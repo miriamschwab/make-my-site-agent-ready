@@ -2,6 +2,11 @@
 
 All notable changes to Make My Site Agent-Ready.
 
+## 1.33.0 — 2026-09-07
+
+- **New: Amazonbot is named in `robots.txt`,** with the same `Allow: /` and `Content-Signal:` group the other AI crawlers get. Amazon documents Amazonbot as its general crawler whose fetches are *eligible for AI model training* — the same position GPTBot and ClaudeBot are in, and the reason it gets the same treatment rather than a `Disallow`: the crawl stays allowed, and the Content-Signal line states what the content may be used for. Prompted by a live log where Amazonbot was one of the busiest clients on the site with no group addressing it, so it fell through to the general rules.
+- **Amazon's two narrower tokens are not listed, on purpose.** `Amzn-SearchBot` (search-adjacent surfaces such as Alexa and Rufus) and `Amzn-User` (a fetch made for one person's action) are documented as never crawling for training, so a group for either would restate what the site's general rules already say.
+
 ## 1.32.0 — 2026-09-07
 
 - **Fixed: renaming a post left its Markdown address broken forever.** WordPress keeps a renamed post's old URL alive — it records the old slug in `_wp_old_slug` and `wp_old_slug_redirect()` turns the old address into a 301 — but that handler only runs on a WordPress 404, and a `.md` request is not one: it matches this plugin's own rewrite rule, so `is_404()` is false and core never looks. The `.md` mirror was therefore the one spelling of a renamed page that stayed permanently dead while every other spelling quietly kept working. Found in a live log, where Amazonbot fetched a post's pre-rename `.md` URL and got a 404 that the same URL without the suffix would have redirected.
