@@ -4,7 +4,7 @@ Tags: markdown, llm, ai, llms-txt, agents
 Requires at least: 6.2
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.31.1
+Stable tag: 1.31.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -113,10 +113,13 @@ Use the `mmsar_registered_endpoints` filter for the same thing without a direct 
 
 == Changelog ==
 
-= 1.31.1 - 2026-09-07 =
+= 1.31.4 - 2026-09-07 =
 * Fixed: agents using Node's built-in fetch were recorded as browsers, which hid them from the Agent Log's default view. Node sends one of the same `Sec-Fetch-*` headers a browser sends, and any one of those headers was enough to be called a browser. The log now looks for a document navigation — the shape a browser makes when it loads a page, and one a fetch tool cannot produce — so a tool that borrows a browser's headers no longer borrows its label.
 * Changed: a client that announces itself as a bot, either by a name like "SomethingBot" or by the `+https://example.com/bot` link crawlers put in their user-agent, is now recorded as a declared crawler even when this plugin does not recognise the name. It is still shown under the name it gave and still identity-checked the same way, which for an unrecognised name means no claim to check.
 * Existing entries keep the client type they were given. The headers were never stored, so nothing recorded before this version can be reclassified — entries from 1.26.0 to 1.30.1 under-count scripts and fetch tools, and over-count browsers.
+* New: the Surface filters now explain themselves on hover. "Agent documents" lists the documents it actually covers, with counts, taken from your own log rather than from a fixed list — so it stays accurate as the plugin adds surfaces.
+* New: a "What agents looked for and did not find" panel under the log, grouping every 404 by the address requested, with how many agents asked for it and when it was last seen. It opens automatically when you filter to Not found. Note that one 404 per agent and address is kept every five minutes, so the counts are a floor, not a total — read the ranking rather than the numbers.
+* Changed: filters now apply as you tick them, instead of needing "Apply filters". Several ticks in a row are batched into one update. With JavaScript disabled the button remains and nothing changes.
 
 = 1.30.1 - 2026-09-04 =
 * Changed: the two dashboard widgets are now one. 1.29.1 added a second widget for the identity-check backlog, which duplicated the first one's forged-identity count, its "log is switched off" notice and its link to the full log. The single "Agent Log" widget shows the forged count, anything waiting on an identity check with the Verify and Re-check buttons, and the recent requests list.

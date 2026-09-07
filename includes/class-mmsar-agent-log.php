@@ -413,6 +413,101 @@ class MMSAR_Agent_Log {
 	}
 
 	/**
+	 * The distinct surfaces inside one category, most-requested first.
+	 *
+	 * Exists because `docs` is the residual category — everything that is not an HTML page view, a
+	 * markdown response or a 404 — so its label cannot say what is in it, and a reader ticking
+	 * "Agent documents" has no way to find out short of reading the source. Answering that from the
+	 * log itself rather than from a hand-written list is the point: a surface added in a later
+	 * version becomes a document by default, and a fixed list would quietly stop being true the
+	 * first time one is.
+	 *
+	 * The same CASE expression as every other category query, for the same reason — one definition
+	 * of what a category is, rather than a second copy here that can drift from it.
+	 *
+	 * @param string $category Category value, from categories().
+	 * @param int    $limit    Maximum distinct surfaces to return.
+	 * @return array[] Rows of `surface` and `total`, descending by total.
+	 */
+	public static function get_surfaces_in_category( $category, $limit = 40 ) {
+		global $wpdb;
+		if ( ! self::table_exists() ) {
+			return array();
+		}
+		$like_html = $wpdb->esc_like( 'HTML page view' ) . '%';
+		$like_md   = $wpdb->esc_like( 'Markdown' ) . '%';
+		$like_404  = $wpdb->esc_like( '404' ) . '%';
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- This plugin's own table; a cached read would describe a stale log.
+		$rows = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT surface, COUNT(*) AS total
+				FROM %i
+				WHERE CASE WHEN surface LIKE %s THEN 'html'
+				           WHEN surface LIKE %s THEN 'markdown'
+				           WHEN surface LIKE %s THEN 'notfound'
+				           ELSE 'docs' END = %s
+				GROUP BY surface
+				ORDER BY total DESC, surface ASC
+				LIMIT %d",
+				self::table(),
+				$like_html,
+				$like_md,
+				$like_404,
+				(string) $category,
+				absint( $limit )
+			),
+			ARRAY_A
+		);
+		return is_array( $rows ) ? $rows : array();
+	}
+
+	/**
+	 * Paths that produced a 404, most-asked-for first.
+	 *
+	 * A count of 404s says agents are asking for something that is not there; only the paths say
+	 * what, and only the paths side by side show a crawler working through a URL pattern the site
+	 * could support rather than failing at random.
+	 *
+	 * **These counts are a sample, not a census, and the caller must say so.** The five-minute
+	 * write throttle keys on agent + surface + IP and deliberately excludes the path, so one 404
+	 * path per agent and address lands per window rather than every one. That is on purpose — a
+	 * caller-supplied path is unbounded, and keying the throttle on it would let anything walking a
+	 * URL list write a row per request. The consequence is that a path guessed twenty times in a
+	 * minute appears once, so these totals rank what is being asked for; they do not measure it.
+	 *
+	 * @param int $limit Maximum distinct paths to return.
+	 * @return array[] Rows of `path`, `total`, `agents` and `last_seen`.
+	 */
+	public static function get_notfound_paths( $limit = 30 ) {
+		global $wpdb;
+		if ( ! self::table_exists() ) {
+			return array();
+		}
+		$like_404 = $wpdb->esc_like( '404' ) . '%';
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- As above.
+		$rows = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT detail AS path,
+				        COUNT(*) AS total,
+				        COUNT( DISTINCT agent ) AS agents,
+				        MAX( logged_at ) AS last_seen
+				FROM %i
+				WHERE surface LIKE %s AND detail <> ''
+				GROUP BY detail
+				ORDER BY total DESC, last_seen DESC
+				LIMIT %d",
+				self::table(),
+				$like_404,
+				absint( $limit )
+			),
+			ARRAY_A
+		);
+		return is_array( $rows ) ? $rows : array();
+	}
+
+	/**
 	 * Whether the log table has been created yet.
 	 *
 	 * The table is only created once the agent log is switched on, so anything that queries it

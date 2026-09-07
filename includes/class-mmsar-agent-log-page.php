@@ -425,22 +425,64 @@ class MMSAR_Agent_Log_Page {
 	 * @param array    $options  value => label.
 	 * @param string[] $selected Currently ticked values.
 	 * @param array    $counts   Optional value => count.
+	 * @param array    $titles   Optional value => hover text explaining what the option covers.
 	 * @return void
 	 */
-	private static function render_filter_group( $name, $legend, $options, $selected, $counts = array() ) {
+	private static function render_filter_group( $name, $legend, $options, $selected, $counts = array(), $titles = array() ) {
 		echo '<fieldset style="margin:0 2rem .5rem 0;display:inline-block;vertical-align:top;">';
 		echo '<legend style="font-weight:600;padding:0 0 .25rem;">' . esc_html( $legend ) . '</legend>';
 		foreach ( $options as $value => $label ) {
 			$text = isset( $counts[ $value ] ) ? $label . ' (' . number_format_i18n( $counts[ $value ] ) . ')' : $label;
+			$hint = isset( $titles[ $value ] ) ? (string) $titles[ $value ] : '';
+
+			// The hint hangs off a span rather than the label, so the dotted underline marks the
+			// words it explains instead of the whole row including the checkbox.
+			$rendered = '' === $hint
+				? esc_html( $text )
+				: '<span title="' . esc_attr( $hint ) . '" style="border-bottom:1px dotted #787c82;cursor:help;">' . esc_html( $text ) . '</span>';
+
 			printf(
 				'<label style="display:block;white-space:nowrap;"><input type="checkbox" name="%1$s[]" value="%2$s" %3$s> %4$s</label>',
 				esc_attr( $name ),
 				esc_attr( $value ),
 				checked( in_array( $value, $selected, true ), true, false ),
-				esc_html( $text )
+				wp_kses_post( $rendered )
 			);
 		}
 		echo '</fieldset>';
+	}
+
+	/**
+	 * Hover text for each Surface option, saying what the category actually contains.
+	 *
+	 * "Agent documents" is the one that needs it. It is the residual category, so its name cannot
+	 * describe it and the answer changes as surfaces are added — which is why it is read back out
+	 * of the log rather than written down here. The other three are named after exactly what they
+	 * hold, so they get a fixed sentence that adds the part the name leaves out.
+	 *
+	 * @return array<string, string> Category value => hover text.
+	 */
+	private static function surface_hints() {
+		$hints = array(
+			MMSAR_Agent_Log::CAT_MARKDOWN => __( 'Markdown versions of your pages — a .md address, or an ordinary URL where the client asked for markdown.', 'make-my-site-agent-ready' ),
+			MMSAR_Agent_Log::CAT_HTML     => __( 'Ordinary page views. Recorded as a denominator so shares can be worked out honestly, not as agent traffic.', 'make-my-site-agent-ready' ),
+			MMSAR_Agent_Log::CAT_NOTFOUND => __( 'Requests for addresses that do not exist. What was asked for is listed under the table.', 'make-my-site-agent-ready' ),
+		);
+
+		$surfaces = MMSAR_Agent_Log::get_surfaces_in_category( MMSAR_Agent_Log::CAT_DOCS );
+		if ( empty( $surfaces ) ) {
+			$hints[ MMSAR_Agent_Log::CAT_DOCS ] = __( 'The agent-facing documents this plugin serves — llms.txt, the catalogs, the MCP and Agent Skills files, and anything else that is not a page view, a markdown response or a 404. Nothing has been requested yet.', 'make-my-site-agent-ready' );
+			return $hints;
+		}
+
+		$parts = array();
+		foreach ( $surfaces as $row ) {
+			$parts[] = $row['surface'] . ' (' . number_format_i18n( (int) $row['total'] ) . ')';
+		}
+		$hints[ MMSAR_Agent_Log::CAT_DOCS ] = __( 'Everything served to agents that is not a page view, a markdown response or a 404:', 'make-my-site-agent-ready' )
+			. "\n\n" . implode( " \xC2\xB7 ", $parts );
+
+		return $hints;
 	}
 
 	/**
@@ -457,14 +499,14 @@ class MMSAR_Agent_Log_Page {
 	private static function render_filter_bar( $filters, $shown, $total ) {
 		$catcounts = MMSAR_Agent_Log::get_category_counts();
 
-		echo '<form method="get" action="' . esc_url( admin_url( 'options-general.php' ) ) . '" style="margin:1.5em 0 1em;padding:1rem 1.2rem;background:#fff;border:1px solid #c3c4c7;">';
+		echo '<form id="mmsar-filter-form" method="get" action="' . esc_url( admin_url( 'options-general.php' ) ) . '" style="margin:1.5em 0 1em;padding:1rem 1.2rem;background:#fff;border:1px solid #c3c4c7;">';
 		echo '<input type="hidden" name="page" value="' . esc_attr( self::SLUG ) . '">';
 
 		$surface_opts = array();
 		foreach ( MMSAR_Agent_Log::categories() as $cat ) {
 			$surface_opts[ $cat ] = MMSAR_Agent_Log::category_label( $cat );
 		}
-		self::render_filter_group( 'surface', __( 'Surface', 'make-my-site-agent-ready' ), $surface_opts, $filters['categories'], $catcounts );
+		self::render_filter_group( 'surface', __( 'Surface', 'make-my-site-agent-ready' ), $surface_opts, $filters['categories'], $catcounts, self::surface_hints() );
 
 		$client_opts = array();
 		foreach ( MMSAR_Agent_Log::client_types() as $ct ) {
@@ -481,7 +523,9 @@ class MMSAR_Agent_Log_Page {
 		self::render_filter_group( 'verdict', __( 'Identity', 'make-my-site-agent-ready' ), $verdict_opts, $filters['verdicts'] );
 
 		echo '<div style="clear:both;padding-top:.6rem;border-top:1px solid #f0f0f1;margin-top:.4rem;">';
+		echo '<span id="mmsar-filter-apply">';
 		submit_button( __( 'Apply filters', 'make-my-site-agent-ready' ), 'primary', 'submit', false );
+		echo '</span>';
 		if ( self::filters_active( $filters ) ) {
 			echo ' <a href="' . esc_url( admin_url( 'options-general.php?page=' . self::SLUG ) ) . '" style="margin-left:.6rem;">' . esc_html__( 'Reset', 'make-my-site-agent-ready' ) . '</a>';
 		}
@@ -503,6 +547,116 @@ class MMSAR_Agent_Log_Page {
 		}
 		echo '</span></div>';
 		echo '</form>';
+
+		// Admin-only inline script, and an enhancement rather than the mechanism: the form is a
+		// plain GET form that works exactly as before with this turned off, which is what keeps
+		// every view a URL that can be bookmarked or sent to someone. All this does is press the
+		// button, so the button is hidden only once the script that replaces it is running.
+		//
+		// Ticks are batched behind a short delay rather than submitted one at a time. Combining
+		// axes means three or four clicks in a row, and reloading between each would throw away
+		// the next click and land the reader somewhere they did not ask for.
+		?>
+		<script>
+		( function () {
+			var form = document.getElementById( 'mmsar-filter-form' );
+			var apply = document.getElementById( 'mmsar-filter-apply' );
+			if ( ! form || ! apply || ! form.addEventListener ) { return; }
+
+			var note = document.createElement( 'span' );
+			note.className = 'description';
+			note.textContent = <?php echo wp_json_encode( __( 'Filters apply as you tick them.', 'make-my-site-agent-ready' ) ); ?>;
+			apply.parentNode.insertBefore( note, apply );
+			apply.style.display = 'none';
+
+			var idle = note.textContent;
+			var busy = <?php echo wp_json_encode( __( 'Updating…', 'make-my-site-agent-ready' ) ); ?>;
+			var timer = null;
+
+			// `form.submit()` is not callable here. The Apply button is `name="submit"`, as
+			// submit_button() writes it, and a named control shadows the form method of the same
+			// name — so `form.submit` is that input element and calling it throws. Going through
+			// the prototype submits the form whatever the controls are called. It also leaves the
+			// button's own name out of the query string, which a click would put there.
+			function mmsarApply() {
+				note.textContent = busy;
+				try {
+					HTMLFormElement.prototype.submit.call( form );
+				} catch ( err ) {
+					// Never leave the reader looking at "Updating…" forever: put the button back
+					// and let them press it, which is the behaviour with this script absent.
+					note.textContent = idle;
+					apply.style.display = '';
+				}
+			}
+
+			form.addEventListener( 'change', function ( e ) {
+				if ( ! e.target || 'checkbox' !== e.target.type ) { return; }
+				if ( timer ) { window.clearTimeout( timer ); }
+				timer = window.setTimeout( mmsarApply, 450 );
+			} );
+		}() );
+		</script>
+		<?php
+	}
+
+	/**
+	 * What agents asked for and did not get, most-asked-for first.
+	 *
+	 * The log answers "how many 404s" on its own; this answers the only part that leads anywhere,
+	 * which is *what* was being looked for. A run of guesses at one URL pattern the site could
+	 * support reads as noise row by row and as an obvious gap once the paths are stacked up.
+	 *
+	 * Opened by default when the reader is already filtering to Not found, closed otherwise — the
+	 * panel is an aid to a question most visits to this screen are not asking.
+	 *
+	 * @param array $filters Current filter set.
+	 * @return void
+	 */
+	private static function render_notfound_panel( $filters ) {
+		$paths = MMSAR_Agent_Log::get_notfound_paths();
+		if ( empty( $paths ) ) {
+			return;
+		}
+
+		$open = in_array( MMSAR_Agent_Log::CAT_NOTFOUND, $filters['categories'], true ) ? ' open' : '';
+
+		echo '<details' . esc_attr( $open ) . ' style="margin:1em 0;padding:.8rem 1.2rem;background:#fff;border:1px solid #c3c4c7;">';
+		echo '<summary style="cursor:pointer;font-weight:600;">';
+		printf(
+			/* translators: %s: number of distinct paths */
+			esc_html__( 'What agents looked for and did not find (%s addresses)', 'make-my-site-agent-ready' ),
+			esc_html( number_format_i18n( count( $paths ) ) )
+		);
+		echo '</summary>';
+
+		// Said before the numbers rather than after them. The throttle that keeps a URL-walking
+		// crawler from writing a row per request also means a path guessed twenty times in a
+		// minute is recorded once, so reading these as request counts overstates the rare and
+		// understates the persistent.
+		echo '<p class="description" style="margin:.6rem 0 .8rem;">'
+			. esc_html__( 'Ranked by how often each address was recorded, not by how often it was asked for: one 404 per agent and address is kept every five minutes, so a crawler working through a list appears far fewer times than it called. Treat the order as the signal and the totals as a floor.', 'make-my-site-agent-ready' )
+			. '</p>';
+
+		echo '<table class="widefat striped"><thead><tr>';
+		echo '<th>' . esc_html__( 'Address asked for', 'make-my-site-agent-ready' ) . '</th>';
+		echo '<th style="width:8em;">' . esc_html__( 'Recorded', 'make-my-site-agent-ready' ) . '</th>';
+		echo '<th style="width:8em;">' . esc_html__( 'Agents', 'make-my-site-agent-ready' ) . '</th>';
+		echo '<th style="width:12em;">' . esc_html__( 'Last seen', 'make-my-site-agent-ready' ) . '</th>';
+		echo '</tr></thead><tbody>';
+
+		foreach ( $paths as $row ) {
+			$stamp = isset( $row['last_seen'] ) ? strtotime( $row['last_seen'] . ' UTC' ) : 0;
+			echo '<tr>';
+			echo '<td><code>' . esc_html( (string) $row['path'] ) . '</code></td>';
+			echo '<td>' . esc_html( number_format_i18n( (int) $row['total'] ) ) . '</td>';
+			echo '<td>' . esc_html( number_format_i18n( (int) $row['agents'] ) ) . '</td>';
+			echo '<td>' . esc_html( $stamp ? wp_date( 'Y-m-d H:i', $stamp ) : '—' ) . '</td>';
+			echo '</tr>';
+		}
+
+		echo '</tbody></table>';
+		echo '</details>';
 	}
 
 	/**
@@ -612,6 +766,7 @@ class MMSAR_Agent_Log_Page {
 					? __( 'No entries match these filters.', 'make-my-site-agent-ready' )
 					: __( 'Nothing recorded yet. Agent traffic is intermittent, so leave the log on and check back.', 'make-my-site-agent-ready' )
 			) . '</em></p>';
+			self::render_notfound_panel( $filters );
 			self::render_clear_form( $total );
 			echo '</div>';
 			return;
@@ -668,6 +823,7 @@ class MMSAR_Agent_Log_Page {
 			echo '</div></div>';
 		}
 
+		self::render_notfound_panel( $filters );
 		self::render_clear_form( $total );
 
 		echo '</div>';

@@ -2,12 +2,16 @@
 
 All notable changes to Make My Site Agent-Ready.
 
-## 1.31.1 — 2026-09-07
+## 1.31.4 — 2026-09-07
 
 - **Fixed: an agent using Node's built-in fetch was recorded as a browser**, and browser rows are excluded from the Agent Log's default view — so the log was hiding exactly the traffic it exists to surface. The check treated *any* `Sec-Fetch-*` header as a browser signature, and Node's fetch (undici) sends `Sec-Fetch-Mode: cors`. Found in a live log where ten Markdown fetches from `OraBot/1.0 (+https://ora.ai/bot)` and from a bare `node` user-agent, seconds apart from one address, all sat under **Browser**.
 - **The test is now a document navigation** — `Sec-Fetch-Mode: navigate` or `Sec-Fetch-Dest: document`, or Chromium's `Sec-CH-UA` — rather than the presence of any one header. A page load produces that shape and the Fetch API cannot ask for it: `fetch()` rejects `mode: 'navigate'` outright. `Sec-Fetch-Site` and `Sec-Fetch-User` are no longer consulted, because neither separates the two populations.
 - **New: a client that announces itself as a bot is recorded as a declared crawler**, even when the name is not one this plugin knows — a `bot`, `crawler`, `spider` or `scraper` token, or the `+https://example.com/bot` self-identification link. It is a claim rather than a signal, so it is tested only after the browser shapes, and it changes nothing about the identity check: an unrecognised name still reports as *unclaimed*, because there is still no claim that can be checked.
 - **Not retroactive, and it cannot be.** The headers were never stored, so every existing entry keeps the client type it was given. Entries recorded between 1.26.0 and 1.30.1 under-count scripts and fetch tools and over-count browsers; anything comparing those shares across this version boundary is comparing two different classifications.
+- **New: the Surface filters say what they cover.** Hovering a Surface option now explains it, and **Agent documents** — the one whose name cannot describe it, because it is defined as everything that is not a page view, a markdown response or a 404 — lists the actual documents it covers with their request counts, read out of your own log. A surface added in a later version appears there on its own, so the list cannot go stale.
+- **New: "What agents looked for and did not find".** A panel under the log groups every 404 by the address that was asked for, with how many agents asked and when it was last seen, so a crawler working through a URL pattern the site could support is visible as a pattern instead of as scattered rows. It opens by default when you filter to *Not found*.
+- **Those totals are a floor, and the panel says so.** One 404 per agent and address is recorded every five minutes, so a client walking a URL list is counted far fewer times than it called. The order is the signal; the counts understate persistent guessing.
+- **Changed: filters apply as you tick them.** No more pressing *Apply filters*. Ticks are batched behind a short pause so combining three or four does not reload between each one. With JavaScript off the button is still there and the screen works exactly as before — every view is still a plain URL you can bookmark or send to someone.
 
 ## 1.30.1 — 2026-09-04
 
