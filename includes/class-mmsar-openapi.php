@@ -638,10 +638,34 @@ class MMSAR_OpenAPI {
 					),
 					'202' => array( 'description' => 'The request was a JSON-RPC notification, which has no response.' ),
 					// JSON-RPC carries its own error codes in the body; the HTTP status mirrors them
-					// so a client can react without parsing. Both of these come back as JSON-RPC
-					// error objects rather than the site's own Error schema.
-					'400' => array( 'description' => 'The body was not valid JSON. Returned as a JSON-RPC error object with code -32700.' ),
-					'429' => array( 'description' => 'Rate limit exceeded. Returned as a JSON-RPC error object with code -32000. Read `RateLimit-Reset` and `Retry-After` before retrying.' ),
+					// so a client can react without parsing.
+					//
+					// The 400 has two shapes, and saying so is the honest description. A body that is
+					// valid JSON of the wrong type reaches this endpoint and gets a JSON-RPC -32700.
+					// A body that is not valid JSON at all never reaches it: WordPress's REST server
+					// rejects it with `rest_invalid_json` before any route callback runs, so that one
+					// arrives in the site's own Error shape. A client must be ready for either.
+					'400' => array(
+						'description' => 'The request body could not be used. Either a JSON-RPC error object with code `-32700` (valid JSON, wrong type — this endpoint expects an object or an array of them), or the site\'s `Error` shape with code `rest_invalid_json` (the body was not parseable JSON, rejected by the REST server before this endpoint saw it).',
+						'content'     => array(
+							'application/json' => array(
+								'schema' => array(
+									'oneOf' => array(
+										array( '$ref' => '#/components/schemas/JsonRpcError' ),
+										array( '$ref' => '#/components/schemas/Error' ),
+									),
+								),
+							),
+						),
+					),
+					'429' => array(
+						'description' => 'Rate limit exceeded. Returned as a JSON-RPC error object with code `-32000`. Read `RateLimit-Reset` and `Retry-After` before retrying.',
+						'content'     => array(
+							'application/json' => array(
+								'schema' => array( '$ref' => '#/components/schemas/JsonRpcError' ),
+							),
+						),
+					),
 					'5XX' => array( '$ref' => '#/components/responses/Error' ),
 				),
 			),
@@ -748,7 +772,7 @@ class MMSAR_OpenAPI {
 	private static function components() {
 		return array(
 			'schemas'   => array(
-				'Error' => array(
+				'Error'        => array(
 					'type'        => 'object',
 					'title'       => 'Error',
 					'description' => 'Every error from this site has this shape, including a 404 on a URL that is not part of any documented route — ask for `application/json` and that is what comes back. Errors are never returned as HTML to a client that asked for JSON.',
@@ -794,8 +818,50 @@ class MMSAR_OpenAPI {
 						),
 					),
 				),
+				'JsonRpcError' => array(
+					'type'        => 'object',
+					'title'       => 'JsonRpcError',
+					'description' => 'The MCP endpoint speaks JSON-RPC 2.0, so its own failures use the JSON-RPC error object rather than this site\'s `Error` shape. The HTTP status mirrors the JSON-RPC code so a client can react without parsing the body.',
+					'required'    => array( 'jsonrpc', 'error' ),
+					'properties'  => array(
+						'jsonrpc' => array(
+							'type'        => 'string',
+							'description' => 'Always `2.0`.',
+							'const'       => '2.0',
+						),
+						'id'      => array(
+							'description' => 'The id of the request being answered, or `null` when the request could not be parsed well enough to recover one.',
+							'type'        => array( 'string', 'integer', 'null' ),
+						),
+						'error'   => array(
+							'type'        => 'object',
+							'required'    => array( 'code', 'message' ),
+							'properties'  => array(
+								'code'    => array(
+									'type'        => 'integer',
+									'description' => 'A JSON-RPC error code. `-32700` parse error, `-32600` invalid request, `-32601` method not found, `-32602` invalid params, `-32000` implementation-defined server error (used here for rate limiting).',
+									'examples'    => array( -32700, -32000 ),
+								),
+								'message' => array(
+									'type'        => 'string',
+									'description' => 'Human-readable explanation of what went wrong.',
+									'examples'    => array( 'Parse error: request body is not valid JSON.' ),
+								),
+								'data'    => array(
+									'description' => 'Additional context, when there is any.',
+								),
+							),
+							'description' => 'The error itself. Match on `code`, not on the message.',
+						),
+					),
+				),
 			),
 			'responses' => array(
+				// Only the site's own Error shape gets a reusable response wrapper, because only it is
+				// reused — 69 of the 71 typed error responses point at it. The JSON-RPC shape appears
+				// on one endpoint whose two failure codes each need their own description, so they
+				// reference the schema directly. A response component nothing references is exactly
+				// the "schema defined but not referenced" smell that makes a spec harder to trust.
 				'Error' => array(
 					'description' => 'A structured JSON error. Read `code` to decide what to do next.',
 					'content'     => array(

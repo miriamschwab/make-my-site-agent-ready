@@ -1442,6 +1442,20 @@ class MMSAR_MCP {
 	private static function ui_results_html() {
 		$site_name = esc_html( html_entity_decode( get_bloginfo( 'name' ), ENT_QUOTES | ENT_HTML5, 'UTF-8' ) );
 
+		// The origin of this site's MCP endpoint, derived rather than assumed: rest_url() can point
+		// at another host or subdomain, and a policy naming the wrong origin is worse than none.
+		$parts      = wp_parse_url( self::endpoint_url() );
+		$mcp_origin = ( isset( $parts['scheme'], $parts['host'] ) )
+			? $parts['scheme'] . '://' . $parts['host'] . ( isset( $parts['port'] ) ? ':' . $parts['port'] : '' )
+			: '';
+
+		// connect-src is named explicitly even though this panel fetches nothing. `default-src
+		// 'none'` already denies it, but silence is ambiguous to a reader — an audit cannot tell a
+		// panel that needs no network from one whose author forgot the directive. Naming the MCP
+		// origin states the only place this panel could ever legitimately call, and keeps the
+		// declaration true if a future revision does call back to the server it belongs to.
+		$connect_src = ( '' !== $mcp_origin ) ? esc_attr( $mcp_origin ) : "'none'";
+
 		return implode(
 			"\n",
 			array(
@@ -1452,8 +1466,11 @@ class MMSAR_MCP {
 				'     connection rather than as an HTTP response, so there is no header to carry a policy. The panel',
 				'     needs nothing from the network: its markup, styles and script are all inline, and the only',
 				'     external thing it references is the href of a result link the viewer may click. Everything',
-				'     else is denied, so a result title that somehow carried markup still cannot fetch or execute. -->',
-				'<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; style-src \'unsafe-inline\'; script-src \'unsafe-inline\'; img-src data:; form-action \'none\'; base-uri \'none\'; frame-ancestors *">',
+				'     else is denied, so a result title that somehow carried markup still cannot fetch or execute.',
+				'     frame-ancestors stays open on purpose: the panel is framed by whichever MCP host rendered it,',
+				'     and that host list is not knowable here. Pinning it to the two hosts that happen to be popular',
+				'     would break every other client for no security gain the sandbox does not already provide. -->',
+				'<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; connect-src ' . $connect_src . '; style-src \'unsafe-inline\'; script-src \'unsafe-inline\'; img-src data:; form-action \'none\'; base-uri \'none\'; frame-ancestors *">',
 				'<title>Results</title>',
 				'<style>',
 				'  :root { color-scheme: light dark; }',

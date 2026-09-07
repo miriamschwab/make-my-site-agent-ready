@@ -4,7 +4,7 @@ Tags: markdown, llm, ai, llms-txt, agents
 Requires at least: 6.2
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.33.0
+Stable tag: 1.33.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -112,6 +112,11 @@ Yes. Plugin and theme authors can register one so it works on any site without t
 Use the `mmsar_registered_endpoints` filter for the same thing without a direct call. Add `'surfaces' => array( 'llms_txt' )` to limit where it appears, and `'rel'` to set its api-catalog link relation. Endpoints that publish a SKILL.md of their own can pass `'skill_url'` to get their own entry in the Agent Skills index. Code-registered endpoints appear read-only under "Added by Plugins" on the settings page. Full documentation is in the plugin's README on GitHub.
 
 == Changelog ==
+
+= 1.33.2 - 2026-09-07 =
+* Fixed: the OpenAPI document described the MCP endpoint's 400 as always being a JSON-RPC error with code -32700, and that was only half true. A body that is valid JSON of the wrong type does get -32700, but a body that is not parseable JSON at all never reaches the endpoint — WordPress's REST server rejects it first with `rest_invalid_json`, in the site's own error shape. An agent building a handler from the spec would have been ready for one of the two and surprised by the other. Both are now documented, and both carry a schema.
+* New: the MCP endpoint's error responses have a typed `JsonRpcError` schema in the OpenAPI document, covering the JSON-RPC error object and what each code means. Previously the 400 and 429 were described in prose with no schema at all, so a client could not tell from the spec what the body would contain.
+* New: the MCP App panel's Content-Security-Policy names `connect-src` explicitly. The panel fetches nothing and `default-src 'none'` already denied it, but a policy that stays silent about a directive cannot be told apart from one whose author forgot it. The directive names the site's own MCP endpoint origin, derived from `rest_url()` rather than assumed, so it stays correct on installs where the REST API answers from another host.
 
 = 1.33.0 - 2026-09-07 =
 * New: Amazonbot gets its own group in robots.txt, alongside GPTBot, ClaudeBot and the rest. Amazon's documentation says Amazonbot's crawl is eligible for AI model training, so it belongs with the crawlers whose group carries the Content-Signal line — crawling stays allowed, and the signal states what the content may be used for. Amazon's two narrower tokens, Amzn-SearchBot and Amzn-User, are documented as never crawling for training and are deliberately not listed.
