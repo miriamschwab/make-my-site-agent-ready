@@ -409,7 +409,6 @@ class MMSAR_Agent_Log_Verify {
 	}
 
 	/**
-	 * The transient key a verdict is cached under. /**
 	 * The transient key a verdict is cached under.
 	 *
 	 * One method rather than an expression repeated at each site, so that forgetting a cached
@@ -446,7 +445,6 @@ class MMSAR_Agent_Log_Verify {
 	}
 
 	/**
-	 * Decides a verdict from scratch.  /**
 	 * Decides a verdict from scratch.
 	 *
 	 * Range data is consulted first, and not merely for speed. For Anthropic, OpenAI and Perplexity

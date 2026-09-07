@@ -2,6 +2,13 @@
 
 All notable changes to Make My Site Agent-Ready.
 
+## 1.31.1 — 2026-09-07
+
+- **Fixed: an agent using Node's built-in fetch was recorded as a browser**, and browser rows are excluded from the Agent Log's default view — so the log was hiding exactly the traffic it exists to surface. The check treated *any* `Sec-Fetch-*` header as a browser signature, and Node's fetch (undici) sends `Sec-Fetch-Mode: cors`. Found in a live log where ten Markdown fetches from `OraBot/1.0 (+https://ora.ai/bot)` and from a bare `node` user-agent, seconds apart from one address, all sat under **Browser**.
+- **The test is now a document navigation** — `Sec-Fetch-Mode: navigate` or `Sec-Fetch-Dest: document`, or Chromium's `Sec-CH-UA` — rather than the presence of any one header. A page load produces that shape and the Fetch API cannot ask for it: `fetch()` rejects `mode: 'navigate'` outright. `Sec-Fetch-Site` and `Sec-Fetch-User` are no longer consulted, because neither separates the two populations.
+- **New: a client that announces itself as a bot is recorded as a declared crawler**, even when the name is not one this plugin knows — a `bot`, `crawler`, `spider` or `scraper` token, or the `+https://example.com/bot` self-identification link. It is a claim rather than a signal, so it is tested only after the browser shapes, and it changes nothing about the identity check: an unrecognised name still reports as *unclaimed*, because there is still no claim that can be checked.
+- **Not retroactive, and it cannot be.** The headers were never stored, so every existing entry keeps the client type it was given. Entries recorded between 1.26.0 and 1.30.1 under-count scripts and fetch tools and over-count browsers; anything comparing those shares across this version boundary is comparing two different classifications.
+
 ## 1.30.1 — 2026-09-04
 
 - **Changed: the two dashboard widgets are now one.** 1.29.1 added a second widget for the identity-check backlog, and it overlapped the existing one on three things — the forged-identity count, the "log is switched off" notice, and the link through to the full log — so a dashboard with both showed the same facts twice. The single **Agent Log** widget carries the forged count, anything waiting on an identity check with the *Verify now* and *Re-check* buttons, and the list of recent requests, in that order.

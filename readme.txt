@@ -4,7 +4,7 @@ Tags: markdown, llm, ai, llms-txt, agents
 Requires at least: 6.2
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.30.1
+Stable tag: 1.31.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -112,6 +112,11 @@ Yes. Plugin and theme authors can register one so it works on any site without t
 Use the `mmsar_registered_endpoints` filter for the same thing without a direct call. Add `'surfaces' => array( 'llms_txt' )` to limit where it appears, and `'rel'` to set its api-catalog link relation. Endpoints that publish a SKILL.md of their own can pass `'skill_url'` to get their own entry in the Agent Skills index. Code-registered endpoints appear read-only under "Added by Plugins" on the settings page. Full documentation is in the plugin's README on GitHub.
 
 == Changelog ==
+
+= 1.31.1 - 2026-09-07 =
+* Fixed: agents using Node's built-in fetch were recorded as browsers, which hid them from the Agent Log's default view. Node sends one of the same `Sec-Fetch-*` headers a browser sends, and any one of those headers was enough to be called a browser. The log now looks for a document navigation — the shape a browser makes when it loads a page, and one a fetch tool cannot produce — so a tool that borrows a browser's headers no longer borrows its label.
+* Changed: a client that announces itself as a bot, either by a name like "SomethingBot" or by the `+https://example.com/bot` link crawlers put in their user-agent, is now recorded as a declared crawler even when this plugin does not recognise the name. It is still shown under the name it gave and still identity-checked the same way, which for an unrecognised name means no claim to check.
+* Existing entries keep the client type they were given. The headers were never stored, so nothing recorded before this version can be reclassified — entries from 1.26.0 to 1.30.1 under-count scripts and fetch tools, and over-count browsers.
 
 = 1.30.1 - 2026-09-04 =
 * Changed: the two dashboard widgets are now one. 1.29.1 added a second widget for the identity-check backlog, which duplicated the first one's forged-identity count, its "log is switched off" notice and its link to the full log. The single "Agent Log" widget shows the forged count, anything waiting on an identity check with the Verify and Re-check buttons, and the recent requests list.

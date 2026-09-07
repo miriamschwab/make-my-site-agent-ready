@@ -736,7 +736,6 @@ class MMSAR_Agent_Log {
 	}
 
 	/**
-	 * Counts per verdict across the whole log, plus how many rows are still undecided. /**
 	 * Counts per verdict across the whole log, plus how many rows are still undecided.
 	 *
 	 * `pending` is the number that stops the rest being misread. Verdict counts over a partially
@@ -1105,25 +1104,44 @@ class MMSAR_Agent_Log {
 	const CLIENT_HTTP    = 'http';
 
 	/**
-	 * What kind of client made this request, from the headers a browser engine cannot help sending.
+	 * What kind of client made this request, from the shape of the request rather than its name.
 	 *
-	 * **This separates browser engines from HTTP clients. It does not separate people from
+	 * **This separates browser navigations from HTTP clients. It does not separate people from
 	 * machines,** and the difference matters enough to state at the top. An agent driving a real
-	 * Chrome through Playwright sends every header below, because it *is* Chrome, and is
+	 * Chrome through Playwright sends everything below, because it *is* Chrome, and is
 	 * indistinguishable here from a person reading the site. What this does catch is the far more
-	 * common case: an agent using a fetch tool, a script, a scraper or a CLI, none of which send any
-	 * of these.
+	 * common case: an agent using a fetch tool, a script, a scraper or a CLI.
 	 *
 	 * The signals, strongest first:
 	 *
-	 * - **`Sec-Fetch-*`**. Fetch Metadata request headers (W3C). Every current browser sends them on
-	 *   a navigation and they are on the forbidden-header list, so page JavaScript cannot set or
-	 *   remove them. curl, `node:fetch`, Python requests and the fetch tools agents use send none.
-	 *   Confirmed against this site: a browser navigation arrives with `Sec-Fetch-Mode: navigate`
-	 *   and `Sec-Fetch-Dest: document`; a bare curl arrives with neither.
+	 * - **A document navigation.** `Sec-Fetch-Mode: navigate`, or `Sec-Fetch-Dest: document`, is
+	 *   what a browser sends when it loads a page — and it is a shape the Fetch API cannot ask for,
+	 *   since `fetch()` rejects `mode: 'navigate'` outright. No fetch tool built on it can produce
+	 *   one. Confirmed against this site: a browser navigation arrives with `Sec-Fetch-Mode:
+	 *   navigate` and `Sec-Fetch-Dest: document`; a bare curl arrives with neither.
 	 * - **`Sec-CH-UA`**. User-agent client hints, Chromium only, so its absence proves nothing on
-	 *   Safari or Firefox and its presence is good evidence.
-	 * - **`Accept-Language`**. Weak on its own, since some clients set it, and useful as a tiebreak.
+	 *   Safari or Firefox and its presence is good evidence. No HTTP client library sends it.
+	 * - **A self-declared bot name**, which is a claim rather than a signal, but a claim worth
+	 *   taking at face value here: something calling itself `SomethingBot` or advertising
+	 *   `+https://…/bot` is not a browser, whatever else it is. Tested only after the browser
+	 *   shapes above, so a phone whose model name happens to end in "bot" is not caught by it.
+	 * - **`Accept-Language` with an HTML-shaped `Accept`**. Weak on its own, and the tiebreak that
+	 *   covers a browser too old for fetch metadata.
+	 *
+	 * **The mere presence of a `Sec-Fetch-*` header is not the test, and treating it as one was a
+	 * bug from 1.26.0 to 1.30.1.** Node's built-in fetch (undici) sends `Sec-Fetch-Mode: cors`, so
+	 * every agent built on it recorded as a browser — and browser rows are excluded from the
+	 * default view, which hid exactly the traffic this log exists to show. It was found in the live
+	 * log: ten `.md` fetches within seconds, from `OraBot/1.0 (+https://ora.ai/bot)` and from a bare
+	 * `node` user-agent at one AWS address, all filed as `browser`. Reproduced against Node 24,
+	 * which sends a wildcard `Accept`, `accept-language: *` and `sec-fetch-mode: cors`, with no
+	 * `Sec-Fetch-Dest`, no `Sec-Fetch-Site` and no `Sec-CH-UA`. So `Sec-Fetch-Site` and
+	 * `Sec-Fetch-User` are no longer consulted at all: neither distinguishes the two populations,
+	 * and each was doing nothing but widening the false positive.
+	 *
+	 * None of this is proof against a client that simply chooses to send these headers. They are
+	 * *forbidden headers in a browser*, which stops page JavaScript forging them; it constrains
+	 * nothing outside one. This reads the shape of a request, and a shape is a claim like any other.
 	 *
 	 * A declared crawler name short-circuits all of it: those are already described by the `agent`
 	 * column and its verification verdict, and calling ClaudeBot an "http client" would bury the
@@ -1132,18 +1150,25 @@ class MMSAR_Agent_Log {
 	 * @return string One of the CLIENT_* constants.
 	 */
 	private static function detect_client_type() {
-		if ( self::is_known_agent( self::user_agent() ) ) {
+		$ua = self::user_agent();
+		if ( self::is_known_agent( $ua ) ) {
 			return self::CLIENT_CRAWLER;
 		}
 
-		foreach ( array( 'HTTP_SEC_FETCH_MODE', 'HTTP_SEC_FETCH_DEST', 'HTTP_SEC_FETCH_SITE', 'HTTP_SEC_FETCH_USER', 'HTTP_SEC_CH_UA' ) as $header ) {
-			if ( ! empty( $_SERVER[ $header ] ) ) {
-				return self::CLIENT_BROWSER;
-			}
+		$mode = isset( $_SERVER['HTTP_SEC_FETCH_MODE'] ) ? strtolower( sanitize_text_field( wp_unslash( $_SERVER['HTTP_SEC_FETCH_MODE'] ) ) ) : '';
+		$dest = isset( $_SERVER['HTTP_SEC_FETCH_DEST'] ) ? strtolower( sanitize_text_field( wp_unslash( $_SERVER['HTTP_SEC_FETCH_DEST'] ) ) ) : '';
+		if ( 'navigate' === $mode || 'document' === $dest || ! empty( $_SERVER['HTTP_SEC_CH_UA'] ) ) {
+			return self::CLIENT_BROWSER;
 		}
 
-		// No fetch metadata at all. Before calling it a script, allow for a browser old enough to
-		// predate those headers: it would still send a language and an HTML-shaped Accept listing
+		// Not browser-shaped. A name that announces itself as a bot is the next most useful thing
+		// the request carries, and it belongs with the crawlers rather than with anonymous scripts.
+		if ( self::is_self_declared_bot( $ua ) ) {
+			return self::CLIENT_CRAWLER;
+		}
+
+		// No navigation shape at all. Before calling it a script, allow for a browser old enough to
+		// predate fetch metadata: it would still send a language and an HTML-shaped Accept listing
 		// several types with quality values, which a fetch tool almost never does.
 		$accept = isset( $_SERVER['HTTP_ACCEPT'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_ACCEPT'] ) ) : '';
 		if ( ! empty( $_SERVER['HTTP_ACCEPT_LANGUAGE'] ) && false !== stripos( $accept, 'text/html' ) && false !== strpos( $accept, ';q=' ) ) {
@@ -1182,7 +1207,6 @@ class MMSAR_Agent_Log {
 	}
 
 	/**
-	 * How much ordinary page-view traffic is recorded. /**
 	 * How much ordinary page-view traffic is recorded.
 	 *
 	 * Three states in one option, kept backwards compatible: the value was a checkbox until 1.25.0,
@@ -1232,6 +1256,34 @@ class MMSAR_Agent_Log {
 	}
 
 	/**
+	 * Whether a user-agent announces itself as automated software, whoever it turns out to be.
+	 *
+	 * The two long-standing conventions, and nothing beyond them: a `bot`, `crawler`, `spider` or
+	 * `scraper` token in the name, and the `+https://example.com/bot` self-identification URL that
+	 * `robots.txt` culture asks operators to put in the comment. `OraBot/1.0 (+https://ora.ai/bot)`
+	 * matches on both.
+	 *
+	 * **A claim, not a signal**, which is the whole reason it is tested last among the positive
+	 * checks in detect_client_type(): anything can say it is a bot, and anything can say it is not.
+	 * It earns its place because a client that volunteers "I am a crawler" is telling the truth
+	 * about the only thing this column records — what kind of software made the request — and
+	 * because unlike the recognised list it needs no prior knowledge of the operator. Nothing here
+	 * touches the `agent` column or the verification verdict; an unrecognised name still verifies
+	 * as `unclaimed`, because there is still no claim this plugin knows how to check.
+	 *
+	 * The `bot` token deliberately matches at the end of a word (`SomethingBot`) rather than only
+	 * as a whole one, which is how these names are actually written — at the cost of matching a
+	 * device called CUBOT. That is tolerable **only** because detect_client_type() runs the browser
+	 * shapes first, and a phone browser sends them.
+	 *
+	 * @param string $ua User-agent string.
+	 * @return bool
+	 */
+	private static function is_self_declared_bot( $ua ) {
+		return 1 === preg_match( '~(?:bot|crawler|spider|scraper)\b|\+https?://~i', (string) $ua );
+	}
+
+	/**
 	 * Whether a user-agent names a crawler this plugin recognises.
 	 *
 	 * @param string $ua User-agent string.
@@ -1247,7 +1299,6 @@ class MMSAR_Agent_Log {
 	}
 
 	/**
-	 * Records one agent request.   /**
 	 * Records one agent request.
 	 *
 	 * Called from the plugin's serve points, which is why there is no user-agent test: a request

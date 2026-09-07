@@ -504,7 +504,7 @@ function mmsar_register_abilities() {
 						'type'        => 'string',
 						'enum'        => array( '', 'crawler', 'browser', 'http', 'all' ),
 						'default'     => '',
-						'description' => 'Restrict entries by what kind of client made the request, judged from headers a browser engine cannot avoid sending. "crawler" declared a known crawler name. "browser" sent a real browser signature. "http" is a script, CLI or agent fetch tool, which is what an agent using a fetch tool looks like. Empty string is the default and returns everything except browsers, because this is an agent log and browser page views are recorded as a denominator rather than as agent traffic; pass "all" to include them. A browser signature identifies the software, not a person: an agent driving a headless Chrome is indistinguishable from a human reader here.',
+						'description' => 'Restrict entries by what kind of client made the request, judged from the shape of the request rather than its name. "crawler" named a recognised crawler, or announced itself as a bot. "browser" made a document navigation, which is a shape the Fetch API cannot ask for. "http" is a script, CLI or agent fetch tool, which is what an agent using a fetch tool looks like. Empty string is the default and returns everything except browsers, because this is an agent log and browser page views are recorded as a denominator rather than as agent traffic; pass "all" to include them. A browser signature identifies the software, not a person: an agent driving a headless Chrome is indistinguishable from a human reader here.',
 					),
 					'verified'     => array(
 						'type'        => 'string',
@@ -557,7 +557,7 @@ function mmsar_register_abilities() {
 					),
 					'client_types'        => array(
 						'type'        => 'object',
-						'description' => 'Request counts by what kind of software made them, over the whole log. "crawler" declared a known crawler name; "browser" sent a signature only a real browser engine produces; "http" is a script, CLI or agent fetch tool; "unrecorded" predates the check and cannot be classified retroactively, because the headers were never stored. **The browser count is a denominator, not agent traffic.** It exists so shares can be computed honestly, and those entries are excluded from the list unless client is "browser" or "all". A browser signature identifies software, not a person: an agent driving a headless Chrome sends exactly what a reader does.',
+						'description' => 'Request counts by what kind of software made them, over the whole log. "crawler" named a recognised crawler or announced itself as a bot; "browser" made a document navigation, a shape only a real browser engine produces; "http" is a script, CLI or agent fetch tool; "unrecorded" predates the check and cannot be classified retroactively, because the headers were never stored. Rows recorded between 1.26.0 and 1.30.1 under-count "http": any agent using Node\'s built-in fetch was filed as "browser" until 1.31.1, and cannot be reclassified. **The browser count is a denominator, not agent traffic.** It exists so shares can be computed honestly, and those entries are excluded from the list unless client is "browser" or "all". A browser signature identifies software, not a person: an agent driving a headless Chrome sends exactly what a reader does.',
 						'properties'  => array(
 							'crawler'    => array( 'type' => 'integer' ),
 							'browser'    => array( 'type' => 'integer' ),

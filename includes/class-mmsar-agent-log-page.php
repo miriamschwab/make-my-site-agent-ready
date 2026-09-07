@@ -246,11 +246,7 @@ class MMSAR_Agent_Log_Page {
 	 * Streams the whole log as a CSV download.
 	 *
 	 * @return void
-	 */ /**
-		 * Streams the whole log as a CSV download.
-		 *
-		 * @return void
-		 */
+	 */
 	public static function handle_export() {
 		if ( ! current_user_can( 'manage_options' ) ) {
 			wp_die( esc_html__( 'Unauthorized.', 'make-my-site-agent-ready' ) );
@@ -510,7 +506,6 @@ class MMSAR_Agent_Log_Page {
 	}
 
 	/**
-	 * Render the page. /**
 	 * Render the page.
 	 *
 	 * @return void
