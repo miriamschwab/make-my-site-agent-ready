@@ -59,7 +59,7 @@ return array(
 	// OpenAI — GPTBot, OAI-SearchBot, ChatGPT-User.
 	// Source: https://openai.com/gptbot.json, https://openai.com/searchbot.json, https://openai.com/chatgpt-user.json.
 	'openai'     => array(
-		'captured' => '2025-10-30',
+		'captured' => '2026-09-07',
 		'v4'       => array(
 			'4.151.71.176/28',
 			'4.151.119.48/28',
@@ -219,7 +219,6 @@ return array(
 			'52.242.132.240/28',
 			'52.255.109.80/28',
 			'52.255.109.96/28',
-			'52.255.109.112/28',
 			'52.255.109.144/28',
 			'52.255.111.0/28',
 			'52.255.111.80/28',
@@ -313,7 +312,11 @@ return array(
 			'172.207.1.32/28',
 			'172.212.172.160/28',
 			'172.215.215.32/28',
+			'191.232.238.96/28',
+			'191.233.197.0/28',
 			'191.233.199.160/28',
+			'191.234.167.144/28',
+			'191.235.99.160/28',
 			'191.237.249.64/28',
 		),
 		'v6'       => array(),
@@ -321,7 +324,7 @@ return array(
 	// Perplexity — PerplexityBot, Perplexity-User.
 	// Source: https://www.perplexity.ai/perplexitybot.json, https://www.perplexity.ai/perplexity-user.json.
 	'perplexity' => array(
-		'captured' => '2025-02-07',
+		'captured' => '2026-09-07',
 		'v4'       => array(
 			'3.211.124.183/32',
 			'3.222.232.239/32',

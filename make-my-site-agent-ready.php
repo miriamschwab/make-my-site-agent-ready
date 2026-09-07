@@ -3,7 +3,7 @@
  * Plugin Name:       Make My Site Agent-Ready
  * Plugin URI:        https://miriamschwab.me/plugins/make-my-site-agent-ready
  * Description:       Makes your WordPress site ready for AI agents: .md URLs, llms.txt, llms-full.txt, an OpenAPI spec, a read-only MCP server, agent-recoverable 404s, security.txt, api-catalog, Agent Skills discovery, Link response headers, Content Signals, optional JSON-LD structured data (merges into Yoast's own schema when active), and AI crawler rules in robots.txt.
- * Version:           1.33.2
+ * Version:           1.35.0
  * Author:            Miriam Schwab
  * Author URI:        https://miriamschwab.me
  * License:           GPL-2.0-or-later
@@ -19,7 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'MMSAR_VERSION', '1.33.2' );
+define( 'MMSAR_VERSION', '1.35.0' );
 define( 'MMSAR_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'MMSAR_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'MMSAR_PLUGIN_FILE', __FILE__ );
@@ -31,6 +31,7 @@ require_once MMSAR_PLUGIN_DIR . 'vendor/autoload.php';
 require_once MMSAR_PLUGIN_DIR . 'includes/class-mmsar-registry.php';
 require_once MMSAR_PLUGIN_DIR . 'includes/class-mmsar-agent-log.php';
 require_once MMSAR_PLUGIN_DIR . 'includes/class-mmsar-agent-log-verify.php';
+require_once MMSAR_PLUGIN_DIR . 'includes/class-mmsar-agent-log-attribution.php';
 require_once MMSAR_PLUGIN_DIR . 'includes/class-mmsar-agent-log-page.php';
 require_once MMSAR_PLUGIN_DIR . 'includes/class-mmsar-agent-log-widget.php';
 require_once MMSAR_PLUGIN_DIR . 'includes/class-mmsar-converter.php';
@@ -43,6 +44,7 @@ require_once MMSAR_PLUGIN_DIR . 'includes/class-mmsar-openapi.php';
 require_once MMSAR_PLUGIN_DIR . 'includes/class-mmsar-mcp.php';
 require_once MMSAR_PLUGIN_DIR . 'includes/class-mmsar-not-found.php';
 require_once MMSAR_PLUGIN_DIR . 'includes/class-mmsar-auth-md.php';
+require_once MMSAR_PLUGIN_DIR . 'includes/class-mmsar-deprecation.php';
 require_once MMSAR_PLUGIN_DIR . 'includes/class-mmsar-ai-catalog.php';
 require_once MMSAR_PLUGIN_DIR . 'includes/class-mmsar-agent-view.php';
 require_once MMSAR_PLUGIN_DIR . 'includes/class-mmsar-nlweb.php';
@@ -413,6 +415,9 @@ if ( mmsar_feature_enabled( 'agent_404' ) ) {
 if ( mmsar_feature_enabled( 'auth_md' ) ) {
 	MMSAR_Auth_Md::init();
 }
+// No feature toggle: the retirement schedule is empty until a site fills it, and an empty schedule
+// adds no header to any response. Nothing to switch off.
+MMSAR_Deprecation::init();
 if ( mmsar_feature_enabled( 'ai_catalog' ) ) {
 	MMSAR_AI_Catalog::init();
 }

@@ -674,27 +674,31 @@ function mmsar_register_abilities() {
 						'items'       => array(
 							'type'       => 'object',
 							'properties' => array(
-								'logged_at'   => array( 'type' => 'string' ),
-								'agent'       => array( 'type' => 'string' ),
-								'surface'     => array( 'type' => 'string' ),
-								'detail'      => array(
+								'logged_at'     => array( 'type' => 'string' ),
+								'agent'         => array( 'type' => 'string' ),
+								'surface'       => array( 'type' => 'string' ),
+								'detail'        => array(
 									'type'        => 'string',
 									'description' => 'What was asked for within the surface — a 404 path, an MCP method, or the permalink path of the post served on a Markdown surface. Empty string on surfaces where the surface name is the whole request.',
 								),
-								'ip'          => array( 'type' => 'string' ),
-								'client_type' => array(
+								'ip'            => array( 'type' => 'string' ),
+								'client_type'   => array(
 									'type'        => 'string',
 									'enum'        => array( '', 'crawler', 'browser', 'http' ),
 									'description' => 'What kind of software made the request. Empty on entries recorded before 1.26.0.',
 								),
-								'verified'    => array(
+								'verified'      => array(
 									'type'        => 'string',
 									'enum'        => array( '', 'verified', 'failed', 'unverifiable', 'unclaimed', 'nodns' ),
 									'description' => 'This entry\'s verification verdict. "failed" means the claimed crawler identity was forged. "unverifiable" means this release has no way to check that operator and is not an accusation. "unclaimed" means no crawler was named. "nodns" means the resolver gave no answer and the entry will be retried. An empty string means it has not been checked yet, so it is not evidence of anything.',
 								),
-								'verified_at' => array(
+								'verified_at'   => array(
 									'type'        => 'string',
 									'description' => 'UTC datetime the verdict was reached, "Y-m-d H:i:s", or null when unchecked. Compare it against logged_at: reverse-DNS assignments and published ranges both change, so a verdict reached days after the request is weaker evidence than one reached in the same hour, and a "failed" verdict on an old entry is suggestive rather than proof.',
+								),
+								'attributed_to' => array(
+									'type'        => 'string',
+									'description' => 'Who the forged identity most likely belonged to, or "" when nothing explains it. Only ever set on a "failed" entry: the `agent` column keeps what the request claimed to be, and this says what the evidence suggests it was, so a row reads as "GPTBot, spoofed by Ora". Derived per read from neighbouring rows rather than stored, and bounded to a 30-minute burst on the same network — a datacenter address is reassigned, so an attribution that outlived its evidence would start accusing whoever holds the address next. Two sources feed it: a configured scanner signature (a token the operator owns, such as its own domain in the user-agent or a probe path it invented), or correlation — the same network, in the same burst, also presenting a self-declared bot name that no operator publishes a check for. A **verified** crawler is never used as an attributor, so this can never claim one real operator forged another.',
 								),
 							),
 						),
@@ -777,7 +781,7 @@ function mmsar_register_abilities() {
 						'categories' => '' === $category ? array() : array( $category ),
 					)
 				);
-				$result['entries']  = $entries;
+				$result['entries']  = MMSAR_Agent_Log_Attribution::annotate( $entries );
 				$result['returned'] = count( $entries );
 				$result['limit']    = $limit;
 				$result['offset']   = $offset;

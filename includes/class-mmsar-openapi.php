@@ -215,6 +215,13 @@ class MMSAR_OpenAPI {
 				'version'     => MMSAR_VERSION,
 				'summary'     => 'Read this site\'s content as JSON or Markdown, without parsing HTML.',
 				'description' => self::info_description( $site_name, $description ),
+				// The same lifecycle facts the description gives in prose, in fields a client can
+				// read without parsing English. An `x-` extension because OpenAPI has no standard
+				// place for a deprecation policy — the prose stays authoritative for a human, and
+				// this is here so "how will I be told before something breaks" is answerable
+				// mechanically. `deprecated` lists what is actually scheduled, so it is empty on a
+				// site that is retiring nothing rather than describing a policy in the abstract.
+				'x-lifecycle' => self::lifecycle(),
 			),
 			'servers'    => array(
 				array(
@@ -293,9 +300,67 @@ class MMSAR_OpenAPI {
 		$lines[] = '';
 		$lines[] = '**Rate limits:** only the MCP endpoint is limited. It returns `RateLimit-Limit`, `RateLimit-Remaining` and `RateLimit-Reset` on every response, and `Retry-After` on a 429, so you can pace yourself rather than discover the limit by hitting it. The plain HTTP routes are unlimited.';
 		$lines[] = '';
-		$lines[] = '**Versioning:** this description is regenerated from the live site, so it always matches what is deployed. Paths under `/wp-json/` carry their own version segment. Nothing here is scheduled for removal; if that changes, retiring routes will carry `Deprecation` and `Sunset` headers (RFC 9745 / RFC 8594) before they stop working.';
+		$lines[] = '**Versioning:** this description is regenerated from the live site, so it always matches what is deployed. Paths under `/wp-json/` carry their own version segment. '
+			. ( MMSAR_Deprecation::has_schedule()
+				? 'Something here is scheduled for retirement: the affected responses carry `Deprecation` and `Sunset` headers (RFC 9745 / RFC 8594), and `x-lifecycle.deprecated` below lists them with their dates.'
+				: 'Nothing here is currently scheduled for removal. When something is, its responses carry `Deprecation` and `Sunset` headers (RFC 9745 / RFC 8594) from the moment it is announced until it stops working, and it is listed in `x-lifecycle.deprecated` below — so a client that watches either one gets notice rather than a surprise 404.' );
 
 		return implode( "\n", $lines );
+	}
+
+	/**
+	 * Machine-readable lifecycle facts.
+	 *
+	 * Split out from the prose so the two cannot drift: both this and the Versioning paragraph read
+	 * the same schedule, so a site that retires a route updates its spec by doing so rather than by
+	 * remembering to edit a description.
+	 *
+	 * @return array Lifecycle object.
+	 */
+	private static function lifecycle() {
+		$deprecated = array();
+
+		foreach ( MMSAR_Deprecation::schedule() as $surface => $entry ) {
+			$headers = MMSAR_Deprecation::headers_for( $entry );
+			if ( array() === $headers ) {
+				// An entry that produces no header is not a deprecation anyone can observe, so it is
+				// not reported as one.
+				continue;
+			}
+
+			$row = array( 'surface' => '/' . trim( (string) $surface, '/' ) );
+			if ( isset( $headers['Deprecation'] ) ) {
+				$row['deprecation'] = $headers['Deprecation'];
+			}
+			if ( isset( $headers['Sunset'] ) ) {
+				$row['sunset'] = $headers['Sunset'];
+			}
+			if ( isset( $entry['link'] ) ) {
+				$row['info'] = esc_url_raw( (string) $entry['link'] );
+			}
+
+			$deprecated[] = $row;
+		}
+
+		return array(
+			'versioning'    => 'url-path',
+			'signalling'    => array(
+				// Named as the specs name them, including the detail that the two headers do not
+				// share a format: Deprecation is a structured-field Date ("@" plus a Unix
+				// timestamp), Sunset is an HTTP-date.
+				'deprecation-header' => array(
+					'spec'   => 'RFC 9745',
+					'format' => 'structured-field Date, e.g. @1688169599',
+				),
+				'sunset-header'      => array(
+					'spec'   => 'RFC 8594',
+					'format' => 'HTTP-date, e.g. Sat, 31 Dec 2018 23:59:59 GMT',
+				),
+				'link-relations'     => array( 'deprecation', 'sunset' ),
+			),
+			'deprecated'    => $deprecated,
+			'authoritative' => self::url(),
+		);
 	}
 
 	/**

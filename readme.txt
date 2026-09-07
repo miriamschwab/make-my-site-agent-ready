@@ -4,7 +4,7 @@ Tags: markdown, llm, ai, llms-txt, agents
 Requires at least: 6.2
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.33.2
+Stable tag: 1.35.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -112,6 +112,21 @@ Yes. Plugin and theme authors can register one so it works on any site without t
 Use the `mmsar_registered_endpoints` filter for the same thing without a direct call. Add `'surfaces' => array( 'llms_txt' )` to limit where it appears, and `'rel'` to set its api-catalog link relation. Endpoints that publish a SKILL.md of their own can pass `'skill_url'` to get their own entry in the Agent Skills index. Code-registered endpoints appear read-only under "Added by Plugins" on the settings page. Full documentation is in the plugin's README on GitHub.
 
 == Changelog ==
+
+= 1.35.0 - 2026-09-07 =
+* New: the Agent Log now says who was behind a forged crawler identity. A scanner that sends six operator names from one address in the same second is one client wearing six masks, and until now the log could only say each of them was `failed`. A spoofed row keeps the name it claimed and gains an attribution, so it reads "GPTBot — spoofed by Ora".
+* Two things feed it. A configured scanner signature matches a token the operator owns — its own domain in the user-agent, or a probe path it invented. Failing that, correlation: the same network, in the same burst, also presenting a self-declared bot name that no operator publishes a verification method for. A **verified** crawler is never used as an attributor, so this can never claim one real operator forged another.
+* Add your own with the `mmsar_agent_log_scanner_signatures` filter. Ora ships as the one default, matched on `ora.ai` and its `/__ora-404-probe-` path rather than on the word "Ora", which appears inside ordinary words like "collaboration".
+* Attribution is derived on read and never stored, and it only holds within a 30-minute burst on the same network. A datacenter address gets reassigned, and a stored mapping would go on accusing whoever holds it next.
+
+= 1.34.1 - 2026-09-07 =
+* Refreshed the bundled crawler IP ranges for OpenAI and Perplexity from each operator's own published file. OpenAI gained 4 prefixes and dropped 1 (254 to 257, unioned across gptbot.json, searchbot.json and chatgpt-user.json). Perplexity's data came back byte-identical to what was already bundled — its capture date was old, its contents were not. The reported capture date moves from 2025-02-07 to 2026-08-18, because that figure is the oldest of the four operators rather than a single date, and Perplexity was the one dragging it down.
+* Why it matters: verification judges a crawler against these ranges, so a prefix an operator adds after the capture date makes a genuine crawler read as `failed`. The bundled data was ten months behind for OpenAI. Anthropic's and DuckDuckGo's lists were already current and are untouched.
+
+= 1.34.0 - 2026-09-07 =
+* New: retiring a URL now tells agents before it breaks. The OpenAPI document has always promised that a route being withdrawn would carry `Deprecation` and `Sunset` headers first — but nothing in the plugin could send either one, so the promise had no mechanism behind it. Add a surface to the `mmsar_deprecated_surfaces` filter and its responses carry both headers, in the formats the specifications actually require: `Deprecation` as an RFC 9745 structured-field Date (`@1790812800`) and `Sunset` as an RFC 8594 HTTP-date (`Fri, 01 Jan 2027 00:00:00 GMT`). A policy URL, if given, goes out as a `Link` with the registered `deprecation` and `sunset` relations.
+* New: the OpenAPI document carries an `info.x-lifecycle` block — the versioning scheme, how deprecation is signalled and in which format, and a list of exactly what is currently scheduled for retirement. It is generated from the same schedule the headers use, so the description and the headers cannot drift apart.
+* The retirement schedule is empty by default and adds no header to any response, which is why it has no feature toggle. A site that is retiring nothing says so, rather than describing a policy in the abstract.
 
 = 1.33.2 - 2026-09-07 =
 * Fixed: the OpenAPI document described the MCP endpoint's 400 as always being a JSON-RPC error with code -32700, and that was only half true. A body that is valid JSON of the wrong type does get -32700, but a body that is not parseable JSON at all never reaches the endpoint — WordPress's REST server rejects it first with `rest_invalid_json`, in the site's own error shape. An agent building a handler from the spec would have been ready for one of the two and surprised by the other. Both are now documented, and both carry a schema.

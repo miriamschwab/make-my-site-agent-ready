@@ -680,6 +680,7 @@ class MMSAR_Agent_Log_Page {
 		$pages   = max( 1, (int) ceil( $shown / self::PER_PAGE ) );
 		$paged   = self::current_page( $pages );
 		$entries = MMSAR_Agent_Log::get_entries( self::PER_PAGE, ( $paged - 1 ) * self::PER_PAGE, $filters );
+		$entries = MMSAR_Agent_Log_Attribution::annotate( $entries );
 
 		echo '<div class="wrap">';
 		echo '<h1>' . esc_html__( 'Agent Log', 'make-my-site-agent-ready' ) . '</h1>';
@@ -787,7 +788,18 @@ class MMSAR_Agent_Log_Page {
 			$stamp = isset( $entry['logged_at'] ) ? strtotime( $entry['logged_at'] . ' UTC' ) : 0;
 			echo '<tr>';
 			echo '<td>' . esc_html( $stamp ? wp_date( 'Y-m-d H:i', $stamp ) : '—' ) . '</td>';
-			echo '<td>' . esc_html( isset( $entry['agent'] ) ? $entry['agent'] : '—' ) . '</td>';
+			$attributed = isset( $entry['attributed_to'] ) ? (string) $entry['attributed_to'] : '';
+			echo '<td>' . esc_html( isset( $entry['agent'] ) ? $entry['agent'] : '—' );
+			if ( '' !== $attributed ) {
+				// The claim stays as the cell's main text. This is appended, not substituted, because the
+				// agent column's job is to say what the request claimed to be — replacing it would hide
+				// the forgery that makes the row interesting.
+				echo '<br><span style="font-size:11px;color:#8c8f94;">'
+					/* translators: %s: name of the client a forged crawler identity is attributed to. */
+					. esc_html( sprintf( __( 'spoofed by %s', 'make-my-site-agent-ready' ), $attributed ) )
+					. '</span>';
+			}
+			echo '</td>';
 			echo '<td>' . esc_html( isset( $entry['surface'] ) ? $entry['surface'] : '—' ) . '</td>';
 			$detail = isset( $entry['detail'] ) ? (string) $entry['detail'] : '';
 			echo '<td>' . ( '' === $detail ? '<span style="color:#8c8f94;">—</span>' : '<code>' . esc_html( $detail ) . '</code>' ) . '</td>';
