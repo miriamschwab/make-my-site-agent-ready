@@ -449,8 +449,7 @@ function mmsar_register_abilities() {
 			'permission_callback' => fn() => current_user_can( 'manage_options' ),
 			'execute_callback'    => function () {
 				mmsar_bulk_generate();
-				delete_transient( 'llmmd_llms_txt' );
-				delete_transient( 'mmsar_llms_full_txt' );
+				mmsar_flush_generated_documents();
 				return array(
 					'success' => true,
 					'message' => __( 'Markdown files regenerated for all published content.', 'make-my-site-agent-ready' ),

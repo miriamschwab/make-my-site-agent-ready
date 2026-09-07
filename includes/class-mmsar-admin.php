@@ -945,8 +945,7 @@ class MMSAR_Admin {
 			$sanitized['root_selector'] = '';
 		}
 
-		delete_transient( 'llmmd_llms_txt' );
-		delete_transient( 'mmsar_llms_full_txt' );
+		mmsar_flush_generated_documents();
 
 		return $sanitized;
 	}

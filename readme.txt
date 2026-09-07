@@ -4,7 +4,7 @@ Tags: markdown, llm, ai, llms-txt, agents
 Requires at least: 6.2
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.31.4
+Stable tag: 1.32.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -112,6 +112,12 @@ Yes. Plugin and theme authors can register one so it works on any site without t
 Use the `mmsar_registered_endpoints` filter for the same thing without a direct call. Add `'surfaces' => array( 'llms_txt' )` to limit where it appears, and `'rel'` to set its api-catalog link relation. Endpoints that publish a SKILL.md of their own can pass `'skill_url'` to get their own entry in the Agent Skills index. Code-registered endpoints appear read-only under "Added by Plugins" on the settings page. Full documentation is in the plugin's README on GitHub.
 
 == Changelog ==
+
+= 1.32.0 - 2026-09-07 =
+* Fixed: renaming a post left its Markdown address permanently broken. WordPress keeps a renamed post's old URL working by redirecting it, but that only ever ran for the HTML page — the matching `.md` URL returned 404 forever. It now redirects to the renamed page's `.md` URL, using the same record of old slugs WordPress itself uses, so the two cannot disagree about where a page went.
+* Fixed: a renamed post's old URL redirected a browser and 404'd an agent. Anything that asked for Markdown or JSON was handed this plugin's "not found" response before WordPress got a chance to redirect it, so one address behaved two different ways depending on who asked. WordPress's redirects now go first; the recovery response is what happens when there is genuinely nothing to redirect to.
+* Fixed: renaming a post refreshed the site-wide llms.txt and llms-full.txt but not the per-section indexes, so `/writing/llms.txt` and its siblings could go on advertising the retired `.md` address for up to a day. Every generated document is now refreshed together.
+* For developers: `mmsar_md_redirect_post_id` filters where a retired `.md` URL is sent, for redirects this plugin cannot see on its own — a redirect plugin's rules, or a manual map. WordPress's own `old_slug_redirect_post_id` is applied too.
 
 = 1.31.4 - 2026-09-07 =
 * Fixed: agents using Node's built-in fetch were recorded as browsers, which hid them from the Agent Log's default view. Node sends one of the same `Sec-Fetch-*` headers a browser sends, and any one of those headers was enough to be called a browser. The log now looks for a document navigation — the shape a browser makes when it loads a page, and one a fetch tool cannot produce — so a tool that borrows a browser's headers no longer borrows its label.

@@ -3,7 +3,7 @@
  * Plugin Name:       Make My Site Agent-Ready
  * Plugin URI:        https://miriamschwab.me/plugins/make-my-site-agent-ready
  * Description:       Makes your WordPress site ready for AI agents: .md URLs, llms.txt, llms-full.txt, an OpenAPI spec, a read-only MCP server, agent-recoverable 404s, security.txt, api-catalog, Agent Skills discovery, Link response headers, Content Signals, optional JSON-LD structured data (merges into Yoast's own schema when active), and AI crawler rules in robots.txt.
- * Version:           1.31.4
+ * Version:           1.32.0
  * Author:            Miriam Schwab
  * Author URI:        https://miriamschwab.me
  * License:           GPL-2.0-or-later
@@ -19,7 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'MMSAR_VERSION', '1.31.4' );
+define( 'MMSAR_VERSION', '1.32.0' );
 define( 'MMSAR_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'MMSAR_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'MMSAR_PLUGIN_FILE', __FILE__ );
@@ -452,8 +452,7 @@ function mmsar_on_save_post( $post_id, $post ) {
 	// place would only be a stale copy of protected content. Drop it and rebuild the shared indexes.
 	if ( ! empty( $post->post_password ) ) {
 		delete_post_meta( $post_id, '_llmmd_content' );
-		delete_transient( 'llmmd_llms_txt' );
-		delete_transient( 'mmsar_llms_full_txt' );
+		mmsar_flush_generated_documents();
 		return;
 	}
 	if ( ! in_array( $post->post_type, mmsar_get_enabled_post_types(), true ) ) {
@@ -461,8 +460,12 @@ function mmsar_on_save_post( $post_id, $post ) {
 	}
 	$markdown = MMSAR_Converter::convert_post( $post_id );
 	update_post_meta( $post_id, '_llmmd_content', $markdown );
-	delete_transient( 'llmmd_llms_txt' );
-	delete_transient( 'mmsar_llms_full_txt' );
+	// Every cached document, not just the two site-wide ones. The scoped `<section>/llms.txt`
+	// indexes list the same posts under the same `.md` addresses, and they were left out here until
+	// 1.32.0 — so renaming a post refreshed /llms.txt immediately while /writing/llms.txt could go
+	// on advertising the retired `.md` URL for up to a day. mmsar_flush_generated_documents() is
+	// the one place that knows the full set; call it rather than re-listing part of it.
+	mmsar_flush_generated_documents();
 }
 
 add_action( 'transition_post_status', 'mmsar_on_status_change', 10, 3 );
@@ -477,8 +480,7 @@ add_action( 'transition_post_status', 'mmsar_on_status_change', 10, 3 );
 function mmsar_on_status_change( $new_status, $old_status, $post ) {
 	if ( $new_status !== $old_status && in_array( $post->post_type, mmsar_get_enabled_post_types(), true ) ) {
 		if ( 'publish' === $old_status || 'publish' === $new_status ) {
-			delete_transient( 'llmmd_llms_txt' );
-			delete_transient( 'mmsar_llms_full_txt' );
+			mmsar_flush_generated_documents();
 		}
 	}
 }
@@ -859,8 +861,7 @@ function mmsar_handle_regenerate() {
 	}
 
 	mmsar_bulk_generate();
-	delete_transient( 'llmmd_llms_txt' );
-	delete_transient( 'mmsar_llms_full_txt' );
+	mmsar_flush_generated_documents();
 
 	wp_safe_redirect(
 		add_query_arg(

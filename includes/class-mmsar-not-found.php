@@ -42,10 +42,19 @@ class MMSAR_Not_Found {
 	 * @return void
 	 */
 	public static function init() {
-		// Priority 2, after MMSAR_Server's negotiated-markdown handler at 1. That one only ever acts
+		// Priority 11, which is after core's own redirect handlers rather than before them. It used
+		// to be 2, and that was wrong in a way only agents could see: `wp_old_slug_redirect()` and
+		// `redirect_canonical()` both run at 10 and both act on a 404, so answering at 2 meant this
+		// class decided a request was unrecoverable while WordPress was still holding the recovery.
+		// The visible symptom was one URL behaving two ways — a renamed post's old address returned
+		// a 301 to a browser and a hard 404 to anything that asked for Markdown or JSON, because
+		// only the second path reached this handler first. A redirect is always the better answer
+		// than a list of places to look instead, so core goes first and this fills in what is left.
+		//
+		// It is still after MMSAR_Server's negotiated-markdown handler at 1. That one only ever acts
 		// on a singular request, so the two cannot both fire, but ordering them explicitly keeps it
 		// that way if either condition is ever loosened.
-		add_action( 'template_redirect', array( __CLASS__, 'handle' ), 2 );
+		add_action( 'template_redirect', array( __CLASS__, 'handle' ), 11 );
 		add_action( 'wp_head', array( __CLASS__, 'render_head_links' ) );
 	}
 
