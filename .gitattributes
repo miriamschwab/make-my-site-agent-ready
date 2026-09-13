@@ -11,3 +11,4 @@
 /.gitattributes export-ignore
 /README.md      export-ignore
 /CHANGELOG.md   export-ignore
+/tests          export-ignore
