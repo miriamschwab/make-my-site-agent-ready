@@ -22,6 +22,25 @@ class MMSAR_Agent_Log_Page {
 	const PER_PAGE = 50;
 
 	/**
+	 * Visits per page in the journeys view.
+	 *
+	 * Lower than PER_PAGE because a visit is not a row: each one opens into its own list of
+	 * requests, so a page of fifty would be several hundred lines of path.
+	 */
+	const VISITS_PER_PAGE = 20;
+
+	/**
+	 * The two views of the same log.
+	 *
+	 * The list is the original and stays the default: it is the view that answers "what happened
+	 * just now", it is what every existing bookmark and every link in this plugin points at, and
+	 * a screen that silently changed shape under someone who knows it would be a worse screen.
+	 * Journeys answer a different question — what one caller did in sequence — and that question
+	 * is asked less often, from a link or a tab rather than on arrival.
+	 */
+	const VIEWS = array( 'list', 'journeys' );
+
+	/**
 	 * Rows read per query while streaming an export.
 	 *
 	 * The export walks the entire log, which can be far larger than anything the screen shows, so
@@ -206,7 +225,13 @@ class MMSAR_Agent_Log_Page {
 		// See handle_verify(): read while the nonce check is still in scope.
 		$return = isset( $_POST['mmsar_return'] ) ? sanitize_key( wp_unslash( $_POST['mmsar_return'] ) ) : '';
 
-		foreach ( MMSAR_Agent_Log::get_undecided_pairs() as $pair ) {
+		// Both lists: get_undecided_pairs() covers the verdicts a re-check has always reopened, and
+		// get_recheckable_pairs() is the set actually about to be reset — which now includes rows
+		// that read `unclaimed` until this plugin learned the name they claim. Forgetting is
+		// idempotent, so the overlap between them costs nothing and missing one would hand the
+		// re-run a cached answer from before the name was known.
+		$to_forget = array_merge( MMSAR_Agent_Log::get_undecided_pairs(), MMSAR_Agent_Log::get_recheckable_pairs() );
+		foreach ( $to_forget as $pair ) {
 			MMSAR_Agent_Log_Verify::forget(
 				isset( $pair['agent'] ) ? $pair['agent'] : '',
 				isset( $pair['ip'] ) ? $pair['ip'] : ''
@@ -388,6 +413,53 @@ class MMSAR_Agent_Log_Page {
 	}
 
 	/**
+	 * Which of the two views is being asked for.
+	 *
+	 * Anything unrecognised falls back to the list rather than erroring: a mistyped or truncated
+	 * URL should land on the screen's own default, which is the behaviour before this argument
+	 * existed.
+	 *
+	 * @return string One of VIEWS.
+	 */
+	private static function current_view() {
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only view selection on an admin screen.
+		$view = isset( $_GET['view'] ) ? sanitize_key( wp_unslash( $_GET['view'] ) ) : '';
+		return in_array( $view, self::VIEWS, true ) ? $view : 'list';
+	}
+
+	/**
+	 * The single address the journeys view is narrowed to, if any.
+	 *
+	 * Validated as an address rather than merely escaped, so the value that reaches the query is
+	 * one of a closed shape whatever arrives in the URL. Both forms this log stores pass: a full
+	 * address, and the reduced `1.2.3.0` / `2001:db8:1:2::` forms written for unrecognised clients
+	 * are themselves valid addresses.
+	 *
+	 * @return string Address, or empty string.
+	 */
+	private static function current_ip() {
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only filtering of an admin screen.
+		$ip = isset( $_GET['ip'] ) ? sanitize_text_field( wp_unslash( $_GET['ip'] ) ) : '';
+		return ( '' !== $ip && filter_var( $ip, FILTER_VALIDATE_IP ) ) ? $ip : '';
+	}
+
+	/**
+	 * Whether the journeys view is hiding visits of a single request.
+	 *
+	 * On by default, and this is the setting that makes the view readable rather than a preference:
+	 * most callers arrive once, take one file and leave, so a list that includes them is mostly
+	 * one-hop entries with the actual journeys scattered among them — which is the flat list again,
+	 * only longer. The unticked box is there because "how many callers took exactly one thing" is
+	 * a real question, just not this view's default one.
+	 *
+	 * @return bool
+	 */
+	private static function current_multi_only() {
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only filtering of an admin screen.
+		return ! isset( $_GET['single'] ) || '1' !== $_GET['single'];
+	}
+
+	/**
 	 * Whether any filter is actually narrowing the view.
 	 *
 	 * @param array $filters Filter set.
@@ -401,9 +473,12 @@ class MMSAR_Agent_Log_Page {
 	 * The current filters as query arguments, for building URLs that keep them.
 	 *
 	 * @param array $filters Filter set.
+	 * @param array $extra   Additional arguments to carry — view, ip, single. Empty values are
+	 *                       dropped, so the list view's URLs stay exactly as they were before the
+	 *                       second view existed.
 	 * @return array
 	 */
-	private static function filter_args( $filters ) {
+	private static function filter_args( $filters, $extra = array() ) {
 		$args = array( 'page' => self::SLUG );
 		foreach ( array(
 			'verdict' => 'verdicts',
@@ -414,7 +489,30 @@ class MMSAR_Agent_Log_Page {
 				$args[ $arg ] = $filters[ $key ];
 			}
 		}
+		foreach ( (array) $extra as $arg => $value ) {
+			if ( '' !== $value && null !== $value ) {
+				$args[ $arg ] = $value;
+			}
+		}
 		return $args;
+	}
+
+	/**
+	 * The view-state arguments that every URL and form on this screen has to carry.
+	 *
+	 * Kept in one place because forgetting one of them is a bug that reads as the screen resetting
+	 * itself: paginating out of the journeys view, or losing the address a link narrowed to.
+	 *
+	 * @param string $view Current view.
+	 * @param string $ip   Current address filter.
+	 * @return array
+	 */
+	private static function view_args( $view, $ip ) {
+		return array(
+			'view'   => 'list' === $view ? '' : $view,
+			'ip'     => $ip,
+			'single' => ( 'journeys' === $view && ! self::current_multi_only() ) ? '1' : '',
+		);
 	}
 
 	/**
@@ -494,13 +592,22 @@ class MMSAR_Agent_Log_Page {
 	 * @param array $filters Current filter set.
 	 * @param int   $shown   Rows the current filter matches.
 	 * @param int   $total   Rows in the whole log.
+	 * @param array $extra   View-state arguments to carry through the form, from view_args().
 	 * @return void
 	 */
-	private static function render_filter_bar( $filters, $shown, $total ) {
+	private static function render_filter_bar( $filters, $shown, $total, $extra = array() ) {
 		$catcounts = MMSAR_Agent_Log::get_category_counts();
 
 		echo '<form id="mmsar-filter-form" method="get" action="' . esc_url( admin_url( 'options-general.php' ) ) . '" style="margin:1.5em 0 1em;padding:1rem 1.2rem;background:#fff;border:1px solid #c3c4c7;">';
 		echo '<input type="hidden" name="page" value="' . esc_attr( self::SLUG ) . '">';
+
+		// The view state rides along, so ticking a filter narrows the view being looked at rather
+		// than returning to the default one.
+		foreach ( (array) $extra as $name => $value ) {
+			if ( '' !== $value && null !== $value ) {
+				echo '<input type="hidden" name="' . esc_attr( $name ) . '" value="' . esc_attr( $value ) . '">';
+			}
+		}
 
 		$surface_opts = array();
 		foreach ( MMSAR_Agent_Log::categories() as $cat ) {
@@ -527,7 +634,20 @@ class MMSAR_Agent_Log_Page {
 		submit_button( __( 'Apply filters', 'make-my-site-agent-ready' ), 'primary', 'submit', false );
 		echo '</span>';
 		if ( self::filters_active( $filters ) ) {
-			echo ' <a href="' . esc_url( admin_url( 'options-general.php?page=' . self::SLUG ) ) . '" style="margin-left:.6rem;">' . esc_html__( 'Reset', 'make-my-site-agent-ready' ) . '</a>';
+			// Resets the filters, not the view: someone pressing this in the journeys view wants
+			// every journey back, not the other screen.
+			$reset = add_query_arg(
+				self::filter_args(
+					array(
+						'verdicts'   => array(),
+						'clients'    => array(),
+						'categories' => array(),
+					),
+					$extra
+				),
+				admin_url( 'options-general.php' )
+			);
+			echo ' <a href="' . esc_url( $reset ) . '" style="margin-left:.6rem;">' . esc_html__( 'Reset', 'make-my-site-agent-ready' ) . '</a>';
 		}
 		echo ' <span class="description" style="margin-left:1rem;">';
 		if ( self::filters_active( $filters ) ) {
@@ -675,15 +795,15 @@ class MMSAR_Agent_Log_Page {
 		MMSAR_Agent_Log_Verify::run_batch();
 
 		$filters = self::current_filters();
+		$view    = self::current_view();
+		$ip      = self::current_ip();
+		$extra   = self::view_args( $view, $ip );
 		$total   = MMSAR_Agent_Log::count_entries();
 		$shown   = MMSAR_Agent_Log::count_filtered( $filters );
-		$pages   = max( 1, (int) ceil( $shown / self::PER_PAGE ) );
-		$paged   = self::current_page( $pages );
-		$entries = MMSAR_Agent_Log::get_entries( self::PER_PAGE, ( $paged - 1 ) * self::PER_PAGE, $filters );
-		$entries = MMSAR_Agent_Log_Attribution::annotate( $entries );
 
 		echo '<div class="wrap">';
 		echo '<h1>' . esc_html__( 'Agent Log', 'make-my-site-agent-ready' ) . '</h1>';
+		self::render_view_tabs( $view, $filters, $ip );
 
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Display-only notice after a nonce-checked redirect.
 		if ( isset( $_GET['mmsar_cleared'] ) ) {
@@ -759,7 +879,20 @@ class MMSAR_Agent_Log_Page {
 
 		self::render_verification_panel();
 		self::render_retention_form( $total, $filters, $shown );
-		self::render_filter_bar( $filters, $shown, $total );
+		self::render_filter_bar( $filters, $shown, $total, $extra );
+
+		if ( 'journeys' === $view ) {
+			self::render_journeys( $filters, $ip, $extra );
+			self::render_notfound_panel( $filters );
+			self::render_clear_form( $total );
+			echo '</div>';
+			return;
+		}
+
+		$pages   = max( 1, (int) ceil( $shown / self::PER_PAGE ) );
+		$paged   = self::current_page( $pages );
+		$entries = MMSAR_Agent_Log::get_entries( self::PER_PAGE, ( $paged - 1 ) * self::PER_PAGE, $filters );
+		$entries = MMSAR_Agent_Log_Attribution::annotate( $entries );
 
 		if ( empty( $entries ) ) {
 			echo '<p><em>' . esc_html(
@@ -807,7 +940,7 @@ class MMSAR_Agent_Log_Page {
 			echo '<td><span style="font-size:11px;color:' . ( MMSAR_Agent_Log::CLIENT_BROWSER === $ctype ? '#8c8f94' : 'inherit' ) . ';">'
 				. esc_html( MMSAR_Agent_Log::client_type_label( $ctype ) ) . '</span></td>';
 			echo '<td>' . wp_kses_post( self::verdict_badge( $entry ) ) . '</td>';
-			echo '<td><code>' . esc_html( isset( $entry['ip'] ) ? $entry['ip'] : '' ) . '</code></td>';
+			echo '<td>' . wp_kses_post( self::ip_cell( isset( $entry['ip'] ) ? (string) $entry['ip'] : '', $filters ) ) . '</td>';
 			echo '</tr>';
 		}
 
@@ -839,6 +972,425 @@ class MMSAR_Agent_Log_Page {
 		self::render_clear_form( $total );
 
 		echo '</div>';
+	}
+
+	/**
+	 * The journeys view: the log's requests stitched back into per-caller visits.
+	 *
+	 * The question this answers is the one the flat list cannot: not which agents fetch what, but
+	 * what one of them did in order — where it came in, what it followed, whether it took the
+	 * markdown after the HTML, where it gave up. The rows are the same rows; only the grouping is
+	 * new.
+	 *
+	 * Rendered from a bounded window of recent requests, and the summary line says so. A visit
+	 * whose earlier requests fell outside that window is shown as what is known of it rather than
+	 * hidden, which is why the note about truncation is unconditional once the window is full.
+	 *
+	 * @param array  $filters Current filter set.
+	 * @param string $ip      Address to narrow to, or empty.
+	 * @param array  $extra   View-state arguments, from view_args().
+	 * @return void
+	 */
+	private static function render_journeys( $filters, $ip, $extra ) {
+		$result     = MMSAR_Agent_Log::get_journeys( $filters, $ip );
+		$all        = $result['visits'];
+		$multi_only = self::current_multi_only();
+		$single     = 0;
+
+		foreach ( $all as $visit ) {
+			if ( count( $visit['hops'] ) < 2 ) {
+				++$single;
+			}
+		}
+
+		$visits = $multi_only
+			? array_values(
+				array_filter(
+					$all,
+					static function ( $visit ) {
+						return count( $visit['hops'] ) > 1;
+					}
+				)
+			)
+			: $all;
+
+		self::render_journey_controls( $filters, $ip, $extra, count( $visits ), $single, $result );
+
+		if ( ! $visits ) {
+			echo '<p><em>';
+			if ( ! $all ) {
+				esc_html_e( 'No requests match these filters, so there are no journeys to build. Agent traffic is intermittent — leave the log on and check back.', 'make-my-site-agent-ready' );
+			} elseif ( self::filters_active( $filters ) ) {
+				// The likeliest way to arrive here, and it is worth naming rather than leaving the
+				// reader to deduce it: a journey is interesting because it crosses surfaces, so
+				// filtering down to one surface reduces most visits to a single request and empties
+				// this view. The filter is doing exactly what it says; it is simply the wrong tool
+				// on this tab.
+				esc_html_e( 'Every visit left after these filters is a single request, so there is no sequence to show. A journey is a caller moving between surfaces, so narrowing to one surface takes the sequence apart — reset the Surface filter to see the journeys these requests belong to, or use the button above to list the visits as they are.', 'make-my-site-agent-ready' );
+			} else {
+				esc_html_e( 'Every visit in this window was a single request: each caller took one thing and left. Use the button above to list them.', 'make-my-site-agent-ready' );
+			}
+			echo '</em></p>';
+			return;
+		}
+
+		$pages = max( 1, (int) ceil( count( $visits ) / self::VISITS_PER_PAGE ) );
+		$paged = self::current_page( $pages );
+		$page  = array_slice( $visits, ( $paged - 1 ) * self::VISITS_PER_PAGE, self::VISITS_PER_PAGE );
+
+		// Attribution is resolved for the visits actually on screen, not for the whole window: it
+		// costs a query over a time span per call, and the list view pays it for one page of rows
+		// for the same reason.
+		$samples = array();
+		foreach ( $page as $i => $visit ) {
+			$samples[ $i ] = $visit['sample'];
+		}
+		$samples = MMSAR_Agent_Log_Attribution::annotate( $samples );
+
+		echo '<table class="widefat striped"><thead><tr>';
+		echo '<th style="width:14%;">' . esc_html__( 'Started', 'make-my-site-agent-ready' ) . '</th>';
+		echo '<th>' . esc_html__( 'Agent', 'make-my-site-agent-ready' ) . '</th>';
+		echo '<th style="width:8%;">' . esc_html__( 'Requests', 'make-my-site-agent-ready' ) . '</th>';
+		echo '<th style="width:10%;">' . esc_html__( 'Lasted', 'make-my-site-agent-ready' ) . '</th>';
+		echo '<th style="width:12%;">' . esc_html__( 'Identity', 'make-my-site-agent-ready' ) . '</th>';
+		echo '<th style="width:14%;">' . esc_html__( 'IP', 'make-my-site-agent-ready' ) . '</th>';
+		echo '</tr></thead><tbody>';
+
+		foreach ( $page as $i => $visit ) {
+			$sample = isset( $samples[ $i ] ) ? $samples[ $i ] : $visit['sample'];
+			self::render_journey_row( $visit, $sample, $filters, $ip );
+		}
+
+		echo '</tbody></table>';
+
+		if ( $pages > 1 ) {
+			echo '<div class="tablenav"><div class="tablenav-pages">';
+			echo wp_kses_post(
+				paginate_links(
+					array(
+						'base'      => add_query_arg(
+							array_merge( self::filter_args( $filters, $extra ), array( 'paged' => '%#%' ) ),
+							admin_url( 'options-general.php' )
+						),
+						'format'    => '',
+						'current'   => $paged,
+						'total'     => $pages,
+						'prev_text' => '&laquo;',
+						'next_text' => '&raquo;',
+					)
+				)
+			);
+			echo '</div></div>';
+		}
+	}
+
+	/**
+	 * One visit: a summary row, and the requests it was made of beneath it.
+	 *
+	 * A `details` element rather than a script-driven toggle, so the sequence opens with JavaScript
+	 * off and the whole page still prints and searches as one document — a browser's find-in-page
+	 * reaches inside a closed `details`, which is exactly what someone hunting for a path wants.
+	 *
+	 * @param array  $visit   Visit, from get_journeys().
+	 * @param array  $sample  The visit's representative row, attribution-annotated.
+	 * @param array  $filters Current filter set.
+	 * @param string $ip      Current address filter.
+	 * @return void
+	 */
+	private static function render_journey_row( $visit, $sample, $filters, $ip ) {
+		$hops  = $visit['hops'];
+		$count = count( $hops );
+
+		echo '<tr>';
+		echo '<td>' . esc_html( wp_date( 'Y-m-d H:i', $visit['started'] ) ) . '</td>';
+
+		echo '<td>' . esc_html( '' !== $visit['agent'] ? $visit['agent'] : '—' );
+		$attributed = isset( $sample['attributed_to'] ) ? (string) $sample['attributed_to'] : '';
+		if ( '' !== $attributed ) {
+			echo '<br><span style="font-size:11px;color:#8c8f94;">'
+				/* translators: %s: name of the client a forged crawler identity is attributed to. */
+				. esc_html( sprintf( __( 'spoofed by %s', 'make-my-site-agent-ready' ), $attributed ) )
+				. '</span>';
+		}
+		echo '</td>';
+
+		echo '<td>' . esc_html( number_format_i18n( $count ) ) . '</td>';
+		echo '<td>' . esc_html( self::duration_label( $visit['ended'] - $visit['started'] ) ) . '</td>';
+		echo '<td>' . wp_kses_post( self::verdict_badge( $sample ) ) . '</td>';
+		$addresses = isset( $visit['addresses'] ) ? (array) $visit['addresses'] : array();
+		$shown_ip  = self::visit_address( $visit );
+		echo '<td>' . ( '' === $ip ? wp_kses_post( self::ip_cell( $shown_ip, $filters ) ) : '<code>' . esc_html( $shown_ip ) . '</code>' );
+		if ( count( $addresses ) > 1 ) {
+			// Two precisions of one caller, which is worth naming rather than hiding behind whichever
+			// of them the cell happened to show. The per-request addresses are in the sequence below.
+			echo '<br><span style="font-size:11px;color:#8c8f94;">' . esc_html(
+				sprintf(
+					/* translators: %s: number of distinct addresses recorded for one visit */
+					_n( '%s address recorded', '%s addresses recorded', count( $addresses ), 'make-my-site-agent-ready' ),
+					number_format_i18n( count( $addresses ) )
+				)
+			) . '</span>';
+		}
+		echo '</td>';
+		echo '</tr>';
+
+		echo '<tr><td colspan="6" style="padding:0 1rem .8rem;">';
+		echo '<details><summary style="cursor:pointer;color:#2271b1;">' . esc_html(
+			sprintf(
+				/* translators: %s: number of requests in the visit */
+				_n( 'Show the %s request', 'Show all %s requests in order', $count, 'make-my-site-agent-ready' ),
+				number_format_i18n( $count )
+			)
+		) . '</summary>';
+
+		echo '<ol style="margin:.6rem 0 .2rem 1.4rem;">';
+		$previous    = 0;
+		$show_hop_ip = count( $addresses ) > 1;
+		foreach ( $hops as $hop ) {
+			echo '<li style="margin-bottom:.25rem;">';
+			echo '<span style="color:#8c8f94;font-variant-numeric:tabular-nums;">' . esc_html( wp_date( 'H:i:s', $hop['when'] ) ) . '</span> ';
+			echo '<strong>' . esc_html( '' !== $hop['surface'] ? $hop['surface'] : '—' ) . '</strong>';
+			if ( '' !== $hop['detail'] ) {
+				echo ' <code>' . esc_html( $hop['detail'] ) . '</code>';
+			}
+
+			// The gap since the previous request, which is where the shape of a run shows: steady
+			// intervals read as a crawl working a list, a long pause as something coming back.
+			if ( $previous > 0 && $hop['when'] - $previous > 0 ) {
+				echo ' <span style="font-size:11px;color:#8c8f94;">'
+					. esc_html(
+						sprintf(
+							/* translators: %s: a length of time, e.g. "12s" */
+							__( '+%s', 'make-my-site-agent-ready' ),
+							self::duration_label( $hop['when'] - $previous )
+						)
+					)
+					. '</span>';
+			}
+			if ( $show_hop_ip && '' !== $hop['ip'] ) {
+				echo ' <span style="font-size:11px;color:#8c8f94;">' . esc_html( $hop['ip'] ) . '</span>';
+			}
+			echo '</li>';
+			$previous = $hop['when'];
+		}
+		echo '</ol>';
+
+		echo '</details>';
+		echo '</td></tr>';
+	}
+
+	/**
+	 * The controls and summary above the journeys table.
+	 *
+	 * @param array  $filters Current filter set.
+	 * @param string $ip      Address narrowed to, or empty.
+	 * @param array  $extra   View-state arguments.
+	 * @param int    $shown   Visits after the single-request test.
+	 * @param int    $single  Visits of exactly one request.
+	 * @param array  $result  Raw result from get_journeys(), for the window note.
+	 * @return void
+	 */
+	private static function render_journey_controls( $filters, $ip, $extra, $shown, $single, $result ) {
+		echo '<div style="margin:1em 0;padding:.8rem 1.2rem;background:#fff;border:1px solid #c3c4c7;">';
+
+		// The toggle is a link rather than a checkbox in a form: it is one binary state, and a link
+		// keeps it a bookmarkable URL like every other control on this screen.
+		$toggle_extra           = $extra;
+		$toggle_extra['single'] = self::current_multi_only() ? '1' : '';
+		$toggle_url             = add_query_arg( self::filter_args( $filters, $toggle_extra ), admin_url( 'options-general.php' ) );
+
+		echo '<a href="' . esc_url( $toggle_url ) . '" class="button button-secondary">' . esc_html(
+			self::current_multi_only()
+				? __( 'Include single-request visits', 'make-my-site-agent-ready' )
+				: __( 'Hide single-request visits', 'make-my-site-agent-ready' )
+		) . '</a>';
+
+		echo '<p class="description" style="margin:.5rem 0 0;">';
+		if ( '' !== $ip ) {
+			$clear       = $extra;
+			$clear['ip'] = '';
+			printf(
+				/* translators: 1: an IP address, 2: number of visits */
+				esc_html__( 'Showing %1$s and the rest of its network — %2$s visits. The network rather than the single address, because this log stores a caller at two precisions and an exact match would show only half of what it did; callers are still told apart by the name they declare.', 'make-my-site-agent-ready' ),
+				'<code>' . esc_html( $ip ) . '</code>',
+				'<strong>' . esc_html( number_format_i18n( $shown ) ) . '</strong>'
+			);
+			echo ' <a href="' . esc_url( add_query_arg( self::filter_args( $filters, $clear ), admin_url( 'options-general.php' ) ) ) . '">'
+				. esc_html__( 'Show every address', 'make-my-site-agent-ready' ) . '</a>';
+		} else {
+			printf(
+				/* translators: 1: visits shown, 2: requests they were built from */
+				esc_html__( '%1$s visits, built from the most recent %2$s requests that match these filters.', 'make-my-site-agent-ready' ),
+				'<strong>' . esc_html( number_format_i18n( $shown ) ) . '</strong>',
+				'<strong>' . esc_html( number_format_i18n( (int) $result['rows'] ) ) . '</strong>'
+			);
+		}
+
+		if ( self::current_multi_only() && $single > 0 ) {
+			echo ' ';
+			printf(
+				/* translators: %s: number of hidden single-request visits */
+				esc_html( _n( '%s visit of a single request is hidden.', '%s visits of a single request are hidden.', $single, 'make-my-site-agent-ready' ) ),
+				'<strong>' . esc_html( number_format_i18n( $single ) ) . '</strong>'
+			);
+		}
+
+		if ( ! empty( $result['window_full'] ) ) {
+			echo ' ';
+			esc_html_e( 'That window is full, so the oldest visit shown may have begun before it and be missing its first requests.', 'make-my-site-agent-ready' );
+		}
+
+		echo '</p>';
+
+		// A visit is bounded by silence, and how much silence is a choice the reader should be able
+		// to see rather than infer from where the groups happen to fall.
+		echo '<p class="description" style="margin:.4rem 0 0;">';
+		printf(
+			/* translators: %s: a length of time, e.g. "30m" */
+			esc_html__( 'A caller going quiet for longer than %s starts a new visit. A visit is one network and one declared agent, so a client that renames itself partway through appears twice — while one that this log records at two precisions, a full address for agent files and a network for page views, stays a single journey.', 'make-my-site-agent-ready' ),
+			'<strong>' . esc_html( self::duration_label( (int) apply_filters( 'mmsar_agent_log_visit_gap', MMSAR_Agent_Log::VISIT_GAP ) ) ) . '</strong>'
+		);
+		echo '</p>';
+
+		echo '</div>';
+	}
+
+	/**
+	 * A span of seconds as something short enough for a table cell.
+	 *
+	 * Deliberately not human_time_diff(), which phrases a span relative to now ("2 hours ago") and
+	 * rounds to one unit. These are durations, not distances into the past, and the difference
+	 * between a nine-second visit and a nine-minute one is the whole point of the column.
+	 *
+	 * @param int $seconds Span in seconds.
+	 * @return string
+	 */
+	private static function duration_label( $seconds ) {
+		$seconds = max( 0, (int) $seconds );
+
+		if ( $seconds < 60 ) {
+			/* translators: %s: a number of seconds */
+			return sprintf( __( '%ss', 'make-my-site-agent-ready' ), number_format_i18n( $seconds ) );
+		}
+		if ( $seconds < HOUR_IN_SECONDS ) {
+			$minutes = intdiv( $seconds, 60 );
+			$rest    = $seconds % 60;
+			if ( 0 === $rest ) {
+				/* translators: %s: a number of minutes */
+				return sprintf( __( '%sm', 'make-my-site-agent-ready' ), number_format_i18n( $minutes ) );
+			}
+			/* translators: 1: minutes, 2: seconds */
+			return sprintf( __( '%1$sm %2$ss', 'make-my-site-agent-ready' ), number_format_i18n( $minutes ), number_format_i18n( $rest ) );
+		}
+
+		$hours = intdiv( $seconds, HOUR_IN_SECONDS );
+		$rest  = intdiv( $seconds % HOUR_IN_SECONDS, 60 );
+		if ( 0 === $rest ) {
+			/* translators: %s: a number of hours */
+			return sprintf( __( '%sh', 'make-my-site-agent-ready' ), number_format_i18n( $hours ) );
+		}
+		/* translators: 1: hours, 2: minutes */
+		return sprintf( __( '%1$sh %2$sm', 'make-my-site-agent-ready' ), number_format_i18n( $hours ), number_format_i18n( $rest ) );
+	}
+
+	/**
+	 * The address that best represents a visit.
+	 *
+	 * The most specific one recorded, which is the full address whenever the visit contains any
+	 * request that kept one. That is the value worth showing: it is what verification ran against
+	 * and what the reader would act on, where the reduced form names a network rather than a
+	 * caller. A visit whose every request was reduced shows the network, because that is all this
+	 * log knows about it.
+	 *
+	 * @param array $visit Visit, from get_journeys().
+	 * @return string
+	 */
+	private static function visit_address( $visit ) {
+		$addresses = isset( $visit['addresses'] ) ? (array) $visit['addresses'] : array();
+		foreach ( $addresses as $address ) {
+			if ( MMSAR_Agent_Log::anonymize_ip( $address ) !== $address ) {
+				return (string) $address;
+			}
+		}
+		if ( $addresses ) {
+			return (string) $addresses[0];
+		}
+		return isset( $visit['ip'] ) ? (string) $visit['ip'] : '';
+	}
+
+	/**
+	 * The IP cell in the list view, linked to that address's journeys.
+	 *
+	 * The link is the shortest path between the two views and the reason they belong on one screen:
+	 * a single interesting row in the list is almost always a question about what else that caller
+	 * did, and answering it used to mean exporting the CSV and sorting it by hand.
+	 *
+	 * An address that will not validate is shown as plain text rather than linked. Every value this
+	 * plugin writes validates, including the reduced forms; anything that does not came from
+	 * somewhere else, and a link built from it would be a link to nothing.
+	 *
+	 * @param string $ip      Address as stored.
+	 * @param array  $filters Current filter set, carried into the journeys view.
+	 * @return string Escaped markup.
+	 */
+	private static function ip_cell( $ip, $filters ) {
+		if ( '' === $ip ) {
+			return '<code></code>';
+		}
+		if ( ! filter_var( $ip, FILTER_VALIDATE_IP ) ) {
+			return '<code>' . esc_html( $ip ) . '</code>';
+		}
+
+		$url = add_query_arg(
+			self::filter_args(
+				$filters,
+				array(
+					'view' => 'journeys',
+					'ip'   => $ip,
+				)
+			),
+			admin_url( 'options-general.php' )
+		);
+
+		return '<a href="' . esc_url( $url ) . '" title="'
+			. esc_attr__( 'Show this address as journeys', 'make-my-site-agent-ready' )
+			. '"><code>' . esc_html( $ip ) . '</code></a>';
+	}
+
+	/**
+	 * The two view tabs.
+	 *
+	 * Filters are carried across, because they are a statement about which requests are interesting
+	 * and that does not stop being true when the shape of the display changes. The address filter
+	 * is not: it belongs to the journeys view, which is the only one that reads it, and carrying it
+	 * onto a list-view tab that ignores it would show an unnarrowed list under a narrowed URL.
+	 *
+	 * @param string $view    Current view.
+	 * @param array  $filters Current filter set.
+	 * @param string $ip      Current address filter.
+	 * @return void
+	 */
+	private static function render_view_tabs( $view, $filters, $ip ) {
+		$tabs = array(
+			'list'     => __( 'List', 'make-my-site-agent-ready' ),
+			'journeys' => __( 'Journeys', 'make-my-site-agent-ready' ),
+		);
+
+		echo '<h2 class="nav-tab-wrapper" style="margin-bottom:0;">';
+		foreach ( $tabs as $slug => $label ) {
+			$args = array( 'view' => 'list' === $slug ? '' : $slug );
+			if ( 'journeys' === $slug ) {
+				$args['ip'] = $ip;
+			}
+			$url = add_query_arg( self::filter_args( $filters, $args ), admin_url( 'options-general.php' ) );
+			printf(
+				'<a href="%1$s" class="nav-tab%2$s">%3$s</a>',
+				esc_url( $url ),
+				$slug === $view ? ' nav-tab-active' : '',
+				esc_html( $label )
+			);
+		}
+		echo '</h2>';
 	}
 
 	/**

@@ -25,7 +25,28 @@ class MMSAR_Agent_Log {
 	/**
 	 * Schema version. Bump to trigger dbDelta on the next load.
 	 */
-	const DB_VERSION = 4;
+	const DB_VERSION = 5;
+
+	/**
+	 * How long a caller may go quiet before its next request counts as a new visit, in seconds.
+	 *
+	 * The journeys view exists because a sequence of requests is worth more than the same requests
+	 * as a flat list, and a sequence needs an end. Thirty minutes is the long-standing web-analytics
+	 * convention and it suits crawlers well: they work through a site in bursts and then leave, so
+	 * a gap this long almost always means the run finished rather than paused.
+	 */
+	const VISIT_GAP = 1800;
+
+	/**
+	 * How many recent requests the journeys view stitches into visits.
+	 *
+	 * Sessionizing is done in PHP over a bounded window rather than in SQL over the whole table.
+	 * The log has no upper size — retention defaults to keeping everything — so a query that
+	 * grouped across all of it would grow without limit on exactly the sites that log the most.
+	 * A window keeps the cost of opening the screen flat, and the view says what it covers rather
+	 * than implying it covers everything.
+	 */
+	const JOURNEY_WINDOW = 5000;
 
 	/**
 	 * Option holding the installed schema version.
@@ -90,6 +111,38 @@ class MMSAR_Agent_Log {
 		'Amazonbot',
 		'YouBot',
 		'Diffbot',
+		'LinkupBot',
+		'SSI-Nutch',
+	);
+
+	/**
+	 * Agent names that are only claimed when the user-agent also discloses the right operator.
+	 *
+	 * Two unrelated crawlers can pick the same name, and the matching above is case-insensitive, so
+	 * one operator's bot would otherwise be recorded under the other's name and then judged against
+	 * the wrong operator's published ranges — which produces a confident `failed` against a real
+	 * crawler, the one outcome the verification code says is worse than having no feature at all.
+	 *
+	 * `LinkupBot` is the live case. Linkup (linkup.so) runs an AI search crawler; LinkUp
+	 * (linkup.com), unrelated, runs a job-listings crawler that spells its name the same way. Each
+	 * discloses its own domain in its user-agent, which is the thing an impersonator cannot borrow
+	 * without pointing at the operator it is impersonating.
+	 *
+	 * `SSI-Nutch` is here for the other reason a name needs guarding: not a collision that has
+	 * already happened, but a name cheap enough to wear. `SSI` is a generic initialism and Nutch is
+	 * an off-the-shelf crawler anyone can run, so the pair says very little on its own; requiring
+	 * `ssi.inc` at least holds a claimant to naming the operator it claims to be. Nothing about this
+	 * verifies the claim — SSI publishes no ranges and no reverse-DNS convention, so requests under
+	 * this name reach `unverifiable` and never `verified`. It is recognition, not endorsement, and
+	 * the reason to want it is that a recognised crawler's address is kept in full rather than
+	 * reduced to its network, which is what makes any later verification possible at all.
+	 *
+	 * A name listed here that arrives without its disclosure is not recognised: it falls through to
+	 * the trimmed user-agent, reads as an unrecognised self-declared crawler, and is never accused.
+	 */
+	const AGENT_DISCLOSURES = array(
+		'LinkupBot' => 'linkup.so',
+		'SSI-Nutch' => 'ssi.inc',
 	);
 
 	/**
@@ -152,7 +205,8 @@ class MMSAR_Agent_Log {
 			PRIMARY KEY  (id),
 			KEY logged_at (logged_at),
 			KEY verified (verified),
-			KEY client_type (client_type)
+			KEY client_type (client_type),
+			KEY visit (ip, logged_at)
 			) {$collate};"
 		);
 
@@ -368,6 +422,290 @@ class MMSAR_Agent_Log {
 				$f['categories']
 			)
 		);
+	}
+
+	/**
+	 * The most recent requests as visits, newest visit first.
+	 *
+	 * A visit is one caller's run of requests: the same network and the same declared agent, with
+	 * no gap longer than VISIT_GAP between consecutive requests. The declared name is half the
+	 * identity because a client that changes what it calls itself partway through is two different
+	 * things asking, and merging them would invent a journey nobody made.
+	 *
+	 * The other half is the *network* rather than the exact address, and that is not an accuracy
+	 * that was given up cheaply. This log deliberately stores two different precisions for the same
+	 * caller: a page view from a user-agent it does not recognise as a crawler is stored against the
+	 * network (see maybe_record_page_view), while that same caller's request for an agent surface
+	 * keys through record() and keeps its full address. Grouping on the exact address therefore tore
+	 * every unrecognised crawler's visit in half — its HTML page views into one journey and its
+	 * llms.txt, .md and MCP requests into another, each looking like a different caller. Measured on
+	 * live traffic that was 7 of the agents in a 400-request sample, and it hid the most interesting
+	 * journey on the site: one crawler doing full agent discovery interleaved with reading pages,
+	 * split into two unremarkable halves.
+	 *
+	 * Matching on the network reunites them, because the reduced form *is* the network of the full
+	 * one. The cost is that two genuinely different callers sharing a network AND an identical
+	 * user-agent string merge into one visit; the declared name does most of the work of keeping
+	 * them apart, and that pair of coincidences is far rarer than the split it fixes. Nothing about
+	 * storage changes: the full address is still recorded, still shown, and is still what
+	 * verification runs against.
+	 *
+	 * Stitched in PHP over a bounded window of rows rather than grouped in SQL. Sessionizing needs
+	 * each row's distance from the previous row in the same series, which SQL cannot express without
+	 * window functions — unavailable on the MySQL 5.7 this plugin still supports — and the window
+	 * is what keeps the work flat as the log grows. See JOURNEY_WINDOW.
+	 *
+	 * Rows arrive newest-first from the query, are walked oldest-first so each visit reads in the
+	 * order the requests happened, and the visits themselves come back newest-first to match every
+	 * other view of this log. A visit at the far edge of the window may be truncated — its earlier
+	 * requests fell outside — which is why `window_full` is reported alongside.
+	 *
+	 * @param array  $filters Filter set, as accepted by normalize_filters().
+	 * @param string $ip      Restrict to one address. Empty for every address.
+	 * @return array{visits: array[], rows: int, window_full: bool}
+	 */
+	public static function get_journeys( $filters = array(), $ip = '' ) {
+		$rows = self::journey_rows( $filters, $ip );
+		if ( ! $rows ) {
+			return array(
+				'visits'      => array(),
+				'rows'        => 0,
+				'window_full' => false,
+			);
+		}
+
+		$total = count( $rows );
+
+		// Oldest first from here on: a journey is only a journey in the order it happened.
+		$rows = array_reverse( $rows );
+
+		/**
+		 * How long a caller may go quiet before its next request starts a new visit.
+		 *
+		 * @param int $seconds Gap in seconds. Default 1800.
+		 */
+		$gap = (int) apply_filters( 'mmsar_agent_log_visit_gap', self::VISIT_GAP );
+		$gap = $gap > 0 ? $gap : self::VISIT_GAP;
+
+		$visits = array();
+		$open   = array();
+
+		foreach ( $rows as $row ) {
+			$row_ip  = isset( $row['ip'] ) ? (string) $row['ip'] : '';
+			$agent   = isset( $row['agent'] ) ? (string) $row['agent'] : '';
+			$network = self::journey_network( $row_ip );
+			$key     = $network . '|' . $agent;
+			$when    = isset( $row['logged_at'] ) ? (int) strtotime( $row['logged_at'] . ' UTC' ) : 0;
+
+			// A row whose timestamp will not parse cannot be placed in a sequence. Dropping it from
+			// the journeys view leaves it visible in the list view, which is the honest outcome:
+			// better a visit that omits it than one that claims it happened at the epoch.
+			if ( ! $when ) {
+				continue;
+			}
+
+			if ( isset( $open[ $key ] ) && ( $when - $open[ $key ]['ended'] ) <= $gap ) {
+				$index                      = $open[ $key ]['index'];
+				$visits[ $index ]['hops'][] = self::journey_hop( $row, $when );
+				$visits[ $index ]['ended']  = $when;
+				$open[ $key ]['ended']      = $when;
+
+				// Every distinct stored address the visit was seen under, in the order they first
+				// appeared. Usually one; two when this is a caller whose page views were reduced to
+				// the network and whose agent-surface requests were not. The screen shows them.
+				if ( '' !== $row_ip && ! in_array( $row_ip, $visits[ $index ]['addresses'], true ) ) {
+					$visits[ $index ]['addresses'][] = $row_ip;
+				}
+
+				// A verdict is recorded per row and the rows of one visit can disagree — an
+				// address checked later, or re-checked. The most decisive answer is the one the
+				// visit is labelled with; see journey_verdict_rank().
+				if ( self::journey_verdict_rank( $row ) > self::journey_verdict_rank( $visits[ $index ]['sample'] ) ) {
+					$visits[ $index ]['sample'] = $row;
+				}
+				continue;
+			}
+
+			$visits[]     = array(
+				'agent'     => $agent,
+				'ip'        => $row_ip,
+				'network'   => $network,
+				'addresses' => '' === $row_ip ? array() : array( $row_ip ),
+				'started'   => $when,
+				'ended'     => $when,
+				'sample'    => $row,
+				'hops'      => array( self::journey_hop( $row, $when ) ),
+			);
+			$open[ $key ] = array(
+				'index' => count( $visits ) - 1,
+				'ended' => $when,
+			);
+		}
+
+		// Newest visit first, matching every other view of this log. Ties broken on the end time so
+		// two visits that began in the same second order by which was still going.
+		usort(
+			$visits,
+			static function ( $a, $b ) {
+				if ( $a['started'] === $b['started'] ) {
+					return $b['ended'] <=> $a['ended'];
+				}
+				return $b['started'] <=> $a['started'];
+			}
+		);
+
+		return array(
+			'visits'      => $visits,
+			'rows'        => $total,
+			'window_full' => $total >= self::JOURNEY_WINDOW,
+		);
+	}
+
+	/**
+	 * One request inside a visit.
+	 *
+	 * @param array $row  Log row.
+	 * @param int   $when Unix time of the request.
+	 * @return array
+	 */
+	private static function journey_hop( $row, $when ) {
+		return array(
+			'when'        => $when,
+			'surface'     => isset( $row['surface'] ) ? (string) $row['surface'] : '',
+			'detail'      => isset( $row['detail'] ) ? (string) $row['detail'] : '',
+			'client_type' => isset( $row['client_type'] ) ? (string) $row['client_type'] : '',
+			'ip'          => isset( $row['ip'] ) ? (string) $row['ip'] : '',
+		);
+	}
+
+	/**
+	 * The network a stored address belongs to, as the journeys view groups on.
+	 *
+	 * This reuses anonymize_ip() rather than reimplementing it: that is the same reduction the log applies
+	 * when storing a page view, so feeding it an address that is already reduced returns that same
+	 * value and the two halves of a split visit land on one key. It also normalizes through
+	 * inet_pton/inet_ntop, so two spellings of one IPv6 address group together.
+	 *
+	 * Falls back to the raw value when the address will not parse. Returning the empty string there
+	 * would file every unparseable row under one key and invent a visit out of unrelated callers.
+	 *
+	 * @param string $ip Stored address.
+	 * @return string Grouping key for that address.
+	 */
+	private static function journey_network( $ip ) {
+		$ip = (string) $ip;
+		if ( '' === $ip ) {
+			return '';
+		}
+		$network = self::anonymize_ip( $ip );
+		return '' === $network ? $ip : $network;
+	}
+
+	/**
+	 * How much a row's verification verdict tells the reader, as a sortable rank.
+	 *
+	 * Used to pick which of a visit's rows labels the whole visit. `failed` outranks everything
+	 * because it is the only verdict that says something was actively misrepresented, and a visit
+	 * containing one forged claim is a visit worth looking at whatever its other rows say. Below
+	 * that, a reached verdict beats an unreached one, and anything beats not having looked yet.
+	 *
+	 * @param array $row Log row.
+	 * @return int
+	 */
+	private static function journey_verdict_rank( $row ) {
+		$verdict = isset( $row['verified'] ) ? (string) $row['verified'] : '';
+		switch ( $verdict ) {
+			case MMSAR_Agent_Log_Verify::FAILED:
+				return 4;
+			case MMSAR_Agent_Log_Verify::VERIFIED:
+				return 3;
+			case MMSAR_Agent_Log_Verify::UNCLAIMED:
+				return 2;
+			case '':
+				return 0;
+			default:
+				return 1;
+		}
+	}
+
+	/**
+	 * The window of recent rows the journeys view is stitched from, newest first.
+	 *
+	 * The same filter clause as get_entries(), so ticking a filter narrows both views the same way
+	 * and the journeys shown are made of the requests the list view would show. One extra test for
+	 * a single caller, which is what the IP links in the list view lead to.
+	 *
+	 * That test matches the address's whole network, not the address alone, for the same reason
+	 * get_journeys() groups on the network: the caller's own requests are stored at two precisions,
+	 * so an exact match would hand this view half a visit and then split what is left. Following a
+	 * link from one address is a request to see *that caller*, and this is what that means.
+	 *
+	 * @param array  $filters Filter set, as accepted by normalize_filters().
+	 * @param string $ip      Restrict to this address and its network. Empty for every address.
+	 * @return array[]
+	 */
+	private static function journey_rows( $filters, $ip ) {
+		global $wpdb;
+		$f         = self::normalize_filters( $filters );
+		$like_html = $wpdb->esc_like( 'HTML page view' ) . '%';
+		$like_md   = $wpdb->esc_like( 'Markdown' ) . '%';
+		$like_404  = $wpdb->esc_like( '404' ) . '%';
+		$ip        = (string) $ip;
+
+		// The network as a LIKE prefix, which is the reduced address with its last character
+		// removed. anonymize_ip() always ends a network in a separator plus one filler — '.0' for
+		// IPv4, '::' for IPv6 — so dropping one character leaves exactly the prefix every address
+		// in that network shares: '203.0.113.0' becomes '203.0.113.', and '2001:db8:1:2::' becomes
+		// '2001:db8:1:2:'. Both keep a trailing separator, which is what stops them reaching into a
+		// neighbouring network: '203.0.113.' cannot match 203.0.1130.x (not an address), and
+		// '2001:db8:1:2:' cannot match 2001:db8:1:20:: because the fifth character of that group is
+		// '0' where the prefix requires ':'.
+		//
+		// Keeping the colon matters for the IPv6 case specifically: the network itself ends '::',
+		// and a full address in it does not, so a prefix built from the unmodified network would
+		// match only the reduced form — the exact split this is here to heal.
+		//
+		// An address that will not reduce has no network, so the prefix falls back to the address
+		// and the LIKE simply restates the exact test beside it.
+		$net_like = '';
+		if ( '' !== $ip ) {
+			$network  = self::anonymize_ip( $ip );
+			$prefix   = '' === $network ? $ip : substr( $network, 0, -1 );
+			$net_like = $wpdb->esc_like( $prefix ) . '%';
+		}
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- This plugin's own table; a cached read would show a stale log.
+		$rows = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT logged_at, surface, detail, agent, ip, verified, verified_at, client_type
+				FROM %i
+				WHERE ( %s = '' OR ip = %s OR ip LIKE %s )
+				  AND ( %s = '' OR FIND_IN_SET( IF( verified = '', 'pending', verified ), %s ) > 0 )
+				  AND ( %s = '' OR FIND_IN_SET( IF( client_type = '', 'unrecorded', client_type ), %s ) > 0 )
+				  AND ( %s = '' OR FIND_IN_SET(
+				        CASE WHEN surface LIKE %s THEN 'html'
+				             WHEN surface LIKE %s THEN 'markdown'
+				             WHEN surface LIKE %s THEN 'notfound'
+				             ELSE 'docs' END, %s ) > 0 )
+				ORDER BY id DESC LIMIT %d",
+				self::table(),
+				$ip,
+				$ip,
+				$net_like,
+				$f['verdicts'],
+				$f['verdicts'],
+				$f['clients'],
+				$f['clients'],
+				$f['categories'],
+				$like_html,
+				$like_md,
+				$like_404,
+				$f['categories'],
+				self::JOURNEY_WINDOW
+			),
+			ARRAY_A
+		);
+		return is_array( $rows ) ? $rows : array();
 	}
 
 	/**
@@ -653,6 +991,13 @@ class MMSAR_Agent_Log {
 	 *   the plugin learning one. Where it still has not — `meta-externalagent`, `YouBot`,
 	 *   `Bytespider`, `CCBot` at the time of writing — re-running produces `unverifiable` again,
 	 *   every time, for as long as nobody publishes a method.
+	 * - **`unclaimed`, on the same condition.** This verdict means no *recognised* name was found
+	 *   in the user-agent, and the set of recognised names grows with the plugin: every request a
+	 *   newly-added crawler made before it was added is sitting in the log reading `unclaimed`, and
+	 *   nothing retries it. LinkupBot is the case that exposed this — 326 rows on one site, all
+	 *   answerable the moment the name was added, none of them reopened. The `has_method()` test
+	 *   below is what keeps this from meaning "recheck everything": the overwhelming majority of
+	 *   `unclaimed` rows are browsers and unbranded tools that claim nothing, and they fail it.
 	 *
 	 * The second test cannot be done in SQL: whether an operator is covered is a fact about the
 	 * suffix map and the bundled range data, both of which live in PHP and are filterable. So the
@@ -672,19 +1017,31 @@ class MMSAR_Agent_Log {
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- This plugin's own table.
 		$rows = $wpdb->get_results(
 			$wpdb->prepare(
-				'SELECT DISTINCT ip, agent FROM %i WHERE verified = %s',
+				'SELECT DISTINCT ip, agent FROM %i WHERE verified IN ( %s, %s )',
 				self::table(),
-				MMSAR_Agent_Log_Verify::UNVERIFIABLE
+				MMSAR_Agent_Log_Verify::UNVERIFIABLE,
+				MMSAR_Agent_Log_Verify::UNCLAIMED
 			),
 			ARRAY_A
 		);
 
 		$pairs = array();
 		foreach ( (array) $rows as $pair ) {
-			$agent = isset( $pair['agent'] ) ? (string) $pair['agent'] : '';
-			if ( MMSAR_Agent_Log_Verify::has_method( $agent ) ) {
-				$pairs[] = $pair;
+			$agent   = isset( $pair['agent'] ) ? (string) $pair['agent'] : '';
+			$pair_ip = isset( $pair['ip'] ) ? (string) $pair['ip'] : '';
+			if ( ! MMSAR_Agent_Log_Verify::has_method( $agent ) ) {
+				continue;
 			}
+
+			// A row stored at network precision can never reach a verdict — verdict_for() withholds
+			// one rather than risk accusing a real crawler on evidence that was reduced at storage
+			// time. Offering it for re-check would put a count on screen that no number of presses
+			// could ever clear, which is the same emptiness this method exists to filter out.
+			if ( '' === $pair_ip || self::anonymize_ip( $pair_ip ) === $pair_ip ) {
+				continue;
+			}
+
+			$pairs[] = $pair;
 		}
 		return $pairs;
 	}
@@ -739,9 +1096,10 @@ class MMSAR_Agent_Log {
 			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- This plugin's own table; a cached count would be stale.
 			$total += (int) $wpdb->get_var(
 				$wpdb->prepare(
-					'SELECT COUNT(*) FROM %i WHERE verified = %s AND agent = %s',
+					'SELECT COUNT(*) FROM %i WHERE verified IN ( %s, %s ) AND agent = %s',
 					self::table(),
 					MMSAR_Agent_Log_Verify::UNVERIFIABLE,
+					MMSAR_Agent_Log_Verify::UNCLAIMED,
 					$agent
 				)
 			);
@@ -818,10 +1176,11 @@ class MMSAR_Agent_Log {
 			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Annotating this plugin's own table.
 			$rows   = $wpdb->query(
 				$wpdb->prepare(
-					'UPDATE %i SET verified = %s, verified_at = NULL WHERE verified = %s AND agent = %s',
+					'UPDATE %i SET verified = %s, verified_at = NULL WHERE verified IN ( %s, %s ) AND agent = %s',
 					self::table(),
 					MMSAR_Agent_Log_Verify::PENDING,
 					MMSAR_Agent_Log_Verify::UNVERIFIABLE,
+					MMSAR_Agent_Log_Verify::UNCLAIMED,
 					$agent
 				)
 			);
@@ -1379,6 +1738,26 @@ class MMSAR_Agent_Log {
 	}
 
 	/**
+	 * Whether one agent name is the right label for this user-agent.
+	 *
+	 * The name has to appear, and — for a name two operators share — so does the disclosure that
+	 * says which of them is calling. See AGENT_DISCLOSURES.
+	 *
+	 * @param string $ua     User-agent string.
+	 * @param string $needle Agent name from AGENTS.
+	 * @return bool
+	 */
+	private static function agent_matches( $ua, $needle ) {
+		if ( false === stripos( $ua, $needle ) ) {
+			return false;
+		}
+		if ( ! isset( self::AGENT_DISCLOSURES[ $needle ] ) ) {
+			return true;
+		}
+		return false !== stripos( $ua, self::AGENT_DISCLOSURES[ $needle ] );
+	}
+
+	/**
 	 * Whether a user-agent names a crawler this plugin recognises.
 	 *
 	 * @param string $ua User-agent string.
@@ -1386,7 +1765,7 @@ class MMSAR_Agent_Log {
 	 */
 	private static function is_known_agent( $ua ) {
 		foreach ( self::AGENTS as $needle ) {
-			if ( false !== stripos( $ua, $needle ) ) {
+			if ( self::agent_matches( $ua, $needle ) ) {
 				return true;
 			}
 		}
@@ -1675,7 +2054,7 @@ class MMSAR_Agent_Log {
 			return 'unknown';
 		}
 		foreach ( self::AGENTS as $needle ) {
-			if ( false !== stripos( $ua, $needle ) ) {
+			if ( self::agent_matches( $ua, $needle ) ) {
 				return $needle;
 			}
 		}

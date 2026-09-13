@@ -835,4 +835,16 @@ return array(
 		),
 		'v6'       => array(),
 	),
+	// Linkup — LinkupBot.
+	// Source: https://www.linkup.so/linkupbot-ips.txt.
+	// One prefix, and Linkup's own documentation says to verify against this file rather than by
+	// reverse DNS — 35.198.113.100 has no PTR record. A single address is unusually narrow, so
+	// expect this one to churn: re-fetch at release time like the rest.
+	'linkup'     => array(
+		'captured' => '2026-09-13',
+		'v4'       => array(
+			'35.198.113.100/32',
+		),
+		'v6'       => array(),
+	),
 );

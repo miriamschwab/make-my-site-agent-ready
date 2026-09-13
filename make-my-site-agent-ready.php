@@ -3,7 +3,7 @@
  * Plugin Name:       Make My Site Agent-Ready
  * Plugin URI:        https://miriamschwab.me/plugins/make-my-site-agent-ready
  * Description:       Makes your WordPress site ready for AI agents: .md URLs, llms.txt, llms-full.txt, an OpenAPI spec, a read-only MCP server, agent-recoverable 404s, security.txt, api-catalog, Agent Skills discovery, Link response headers, Content Signals, optional JSON-LD structured data (merges into Yoast's own schema when active), and AI crawler rules in robots.txt.
- * Version:           1.35.0
+ * Version:           1.38.0
  * Author:            Miriam Schwab
  * Author URI:        https://miriamschwab.me
  * License:           GPL-2.0-or-later
@@ -19,7 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'MMSAR_VERSION', '1.35.0' );
+define( 'MMSAR_VERSION', '1.38.0' );
 define( 'MMSAR_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'MMSAR_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'MMSAR_PLUGIN_FILE', __FILE__ );
@@ -654,6 +654,12 @@ function mmsar_robots_txt( $output, $is_public ) {
 	// what the content may be used for. Amazon's two narrower tokens, Amzn-SearchBot and Amzn-User,
 	// are documented as never crawling for training and are not listed for that reason: naming them
 	// here would add nothing the site's general rules do not already say.
+	//
+	// LinkupBot is here on the other rationale, the one PerplexityBot is here on: it crawls to
+	// answer questions rather than to train, so what the signal says about training is not the
+	// interesting half — what matters is that the group states the site's terms to an operator that
+	// will quote it. Naming it also keeps it off the site's general rules, which may be stricter
+	// than the owner intends for a crawler they are happy to be cited by.
 	$ai_crawlers = array(
 		'GPTBot',
 		'ClaudeBot',
@@ -662,6 +668,7 @@ function mmsar_robots_txt( $output, $is_public ) {
 		'PerplexityBot',
 		'FacebookBot',
 		'Amazonbot',
+		'LinkupBot',
 	);
 
 	// Skip auto-adding Content-Signal if the site owner already added one manually in the

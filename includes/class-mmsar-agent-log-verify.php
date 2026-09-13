@@ -164,6 +164,7 @@ class MMSAR_Agent_Log_Verify {
 		'ChatGPT-User'     => 'openai',
 		'PerplexityBot'    => 'perplexity',
 		'Perplexity-User'  => 'perplexity',
+		'LinkupBot'        => 'linkup',
 	);
 
 	/**
@@ -310,8 +311,9 @@ class MMSAR_Agent_Log_Verify {
 		}
 
 		$max_ips = max( 1, absint( $max_ips ) );
-		$budget  = (float) $budget;
+		$budget  = self::affordable_budget( (float) $budget );
 		$started = microtime( true );
+		$slowest = 0.0;
 
 		$pairs = MMSAR_Agent_Log::get_unverified_pairs( $max_ips );
 		if ( ! $pairs ) {
@@ -323,8 +325,10 @@ class MMSAR_Agent_Log_Verify {
 			$agent = isset( $pair['agent'] ) ? (string) $pair['agent'] : '';
 			$ip    = isset( $pair['ip'] ) ? (string) $pair['ip'] : '';
 
-			$verdict = self::verdict_for( $agent, $ip );
-			$rows    = MMSAR_Agent_Log::apply_verdict( $ip, $agent, $verdict );
+			$lookup_started = microtime( true );
+			$verdict        = self::verdict_for( $agent, $ip );
+			$slowest        = max( $slowest, microtime( true ) - $lookup_started );
+			$rows           = MMSAR_Agent_Log::apply_verdict( $ip, $agent, $verdict );
 
 			++$done['ips'];
 			$done['rows'] += $rows;
@@ -333,10 +337,19 @@ class MMSAR_Agent_Log_Verify {
 			}
 			++$done['verdicts'][ $verdict ];
 
-			// Checked between lookups rather than before the loop, so a pass that runs into a slow
-			// resolver stops cleanly and leaves the remainder pending rather than holding the
-			// request open. Whatever is left is picked up by the next pass.
-			if ( ( microtime( true ) - $started ) >= $budget ) {
+			// Stop while there is still room for another lookup of the worst length this pass has
+			// actually seen, rather than on the budget alone. Testing `elapsed >= budget` stops only
+			// once the budget is already spent, which means the *next* lookup was always allowed to
+			// start and the pass overran by however long that one took. A reverse-DNS call against
+			// an address that does not resolve blocks for seconds, so the overrun is seconds, and a
+			// pass measured here ran 32.8s against a 20s budget — past the 30s max_execution_time
+			// that most shared hosts set, which ends the request in a fatal rather than a verdict.
+			//
+			// The reserve is measured rather than assumed because resolver latency is a property of
+			// the host and the addresses, not something this plugin can know in advance. It starts
+			// at zero, so a pass over fast lookups still uses its whole budget and nothing is lost
+			// on the sites where this never mattered.
+			if ( ( microtime( true ) - $started ) + $slowest >= $budget ) {
 				return $done;
 			}
 		}
@@ -367,6 +380,27 @@ class MMSAR_Agent_Log_Verify {
 			return self::NODNS;
 		}
 
+		// An address that is already its own network cannot be checked against a published range,
+		// and must never be judged as though it could. This log stores a reduced address for page
+		// views from user-agents it does not recognise as crawlers, so every request a crawler made
+		// *before* this plugin learned its name is on file at network precision. Ask whether
+		// 35.198.113.0 is inside Linkup's published 35.198.113.100/32 and the honest answer is that
+		// the evidence was discarded at storage time — but a range check answers "no", which this
+		// class reports as `failed`, the verdict that says a real operator was impersonated.
+		//
+		// That is the exact false accusation the whole verification design treats as worse than
+		// having no feature at all, and re-checking makes it reachable in bulk: the rows that
+		// become answerable when a crawler is newly recognised are, by definition, the ones logged
+		// while it was not — the reduced ones. So withhold judgement instead. `unverifiable` is
+		// what it means: something was claimed and this row cannot settle it.
+		//
+		// A genuine host address ending in .0 is caught by the same test and also withheld. That
+		// costs a verdict on a rare address and never costs a false accusation, which is the right
+		// way round for this trade.
+		if ( MMSAR_Agent_Log::anonymize_ip( $ip ) === $ip ) {
+			return self::UNVERIFIABLE;
+		}
+
 		$cache_key = self::cache_key( $claimed, $ip );
 		$cached    = get_transient( $cache_key );
 		if ( is_string( $cached ) && '' !== $cached ) {
@@ -378,6 +412,43 @@ class MMSAR_Agent_Log_Verify {
 		set_transient( $cache_key, $verdict, self::NODNS === $verdict ? self::NODNS_TTL : self::CACHE_TTL );
 
 		return $verdict;
+	}
+
+	/**
+	 * The largest slice of this request that may safely be spent on lookups.
+	 *
+	 * A budget is only meaningful next to the limit that ends the request. `max_execution_time` is
+	 * what PHP kills the request at, and exceeding it is a fatal — the blank "critical error" page,
+	 * not a slow screen — so a fixed budget chosen without reference to it is a guess that happens
+	 * to be safe on the machine it was written on.
+	 *
+	 * Two adjustments. The time this request has *already* spent is subtracted, because the pass
+	 * runs after a page has been queried and rendered and it is the total that gets killed, not the
+	 * pass. What remains is then halved, leaving room for the one lookup that may still be in flight
+	 * when the loop decides to stop, plus whatever the response itself costs after this returns.
+	 *
+	 * A limit of 0 means no limit, which is the normal case under WP-CLI and on hosts that lift it;
+	 * there the caller's budget stands unchanged. The result is never raised above what the caller
+	 * asked for — this only ever takes time away.
+	 *
+	 * @param float $budget Budget the caller asked for, in seconds.
+	 * @return float Budget to actually honour.
+	 */
+	private static function affordable_budget( $budget ) {
+		$limit = (int) ini_get( 'max_execution_time' );
+		if ( $limit <= 0 ) {
+			return $budget;
+		}
+
+		$spent = isset( $_SERVER['REQUEST_TIME_FLOAT'] )
+			? microtime( true ) - (float) $_SERVER['REQUEST_TIME_FLOAT']
+			: 0.0;
+
+		$remaining = (float) $limit - max( 0.0, $spent );
+
+		// Never return zero or less: one lookup is always attempted, so a pass that reports doing
+		// nothing while the screen says work is pending would be worse than a pass that runs long.
+		return min( $budget, max( 1.0, $remaining / 2 ) );
 	}
 
 	/**
@@ -529,8 +600,28 @@ class MMSAR_Agent_Log_Verify {
 			)
 		);
 
+		// A value byte-identical to a canonical name needs no disclosure test, because it did not
+		// come from a user-agent: agent_label() writes the name verbatim out of the AGENTS list, and
+		// it only reaches that point by passing agent_matches(), which is the guard. Re-deriving the
+		// guard from the label is what broke this — the label carries the *result* of the check and
+		// none of the evidence, so asking whether "LinkupBot" contains "linkup.so" says no and the
+		// verdict comes out `unclaimed` for the one crawler the guard was written for.
+		//
+		// The exemption is deliberately byte-exact rather than case-insensitive. strcasecmp() reads
+		// `LinkUpBot` and `LinkupBot` as the same string, so a case-insensitive exemption would wave
+		// through linkup.com's crawler under linkup.so's name and judge it against linkup.so's
+		// address — the false accusation this guard exists to prevent. A case variant cannot have
+		// been written by agent_label(), so it is a raw user-agent and is tested like one.
+		//
+		// One ambiguity is accepted knowingly: a caller whose entire user-agent is the literal
+		// string `LinkupBot`, with no disclosure, is stored raw and is byte-identical to the label,
+		// so it is treated as guard-approved and judged. That is defensible — it claims the exact
+		// name and offers nothing to tell it apart — and it is distinct from the impostor, which
+		// spells the name differently and still fails. Removing the ambiguity would mean storing the
+		// resolved claim in its own column rather than re-deriving it from a lossy label, which is a
+		// schema change that would do nothing for the rows already written.
 		foreach ( $known as $name ) {
-			if ( 0 === strcasecmp( $agent, $name ) ) {
+			if ( 0 === strcasecmp( $agent, $name ) && ( $agent === $name || self::discloses( $agent, $name ) ) ) {
 				return $name;
 			}
 		}
@@ -545,12 +636,44 @@ class MMSAR_Agent_Log_Verify {
 		);
 
 		foreach ( $known as $name ) {
-			if ( false !== stripos( $agent, $name ) ) {
+			if ( false !== stripos( $agent, $name ) && self::discloses( $agent, $name ) ) {
 				return $name;
 			}
 		}
 
 		return '';
+	}
+
+	/**
+	 * Whether a stored agent value may be judged as the crawler whose name it contains.
+	 *
+	 * The same disclosure requirement MMSAR_Agent_Log applies when labelling a live request, applied
+	 * again here — because this method reads the *stored* string, and the two paths can see
+	 * different things. A request from a recognised crawler is stored under its bare name and the
+	 * guard has already been satisfied; anything unrecognised is stored as its raw user-agent, and
+	 * that raw string reaches this method with the guard never having run.
+	 *
+	 * Without this, `LinkUpBot (job aggregator; linkup.com)` — an unrelated crawler that spells its
+	 * name the same way — matches `LinkupBot` on a case-insensitive substring, gets judged against
+	 * linkup.so's single published address, and is reported as having impersonated an operator it
+	 * has nothing to do with. Labelling was already protected against exactly this; verification was
+	 * not, and re-checking is what made the gap reachable in bulk, since reopening `unclaimed` rows
+	 * hands this method every raw user-agent the log has ever stored.
+	 *
+	 * A name with no disclosure requirement passes unconditionally, which is every name but one.
+	 *
+	 * @param string $agent Stored agent value.
+	 * @param string $name  Recognised crawler name found in it.
+	 * @return bool
+	 */
+	private static function discloses( $agent, $name ) {
+		$required = MMSAR_Agent_Log::AGENT_DISCLOSURES;
+		foreach ( $required as $needle => $disclosure ) {
+			if ( 0 === strcasecmp( $needle, $name ) ) {
+				return false !== stripos( $agent, $disclosure );
+			}
+		}
+		return true;
 	}
 
 	/**
