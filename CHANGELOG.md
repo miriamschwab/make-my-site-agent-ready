@@ -2,6 +2,21 @@
 
 All notable changes to Make My Site Agent-Ready.
 
+## 1.40.0 — 2026-09-14
+
+- **New: an Open Knowledge Format (OKF v0.2) bundle at `/okf/`.** Publishes this site's content as a browsable tree of typed Markdown "concept" files — one per published post/page, each with YAML front matter (`type`, `title`, `description`, `resource`, `tags`, `modified`) — plus a per-post-type index and a root index, so an agent can ingest the whole corpus in one pass instead of scraping page by page.
+- **Reuses the same Markdown already generated for the `.md` URLs**; nothing is converted twice. Deliberately does not ship the spec's optional packaged `.tar.gz` archive or a `references/` directory — the first adds real generation cost for a convenience nothing here requires, the second exists to mirror externally cited standards that ordinary post content doesn't have.
+- **New: `/okf/log.md`**, a change log generated from each concept's own last-modified date (newest first, 200 most recent) — not a hand-maintained editorial log, since WordPress content has no such thing to draw from.
+- **Advertised from `/llms.txt` and the Agentic Resource Discovery catalog**, the same way `llms-full.txt` is — not from a Link header on every page, to avoid saying it twice.
+- **New feature toggle: OKF bundle**, on by default like the plugin's other document-only features.
+
+## 1.39.0 — 2026-09-14
+
+- **New: a TDMRep reservation header.** Sends `tdm-reservation` on every response — `1` if you reserve the right to object to text and data mining of your content, `0` if you don't — which is the machine-readable form the EU's Copyright in the Digital Single Market Directive (Article 4) requires for that reservation to actually count; without it, mining is permitted by default. It is a legal notice, not a technical block: it stops no request.
+- **The reservation value is not a new setting to configure.** It is derived from the existing AI Train answer in Content Signals, because the two conventions answer the same underlying question for two different audiences, and stating one thing in one and the opposite in the other is a contradiction with no good resolution. Set AI Train and both now agree automatically.
+- **New: an optional Policy URL setting.** Sent as a `tdm-policy` header alongside the reservation, and only alongside an actual reservation, so a would-be licensee has somewhere to ask rather than just a closed door.
+- **New feature toggle: TDM reservation (TDMRep)**, on by default like the plugin's other document-only features — it changes no existing response body, only adds headers.
+
 ## 1.38.0 — 2026-09-14
 
 - **New: SSI-Nutch is recognised in the Agent Log.** SSI (ssi.inc) runs a broad web crawler built on Apache Nutch. Until now its requests were logged as ordinary page views, which had a cost beyond the label: an unrecognised crawler's page views are stored against the network rather than the full address, so the evidence needed to identify it was being discarded on every visit and cannot be recovered afterwards. Recognising the name is what stops that.

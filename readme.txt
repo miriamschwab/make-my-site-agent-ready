@@ -4,34 +4,45 @@ Tags: markdown, llm, ai, llms-txt, agents
 Requires at least: 6.2
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.38.0
+Stable tag: 1.40.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Makes your WordPress site ready for AI agents: markdown URLs, llms.txt, security.txt, api-catalog, Agent Skills, and AI crawler rules.
+Makes your WordPress site agent-ready: markdown URLs, OKF bundle, llms.txt, MCP, OpenAPI, api-catalog, Agent Skills, TDMRep, and AI crawler rules.
 
 == Description ==
 
-Make My Site Agent-Ready makes your WordPress content accessible to AI language models and AI agents. Every post and page gets a markdown endpoint automatically, a site index is generated for discovery, and the full site content is available in one request for LLMs that want it.
+Make My Site Agent-Ready makes your WordPress content accessible to AI language models and AI agents. Every post and page gets a markdown endpoint automatically, a site index and a typed Open Knowledge Format bundle are generated for discovery, and the full site content is available in one request for LLMs that want it.
 
-Every feature below can be switched off individually under Settings > Agent-Ready, so the plugin stays out of the way of anything you already manage elsewhere. Everything is on by default except structured data.
+Every feature below can be switched off individually under Settings > Agent-Ready, so the plugin stays out of the way of anything you already manage elsewhere. Most default on; a handful default off, each for its own stated reason (see Features below and the settings page itself).
 
 **Features:**
 
-* **Individual feature toggles** — Turn off any output the plugin publishes (markdown URLs, llms.txt, llms-full.txt, robots.txt rules, security.txt, api-catalog, Agent Skills). A disabled feature registers nothing at all — no rewrite rule, no filter, no header — so the site behaves as if that part of the plugin did not exist.
+* **Individual feature toggles** — Turn off any output the plugin publishes. A disabled feature registers nothing at all — no rewrite rule, no filter, no header — so the site behaves as if that part of the plugin did not exist.
 * **`.md` URLs** — Append `.md` to any post or page URL to get a clean markdown version
 * **Markdown from the normal page URL** — Optional (off by default). Answers a request for an ordinary page with its markdown when the request's `Accept` header asks for markdown, which is how AI clients ask. Comes with a self-check that requests one of your own pages as an agent and then as a browser, reports which version came back and what cache headers survived, and switches the feature off by itself if a browser-style request is ever answered with markdown. Leave it off if your site is behind a CDN that ignores `Vary: Accept` — Cloudflare does
-* **llms.txt** — Auto-generated site index at `/llms.txt` listing all available markdown content
+* **`?mode=agent`** — Appended to any URL, returns that page as Markdown; on the homepage, a summary of every machine-readable surface the site has
+* **llms.txt** — Auto-generated site index at `/llms.txt` listing all available markdown content, per v2 of the llms.txt proposal (scoped indexes per section, discoverable by link relation)
 * **llms-full.txt** — Full site content in one file at `/llms-full.txt` for LLMs that want everything
+* **OKF bundle** — Serves `/okf/`, the same content as an Open Knowledge Format v0.2 tree: a root index, one index per post type, and one typed Markdown "concept" file per post/page (front matter: type, title, description, resource, tags, modified), plus a change log at `/okf/log.md`. Reuses the same generated markdown as the `.md` URLs
+* **OpenAPI specification** — Serves `/openapi.json`, an OpenAPI 3.1 description of every public endpoint this plugin serves, generated from the site's actual registered routes
+* **MCP server** — Optional (off by default). A read-only Model Context Protocol endpoint AI clients can connect to directly, with tools to search the site, list content, and read a page as Markdown. Rate-limited, and exposes nothing llms-full.txt doesn't already publish
+* **auth.md** — Serves `/auth.md`, a plain-language explanation of how an agent gets access to the site — usually "you don't need credentials," stated so an agent doesn't assume otherwise
+* **Agentic Resource Discovery catalog** — Serves `/.well-known/ai-catalog.json` (also at `/.well-known/ard.json`), a typed inventory of the site's agentic resources with stable identifiers
 * **security.txt** — Serves `/.well-known/security.txt` (RFC 9116). Enter your security contact as a full URL, a path like `/contact`, or an email address, and the plugin formats it correctly
 * **api-catalog** — Serves `/.well-known/api-catalog` (RFC 9727), a machine-readable index linking llms.txt, llms-full.txt, security.txt, the Agent Skills index, sitemap, and feed
 * **Agent Skills discovery** — Serves `/.well-known/agent-skills/index.json` plus a bundled skill teaching agents how to use this plugin's markdown endpoints
-* **Link response headers** — Every front-end response carries `Link` headers (RFC 8288) pointing to api-catalog, llms.txt, and the Agent Skills index; singular posts/pages add one more pointing to their markdown alternate — so agents that only read headers, not HTML, can still find these resources
+* **NLWeb `/ask` endpoint** — Optional (off by default). Answers questions about the site in NLWeb's shape, retrieval only. Ships with a Schemamap at `/schema-map.xml` plus a `Schemamap:` robots.txt directive
+* **MCP Apps UI** — Experimental, off by default. Lets an MCP client render search/list results as a card list instead of plain text
+* **Agent-recoverable 404s** — A 404 adds Link headers and a short Markdown list pointing at the sitemap, llms.txt and endpoint catalog, instead of leaving an agent with nothing but a dead end. Looks identical to visitors
+* **Link response headers** — Every front-end response carries `Link` headers (RFC 8288) pointing to whichever of the resources above are switched on; singular posts/pages add one more pointing to their markdown alternate — so agents that only read headers, not HTML, can still find these resources
 * **Content Signals** — Declares `Content-Signal: search=..., ai-input=..., ai-train=...` (contentsignals.org) under each AI crawler's group in `robots.txt`, configurable in Settings > Agent-Ready. Defaults to allowing search and live AI retrieval, declining AI training use.
+* **TDMRep reservation header** — Sends `tdm-reservation: 1` or `0` on every response, the machine-readable form EU copyright law (DSM Directive Article 4) requires for a text-and-data-mining reservation to count. The value is derived from the AI Train setting above, not a separate choice, so the two can never disagree. An optional Policy URL is sent alongside it when reserving
 * **Structured data (JSON-LD)** — Optional (off by default) pointer to the markdown alternate on each enabled post/page. When Yoast SEO is active and produces schema for the page, the pointer merges directly into Yoast's own `Article`/`WebPage` piece — no duplicate block. Otherwise, a standalone `Article`/`WebPage` JSON-LD block is added instead. Enable in Settings > Agent-Ready.
 * **AI crawler rules** — Adds explicit `Allow: /` entries for GPTBot, ClaudeBot, and other AI crawlers in `robots.txt`
 * **llms.txt discovery in robots.txt** — Adds an `Llms-txt:` directive pointing at your `/llms.txt`, so agents that fetch `robots.txt` first are told where the index is. Skipped if llms.txt is switched off, or if `robots.txt` already mentions it
 * **Endpoints stay reachable** — If `robots.txt` disallows a path one of your published endpoints lives on (several SEO plugins disallow `/wp-json/` by default), an `Allow:` line for that individual endpoint is added above the rule blocking it. The endpoint stays reachable to agents that found it in your api-catalog, llms.txt or Agent Skills index; the rest of the REST API stays disallowed
+* **Deprecation/Sunset headers** — For surfaces you schedule for retirement (via a filter), responses carry `Deprecation` and `Sunset` headers so an agent is told a URL is going away before it does. Empty, and inactive, until you fill in a schedule
 * **YAML frontmatter** — Title, date, author, URL, excerpt, categories, and tags
 * **Pre-generated** — Markdown is generated when posts are saved, so `.md` requests are instant
 * **Discoverable** — Adds `<link rel="alternate" type="text/markdown">` to page headers
@@ -43,6 +54,7 @@ Every feature below can be switched off individually under Settings > Agent-Read
 2. When someone requests `your-post.md`, the pre-generated markdown is served instantly
 3. The `/llms.txt` file lists all available markdown URLs organized by category
 4. The `/llms-full.txt` file concatenates the full content of all posts and pages
+5. The OKF bundle at `/okf/` wraps the same markdown in typed front matter, addressable one concept at a time
 
 == Installation ==
 
@@ -112,6 +124,21 @@ Yes. Plugin and theme authors can register one so it works on any site without t
 Use the `mmsar_registered_endpoints` filter for the same thing without a direct call. Add `'surfaces' => array( 'llms_txt' )` to limit where it appears, and `'rel'` to set its api-catalog link relation. Endpoints that publish a SKILL.md of their own can pass `'skill_url'` to get their own entry in the Agent Skills index. Code-registered endpoints appear read-only under "Added by Plugins" on the settings page. Full documentation is in the plugin's README on GitHub.
 
 == Changelog ==
+
+= 1.40.0 - 2026-09-14 =
+
+* New: an Open Knowledge Format (OKF v0.2) bundle at /okf/. Publishes this site's content as a browsable tree of typed Markdown "concept" files — one per published post/page, each with YAML front matter (type, title, description, resource, tags, modified) — plus a per-post-type index and a root index, so an agent can ingest the whole corpus in one pass instead of scraping page by page.
+* Reuses the same Markdown already generated for the .md URLs; nothing is converted twice. Deliberately does not ship the spec's optional packaged .tar.gz archive or a references/ directory — the first adds real generation cost for a convenience nothing here requires, the second exists to mirror externally cited standards that ordinary post content doesn't have.
+* New: /okf/log.md, a change log generated from each concept's own last-modified date (newest first, 200 most recent) — not a hand-maintained editorial log, since WordPress content has no such thing to draw from.
+* Advertised from /llms.txt and the Agentic Resource Discovery catalog, the same way llms-full.txt is — not from a Link header on every page, to avoid saying it twice.
+* New feature toggle: OKF bundle, on by default like the plugin's other document-only features.
+
+= 1.39.0 - 2026-09-14 =
+
+* New: a TDMRep reservation header. Sends `tdm-reservation` on every response — `1` if you reserve the right to object to text and data mining of your content, `0` if you don't — which is the machine-readable form the EU's Copyright in the Digital Single Market Directive (Article 4) requires for that reservation to actually count; without it, mining is permitted by default. It is a legal notice, not a technical block: it stops no request.
+* The reservation value is not a new setting to configure. It is derived from the existing AI Train answer in Content Signals, because the two conventions answer the same underlying question for two different audiences, and stating one thing in one and the opposite in the other is a contradiction with no good resolution. Set AI Train and both now agree automatically.
+* New: an optional Policy URL setting. Sent as a `tdm-policy` header alongside the reservation, and only alongside an actual reservation, so a would-be licensee has somewhere to ask rather than just a closed door.
+* New feature toggle: TDM reservation (TDMRep), on by default like the plugin's other document-only features — it changes no existing response body, only adds headers.
 
 = 1.38.0 - 2026-09-14 =
 

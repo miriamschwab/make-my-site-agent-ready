@@ -167,6 +167,14 @@ class MMSAR_Admin {
 				__( 'Agent Skills discovery', 'make-my-site-agent-ready' ),
 				__( 'Publishes an Agent Skills index at /.well-known/agent-skills/ describing how agents can work with this site.', 'make-my-site-agent-ready' ),
 			),
+			'tdmrep'               => array(
+				__( 'TDM reservation (TDMRep)', 'make-my-site-agent-ready' ),
+				__( 'Sends a tdm-reservation response header declaring whether you reserve the right to object to text and data mining of this content — the machine-readable notice EU copyright law (DSM Directive Article 4) requires for that reservation to count. Its value is not a separate setting: it is derived from the AI Train answer in Content Signals below, so the two can never contradict each other. Set a Policy URL below to say where a would-be licensee should ask.', 'make-my-site-agent-ready' ),
+			),
+			'okf_bundle'           => array(
+				__( 'OKF bundle', 'make-my-site-agent-ready' ),
+				__( 'Publishes your content as an Open Knowledge Format (v0.2) bundle at /okf/ — one typed Markdown concept file per post/page, with a browsable index per post type and a root index and change log. Lets an agent ingest the whole corpus in one pass instead of scraping page by page. Reuses the same Markdown already generated for the .md URLs above.', 'make-my-site-agent-ready' ),
+			),
 		);
 	}
 
@@ -228,6 +236,7 @@ class MMSAR_Admin {
 			'auth_md'       => '/auth.md',
 			'ai_catalog'    => '/.well-known/ai-catalog.json',
 			'nlweb'         => '/schema-map.xml',
+			'okf_bundle'    => '/okf/index.md',
 		);
 	}
 
@@ -258,6 +267,7 @@ class MMSAR_Admin {
 			'markdown_negotiation' => 'mmsar-section-negotiation',
 			'robots_txt'           => 'mmsar-section-robots',
 			'security_txt'         => 'mmsar-section-security',
+			'tdmrep'               => 'mmsar-section-tdmrep',
 		);
 	}
 
@@ -853,6 +863,37 @@ class MMSAR_Admin {
 			'mmsar_content_signals'
 		);
 
+		// TDM reservation (TDMRep) settings. The reservation value itself is derived from
+		// mmsar_content_signals['ai_train'] (see mmsar_tdm_reservation_value()) rather than stored
+		// separately, so the only thing to register here is the optional policy URL.
+		register_setting(
+			'mmsar_settings_group',
+			'mmsar_tdm_policy_url',
+			array(
+				'sanitize_callback' => 'esc_url_raw',
+				'default'           => '',
+			)
+		);
+
+		add_settings_section(
+			'mmsar_tdmrep',
+			__( 'TDM Reservation (TDMRep)', 'make-my-site-agent-ready' ),
+			array( __CLASS__, 'render_tdmrep_section' ),
+			'make-my-site-agent-ready',
+			array(
+				'before_section' => '<div id="mmsar-section-tdmrep">',
+				'after_section'  => '</div>',
+			)
+		);
+
+		add_settings_field(
+			'mmsar_tdm_policy_url',
+			__( 'Policy URL', 'make-my-site-agent-ready' ),
+			array( __CLASS__, 'render_tdmrep_field' ),
+			'make-my-site-agent-ready',
+			'mmsar_tdmrep'
+		);
+
 		// Structured data (JSON-LD) settings.
 		register_setting(
 			'mmsar_settings_group',
@@ -1066,6 +1107,45 @@ class MMSAR_Admin {
 			echo '<p class="description">' . esc_html( $description ) . '</p>';
 			echo '</p>';
 		}
+	}
+
+	/**
+	 * Render TDMRep section.
+	 *
+	 * @return void
+	 */
+	public static function render_tdmrep_section() {
+		if ( ! mmsar_feature_enabled( 'tdmrep' ) ) {
+			echo '<p class="description"><em>';
+			esc_html_e( 'TDM Reservation is switched off in Features above. This setting is saved but has no effect until it is switched back on.', 'make-my-site-agent-ready' );
+			echo '</em></p>';
+			return;
+		}
+		$reserved = ( '1' === mmsar_tdm_reservation_value() );
+		echo '<p>';
+		esc_html_e( 'TDMRep is a W3C convention for declaring, in a machine-readable HTTP header, whether you reserve the right to object to text and data mining of this content. Under the EU\'s Copyright in the Digital Single Market Directive (Article 4), mining is permitted by default unless that reservation is expressed this way — an unstated preference is not a reservation in the eyes of that law. It is a legal notice, not a technical block: it stops no request and blocks no crawler.', 'make-my-site-agent-ready' );
+		echo '</p>';
+		echo '<p>';
+		printf(
+			/* translators: 1: tdm-reservation, 2: 1 (reserved) or 0 (not reserved), 3: the AI Train label */
+			esc_html__( 'Currently sending %1$s: %2$s — because %3$s is set to %4$s in Content Signals above.', 'make-my-site-agent-ready' ),
+			'<code>tdm-reservation</code>',
+			$reserved ? '<code>1</code> (' . esc_html__( 'reserved', 'make-my-site-agent-ready' ) . ')' : '<code>0</code> (' . esc_html__( 'not reserved', 'make-my-site-agent-ready' ) . ')',
+			esc_html__( 'AI Train', 'make-my-site-agent-ready' ),
+			$reserved ? esc_html__( 'No', 'make-my-site-agent-ready' ) : esc_html__( 'Yes', 'make-my-site-agent-ready' )
+		);
+		echo '</p>';
+	}
+
+	/**
+	 * Render TDMRep policy URL field.
+	 *
+	 * @return void
+	 */
+	public static function render_tdmrep_field() {
+		$value = get_option( 'mmsar_tdm_policy_url', '' );
+		echo '<input type="url" name="mmsar_tdm_policy_url" value="' . esc_attr( $value ) . '" class="regular-text" placeholder="https://example.com/tdm-policy">';
+		echo '<p class="description">' . esc_html__( 'Where a would-be licensee should go to ask permission or read your licensing terms. Only sent (as a tdm-policy header) when the reservation above is "reserved" — leave empty if you have nothing to point to yet.', 'make-my-site-agent-ready' ) . '</p>';
 	}
 
 	/**

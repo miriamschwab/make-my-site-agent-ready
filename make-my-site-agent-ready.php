@@ -2,8 +2,8 @@
 /**
  * Plugin Name:       Make My Site Agent-Ready
  * Plugin URI:        https://miriamschwab.me/plugins/make-my-site-agent-ready
- * Description:       Makes your WordPress site ready for AI agents: .md URLs, llms.txt, llms-full.txt, an OpenAPI spec, a read-only MCP server, agent-recoverable 404s, security.txt, api-catalog, Agent Skills discovery, Link response headers, Content Signals, optional JSON-LD structured data (merges into Yoast's own schema when active), and AI crawler rules in robots.txt.
- * Version:           1.38.0
+ * Description:       Makes your WordPress site ready for AI agents: .md URLs, llms.txt, llms-full.txt, an OpenAPI spec, a read-only MCP server, agent-recoverable 404s, security.txt, api-catalog, Agent Skills discovery, an OKF bundle, Link response headers, Content Signals, a TDMRep reservation header, optional JSON-LD structured data (merges into Yoast's own schema when active), and AI crawler rules in robots.txt.
+ * Version:           1.40.0
  * Author:            Miriam Schwab
  * Author URI:        https://miriamschwab.me
  * License:           GPL-2.0-or-later
@@ -19,7 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'MMSAR_VERSION', '1.38.0' );
+define( 'MMSAR_VERSION', '1.40.0' );
 define( 'MMSAR_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'MMSAR_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'MMSAR_PLUGIN_FILE', __FILE__ );
@@ -50,6 +50,7 @@ require_once MMSAR_PLUGIN_DIR . 'includes/class-mmsar-agent-view.php';
 require_once MMSAR_PLUGIN_DIR . 'includes/class-mmsar-nlweb.php';
 require_once MMSAR_PLUGIN_DIR . 'includes/class-mmsar-robots-allow.php';
 require_once MMSAR_PLUGIN_DIR . 'includes/class-mmsar-structured-data.php';
+require_once MMSAR_PLUGIN_DIR . 'includes/class-mmsar-okf.php';
 require_once MMSAR_PLUGIN_DIR . 'includes/class-mmsar-admin.php';
 require_once MMSAR_PLUGIN_DIR . 'includes/abilities.php';
 
@@ -105,6 +106,15 @@ function mmsar_get_feature_keys() {
 		// Off by default because it is the only feature that adds something a visitor can see.
 		// Everything else this plugin publishes is invisible on the page.
 		'llms_txt_footer_link' => false,
+		// Adds one response header (two when a policy URL is set) and changes no existing response
+		// body, so it is on by default like the other document-only features above. The value itself
+		// is derived from the AI Train setting in Content Signals rather than asked for separately —
+		// see mmsar_tdm_reservation_value() — so there is nothing here for a site owner to get out of
+		// sync with what they already declared.
+		'tdmrep'               => true,
+		// Publishes a new tree of documents and changes no existing response, the same category as
+		// llms_full_txt and security_txt above, so it defaults on for the same reason.
+		'okf_bundle'           => true,
 	);
 }
 
@@ -185,6 +195,14 @@ function mmsar_flush_generated_documents() {
 	}
 	if ( class_exists( 'MMSAR_OpenAPI' ) ) {
 		MMSAR_OpenAPI::flush();
+	}
+	// The OKF root index and log list every post type/post regardless of which one just changed, and
+	// there is no wildcard delete for the per-type indexes — same reasoning as the scoped llms.txt
+	// indexes above, walking the post types that actually exist rather than every type that ever has.
+	delete_transient( 'mmsar_okf_root_index' );
+	delete_transient( 'mmsar_okf_log' );
+	foreach ( mmsar_get_enabled_post_types() as $post_type ) {
+		delete_transient( 'mmsar_okf_index_' . $post_type );
 	}
 }
 
@@ -426,6 +444,9 @@ if ( mmsar_feature_enabled( 'agent_view' ) ) {
 }
 if ( mmsar_feature_enabled( 'nlweb' ) ) {
 	MMSAR_NLWeb::init();
+}
+if ( mmsar_feature_enabled( 'okf_bundle' ) ) {
+	MMSAR_OKF::init();
 }
 MMSAR_Negotiation_Check::init();
 MMSAR_Agent_Log::init();
@@ -788,6 +809,52 @@ function mmsar_content_signal_line() {
 	$ai_train = ( isset( $settings['ai_train'] ) && 'yes' === $settings['ai_train'] ) ? 'yes' : 'no';
 
 	return "Content-Signal: search={$search}, ai-input={$ai_input}, ai-train={$ai_train}";
+}
+
+/**
+ * Derives the TDMRep reservation value ('1' reserved / '0' not reserved) from the existing AI Train
+ * Content Signal rather than asking the site owner to set it a second time. TDMRep and Content
+ * Signals answer the same underlying question — may this content be mined to train a model? — for
+ * two different audiences (a legal notice under EU DSM Article 4 vs. a technical crawler
+ * convention), and the spec itself warns that stating one thing in one and the opposite in the
+ * other is a contradiction someone will eventually have to resolve. Deriving it removes the
+ * possibility.
+ *
+ * @return string '1' or '0'.
+ */
+function mmsar_tdm_reservation_value() {
+	$settings = get_option( 'mmsar_content_signals', array( 'ai_train' => 'no' ) );
+	$ai_train = ( isset( $settings['ai_train'] ) && 'yes' === $settings['ai_train'] ) ? 'yes' : 'no';
+	return ( 'no' === $ai_train ) ? '1' : '0';
+}
+
+if ( mmsar_feature_enabled( 'tdmrep' ) ) {
+	add_action( 'send_headers', 'mmsar_send_tdmrep_headers' );
+}
+/**
+ * Sends the TDMRep reservation header (and, when reserving and a policy URL is set, tdm-policy) on
+ * every front-end response. Hooked to send_headers rather than template_redirect so it reaches
+ * every WP-routed response this plugin can affect, including this plugin's own non-HTML documents —
+ * TDMRep's own guidance is to prefer the header precisely because it covers responses that have no
+ * `<head>` for a `<meta>` element. It cannot reach a static asset the web server serves directly
+ * without going through WordPress at all; nothing in this plugin can.
+ *
+ * @return void
+ */
+function mmsar_send_tdmrep_headers() {
+	$reservation = mmsar_tdm_reservation_value();
+	header( 'tdm-reservation: ' . $reservation, false );
+
+	// A bare reservation with no policy tells a would-be licensee the answer is no without telling
+	// them who to ask — the spec calls this a wasted opportunity, so only send tdm-policy alongside
+	// an actual reservation, and only when the site owner has actually set one.
+	if ( '1' !== $reservation ) {
+		return;
+	}
+	$policy_url = trim( (string) get_option( 'mmsar_tdm_policy_url', '' ) );
+	if ( '' !== $policy_url ) {
+		header( 'tdm-policy: ' . esc_url_raw( $policy_url ), false );
+	}
 }
 
 register_activation_hook( __FILE__, 'mmsar_activate' );

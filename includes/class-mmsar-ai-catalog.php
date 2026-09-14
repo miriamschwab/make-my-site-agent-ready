@@ -130,6 +130,19 @@ class MMSAR_AI_Catalog {
 			);
 		}
 
+		if ( mmsar_feature_enabled( 'okf_bundle' ) ) {
+			$entries[] = self::entry(
+				'document',
+				'okf',
+				$site_name . ' OKF bundle',
+				'text/markdown',
+				home_url( '/okf/index.md' ),
+				'Open Knowledge Format (v0.2) bundle: this site\'s content as a browsable tree of typed Markdown concept files, one per post/page, for ingesting the whole corpus in one pass.',
+				array( 'listContent', 'fetchContentAsMarkdown' ),
+				array( 'ingest the whole ' . $site_name . ' knowledge base in one fetch' )
+			);
+		}
+
 		// Endpoints the site owner or another plugin registered that do something, as opposed to
 		// simply being readable — ARD is a catalog of capabilities rather than of pages.
 		foreach ( MMSAR_Registry::get_endpoints() as $endpoint ) {

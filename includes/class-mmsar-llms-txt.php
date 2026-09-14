@@ -583,6 +583,9 @@ class MMSAR_LLMs_Txt {
 		if ( mmsar_feature_enabled( 'llms_full_txt' ) ) {
 			$entries[] = '- [llms-full.txt](' . home_url( '/llms-full.txt' ) . '): every page below, in full, in one document.';
 		}
+		if ( mmsar_feature_enabled( 'okf_bundle' ) ) {
+			$entries[] = '- [OKF bundle](' . home_url( '/okf/index.md' ) . '): the same content as a tree of typed Markdown concept files (Open Knowledge Format v0.2) — one addressable file per page, for ingesting the whole corpus in one pass rather than scraping it.';
+		}
 		if ( mmsar_feature_enabled( 'openapi' ) && MMSAR_OpenAPI::is_serving() ) {
 			$entries[] = '- [openapi.json](' . MMSAR_OpenAPI::url() . '): OpenAPI description of this site\'s API — how to search and filter its content over HTTP.';
 		}
