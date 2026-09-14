@@ -4,7 +4,7 @@ Tags: markdown, llm, ai, llms-txt, agents
 Requires at least: 6.2
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.41.0
+Stable tag: 1.45.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -39,7 +39,7 @@ Every feature below can be switched off individually under Settings > Agent-Read
 * **Content Signals** — Declares `Content-Signal: search=..., ai-input=..., ai-train=...` (contentsignals.org) under each AI crawler's group in `robots.txt`, configurable in Settings > Agent-Ready. Defaults to allowing search and live AI retrieval, declining AI training use.
 * **TDMRep reservation header** — Sends `tdm-reservation: 1` or `0` on every response, the machine-readable form EU copyright law (DSM Directive Article 4) requires for a text-and-data-mining reservation to count. The value is derived from the AI Train setting above, not a separate choice, so the two can never disagree. An optional Policy URL is sent alongside it when reserving
 * **Structured data (JSON-LD)** — Optional (off by default) pointer to the markdown alternate on each enabled post/page. When Yoast SEO is active and produces schema for the page, the pointer merges directly into Yoast's own `Article`/`WebPage` piece — no duplicate block. Otherwise, a standalone `Article`/`WebPage` JSON-LD block is added instead. Enable in Settings > Agent-Ready.
-* **AI crawler rules** — Adds explicit `Allow: /` entries for GPTBot, ClaudeBot, and other AI crawlers in `robots.txt`
+* **AI crawler rules** — Gives each named AI crawler its own group in `robots.txt` — GPTBot, ClaudeBot, Anthropic-AI, GoogleOther, PerplexityBot, FacebookBot, Amazonbot, CCBot and LinkupBot — with an explicit `Allow: /` and the site's Content-Signal line, so a training crawler is told what the content may be used for instead of falling through to general rules that may say nothing about it
 * **llms.txt discovery in robots.txt** — Adds an `Llms-txt:` directive pointing at your `/llms.txt`, so agents that fetch `robots.txt` first are told where the index is. Skipped if llms.txt is switched off, or if `robots.txt` already mentions it
 * **Endpoints stay reachable** — If `robots.txt` disallows a path one of your published endpoints lives on (several SEO plugins disallow `/wp-json/` by default), an `Allow:` line for that individual endpoint is added above the rule blocking it. The endpoint stays reachable to agents that found it in your api-catalog, llms.txt or Agent Skills index; the rest of the REST API stays disallowed
 * **Deprecation/Sunset headers** — For surfaces you schedule for retirement (via a filter), responses carry `Deprecation` and `Sunset` headers so an agent is told a URL is going away before it does. Empty, and inactive, until you fill in a schedule
@@ -125,6 +125,54 @@ Yes. Plugin and theme authors can register one so it works on any site without t
 Use the `mmsar_registered_endpoints` filter for the same thing without a direct call. Add `'surfaces' => array( 'llms_txt' )` to limit where it appears, and `'rel'` to set its api-catalog link relation. Endpoints that publish a SKILL.md of their own can pass `'skill_url'` to get their own entry in the Agent Skills index. Code-registered endpoints appear read-only under "Added by Plugins" on the settings page. Full documentation is in the plugin's README on GitHub.
 
 == Changelog ==
+
+= 1.45.1 - 2026-09-14 =
+
+* Fixed: unrecognised callers are no longer all recorded under the same label. The Agent column showed page after page of identical "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like" rows, and they were identical in the database rather than only on screen. An unrecognised user-agent was stored as its first 80 characters, which in a browser user-agent is entirely boilerplate — the version and product that tell two callers apart come after it. On one site a single label covered 725 requests from 339 different addresses.
+* The shared boilerplate is now removed before the label is shortened, so what gets stored is the part that actually varies.
+* This stores less than before, on purpose. Keeping more of the string, or recording a made-up browser signature, would make ordinary visitors more distinguishable from each other — and ordinary page views are recorded here as a denominator, not as subjects, which is the same reason their addresses are stored as a network rather than in full. The operating system is kept because it says something real, and a crawler name inside a user-agent comment is never touched, so a bot recognised in a later release still matches entries stored before it.
+* Not retroactive: entries already recorded keep the label they were stored with.
+
+= 1.45.0 - 2026-09-14 =
+
+* New: FeedBurner and Feedbin are recognised, categorised as feed readers alongside Miniflux. Recognition labels their requests and, more importantly, keeps their addresses in full instead of reducing them to a network.
+* Neither can be verified and neither gets a verification entry. Feedbin publishes no IP ranges or hostname convention. FeedBurner's requests do come from Google and resolve under the hostname mask Google documents for its user-triggered fetchers, but Google's published list of fetcher names does not include FeedBurner — and a convention documented for an operator's other crawlers is not a promise about this one.
+* Recognising now and verifying later is deliberate. An address reduced today can never be checked against a list published tomorrow, while a hostname suffix can be added whenever an operator documents one.
+* WhatsApp was checked and deliberately not recognised. WhatsApp requests arrive from residential broadband rather than from Meta, because WhatsApp builds link previews on the sender's own device — so those rows are a person sharing a link, and their phone fetching the page. Recognising the name would store that person's full IP address, which is what network-level storage exists to prevent.
+* Twitterbot is unchanged and still reads Unverifiable, correctly: X publishes no verification method and its requests arrive from shared CDN addresses.
+
+= 1.44.1 - 2026-09-14 =
+
+* Fixed: rows showing who was behind a forged crawler identity no longer read "spoofed by Mozilla". The name was being read from the wrong part of the user-agent — the first token before a slash, which is Mozilla for almost every crawler, since most write themselves as Mozilla/5.0 (compatible; SomeBot/1.0; +https://example.com/bot). The real name was being thrown away.
+* The name is now taken from the part of the user-agent that identifies the operator: the token containing bot, crawler, spider or scraper, or else the host of the self-identification URL the crawler publishes.
+* Where a user-agent contains neither, no attribution is shown. A guessed name is worse than a blank, and a blank already means nothing explains that row. Which rows can be attributed is unchanged — a verified crawler is never named as the author of someone else's forgery.
+
+= 1.44.0 - 2026-09-14 =
+
+* New: PetalBot and YouBot are now verified instead of reading as Unverifiable. Every recognised crawler without a verification method was re-checked against the operator's own current documentation, after CCBot in 1.42.2 showed that "publishes no method" can go out of date.
+* PetalBot is verified by reverse DNS only, since Huawei publishes no IP ranges. Huawei documents two hostname suffixes, petalsearch.com and aspiegel.com, and both are accepted.
+* YouBot publishes both an IP range and a reverse-DNS convention, so the range is checked first and a miss falls through to the hostname check rather than deciding.
+* Verification immediately told a real YouBot from a forged one: the same name arrived both from You.com's published range and from a Google Cloud address that was also claiming to be a different AI crawler in the same window. Both previously read Unverifiable.
+* Four crawlers were checked and deliberately left as Unverifiable, because their operators publish no method that can be used safely: MJ12bot, SemrushBot, meta-externalagent and Bytespider. Some do have working reverse DNS on some addresses, but the convention is not documented by the operator — using it would verify those and wrongly accuse every genuine caller without it of forgery.
+* Existing PetalBot and YouBot rows keep their old reading until you press Re-check on Settings > Agent Log. A verdict is cached for a week and the log cannot tell that the plugin has learned a new operator.
+
+= 1.43.0 - 2026-09-14 =
+
+* New: Googlebot, bingbot and Applebot are recognised. All three already had a reverse-DNS verification method and a crawler category in this plugin; they were missing from the one list that decides whether a caller's address is kept. Nothing about them was ever unrecognised except that.
+* What that cost: every page view from the three largest search crawlers on the web was stored against a network rather than an address, so none of it could ever be verified — and under the "Page views from recognized crawlers only" setting, none of it was recorded at all. If you use that setting, expect Googlebot, bingbot and Applebot to appear in the log for the first time after this release.
+* Changed: any caller the log reads as a crawler now keeps its full address, even when this release has never heard of its name. Previously that depended on the name already being on the recognised list, which is a list that grows — so a crawler's page views were stored at reduced precision right up until the release that learned its name, and those rows can never be verified afterwards. Reduction is not reversible.
+* This is the LinkupBot case, and it is worth stating plainly. LinkupBot arrived in August announcing `bot@linkup.so` in its user-agent. It was recognised weeks later, and Linkup publishes a single address to verify against. By then 303 of its page views were on file as a network, against a `/32` they could no longer be tested against. Those rows read Unverifiable, and that is a fact about this log rather than anything about Linkup.
+* Human traffic is unaffected. The decision runs through the same client-type detection the log already uses, which tests browser shapes — `Sec-Fetch-Mode: navigate`, `Sec-Fetch-Dest: document`, `Sec-CH-UA` — before it looks at the name. A phone browser sends those, so a device whose model name happens to end in "bot" is read as a browser and keeps the reduction. An agent driving a headless browser also keeps it, being indistinguishable from a reader.
+* Not retroactive, and it cannot be. Rows already stored at network precision stay that way; a re-check reads them as Unverifiable rather than judging an address the log no longer holds.
+
+= 1.42.2 - 2026-09-14 =
+
+* New: CCBot gets its own group in robots.txt, alongside GPTBot, ClaudeBot and the rest — an explicit `Allow: /` and the site's Content-Signal line, which by default declares `search=yes, ai-input=yes, ai-train=no`. CCBot is Common Crawl's crawler, and it is the plainest training case of the list: Common Crawl trains nothing itself, it publishes the corpus other operators train on, so a page it collects reaches models this site will never see a request from. Naming it is the one place the site can state its terms to all of them at once.
+* This declares, it does not block. Content-Signal is an emerging convention and no crawler is known to honor it yet, CCBot included. If you want Common Crawl kept out rather than told your terms, add `User-agent: CCBot` and `Disallow: /` in the extra robots.txt directives box under Settings > Agent-Ready — Common Crawl does honor a Disallow. The plugin writes no Disallow of its own, deliberately: what an AI crawler may do with your content is your call, not the plugin's default.
+* CCBot is now verified rather than read as Unverifiable. Common Crawl publishes both methods — a range file at `index.commoncrawl.org/ccbot.json` and forward-confirmed reverse DNS under `crawl.commoncrawl.org` — and this release uses both. CCBot was already recognised and categorised as AI training; what it had no way to do was prove it was CCBot, which on a training crawler is the identity most worth forging. Common Crawl says so itself: it is aware of crawlers falsely identifying as CCBot and asks that the user-agent be verified.
+* Reverse DNS is IPv4-only here, by Common Crawl's own statement, so the bundled prefixes carry the published IPv6 `/56` and that list is the only evidence an IPv6 caller can be settled by.
+* Both methods together also absorb a stale range file. The bundled ranges age, and a prefix added after capture otherwise reads as `failed` — this plugin's one accusatory verdict. For an operator that documents rDNS too, a range miss falls through to the reverse lookup instead of deciding. Captured 2026-09-14; the upstream file's own creationTime was 2026-08-11.
+* Existing CCBot rows do not re-decide themselves. A verdict is cached for a week and the log cannot notice that the plugin has learned a new operator, so rows already recorded as Unverifiable keep reading that way. They now appear in the Re-check button's count on Settings > Agent Log — pressing it discards the cached verdicts and re-runs them.
 
 = 1.41.0 - 2026-09-14 =
 

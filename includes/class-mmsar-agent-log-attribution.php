@@ -96,18 +96,126 @@ class MMSAR_Agent_Log_Attribution {
 	}
 
 	/**
+	 * Tokens that are never an operator name.
+	 *
+	 * Every one of these is part of the browser-compatibility stack that almost every user-agent
+	 * opens with, including those of honest crawlers: `Mozilla/5.0 (compatible; SomeBot/1.0;
+	 * +https://example.com/bot)`. A crawler that writes itself that way is not claiming to be
+	 * Mozilla, and naming Mozilla as the author of a forgery is both meaningless and unfair to a
+	 * real organisation.
+	 *
+	 * Lower-case; comparison is case-insensitive.
+	 */
+	const GENERIC_TOKENS = array(
+		'mozilla',
+		'applewebkit',
+		'webkit',
+		'khtml',
+		'gecko',
+		'chrome',
+		'chromium',
+		'safari',
+		'firefox',
+		'version',
+		'opera',
+		'opr',
+		'edge',
+		'edg',
+		'trident',
+		'msie',
+		'mobile',
+		'like',
+		'compatible',
+		'windows',
+		'macintosh',
+		'linux',
+		'android',
+		'iphone',
+		'ipad',
+		'x11',
+		'http',
+		'https',
+	);
+
+	/**
 	 * Short display name for an attributor.
 	 *
+	 * **Public because it is a pure string function and the only part of this class worth asserting
+	 * directly** — the rest needs rows in the table. Same reasoning as `anonymize_ip()`.
+	 *
+	 * The naive version of this took the first token before a slash or a space, which is right for
+	 * a bare `OraBot/1.0` and wrong for the shape most crawlers actually use. `Mozilla/5.0
+	 * (compatible; AgentReadinessScanner/1.0; +https://isitagentready.com)` came out as `Mozilla`,
+	 * and rows on the live log read "spoofed by Mozilla" — an attribution that names no one, on a
+	 * screen whose entire purpose is to say who was behind a forged identity.
+	 *
+	 * Two passes, most specific first:
+	 *
+	 * 1. **The token carrying the bot signal.** A caller only becomes an attributor by declaring
+	 *    itself automated, so the token holding `bot`/`crawler`/`spider`/`scraper` is the one that
+	 *    made it a candidate, and it is the operator's own product name.
+	 * 2. **The host of a self-identification URL.** The `+https://example.com/bot` convention names
+	 *    a domain the operator owns, which is better evidence of identity than any product token.
+	 *
+	 * Those two are not an arbitrary pair — they are the same two things is_self_declared_bot()
+	 * tests for, so between them they cover every caller that can legitimately become an
+	 * attributor. Returns an empty string otherwise, and the caller drops the candidate rather than
+	 * attributing a forgery to a name that says nothing.
+	 *
 	 * @param string $agent Raw user-agent.
-	 * @return string Product token, e.g. `OraBot`.
+	 * @return string Product token, e.g. `OraBot`, or '' when no usable name is present.
 	 */
-	private static function short_name( $agent ) {
+	public static function short_name( $agent ) {
 		$agent = trim( (string) $agent );
 		if ( '' === $agent ) {
 			return '';
 		}
-		$token = strtok( $agent, '/ ' );
-		return false === $token ? $agent : $token;
+
+		// Product tokens, in order: the text before a version, wherever it sits in the string.
+		// Splitting on the comment punctuation too is what reaches the name inside `(compatible;
+		// Name/1.0; ...)`, which is where these names usually live.
+		$parts = preg_split( '~[\s/;(),]+~', $agent, -1, PREG_SPLIT_NO_EMPTY );
+		$parts = is_array( $parts ) ? $parts : array();
+
+		// 1. The token that announces automation.
+		foreach ( $parts as $part ) {
+			if ( self::is_generic( $part ) ) {
+				continue;
+			}
+			if ( 1 === preg_match( '~(?:bot|crawler|spider|scraper)~i', $part ) ) {
+				return $part;
+			}
+		}
+
+		// 2. The host of a self-identification URL.
+		if ( 1 === preg_match( '~\+?https?://([A-Za-z0-9.-]+)~i', $agent, $m ) ) {
+			$host = preg_replace( '~^www\.~i', '', $m[1] );
+			if ( '' !== (string) $host ) {
+				return (string) $host;
+			}
+		}
+
+		// Nothing else. There is deliberately no "first non-generic token" fallback: a candidate
+		// reaches here only by having satisfied is_self_declared_bot(), which means it carries an
+		// automation token or a `+http://` URL — exactly the two passes above. Anything that gets
+		// past both is a user-agent with no self-declaration in it, and guessing a name from its
+		// remaining tokens produces attributions like `Intel`, picked out of
+		// `(Macintosh; Intel Mac OS X 10_15_7)`. Blank already means "nothing explains this" on the
+		// screen, and is the honest answer.
+		return '';
+	}
+
+	/**
+	 * Whether a token is browser boilerplate rather than an operator name.
+	 *
+	 * Version-like tokens are generic too — `5.0`, `537.36` — and are caught by the leading-letter
+	 * test rather than being listed.
+	 *
+	 * @param string $token One token from a user-agent.
+	 * @return bool
+	 */
+	private static function is_generic( $token ) {
+		return in_array( strtolower( trim( (string) $token ) ), self::GENERIC_TOKENS, true );
 	}
 
 	/**
@@ -301,6 +409,10 @@ class MMSAR_Agent_Log_Attribution {
 			$verdict  = isset( $r['verified'] ) ? $r['verified'] : '';
 			$is_bot   = ( isset( $r['client_type'] ) && 'crawler' === $r['client_type'] );
 			if ( $is_bot && in_array( $verdict, array( MMSAR_Agent_Log_Verify::UNCLAIMED, MMSAR_Agent_Log_Verify::UNVERIFIABLE ), true ) ) {
+				// short_name() returns '' when the user-agent carries no usable operator name, and
+				// an empty declared name drops the row below. Attributing a forgery to nobody is
+				// worse than leaving `attributed_to` blank, which already means "nothing explains
+				// this" and is read that way on the screen.
 				$declared = self::short_name( isset( $r['agent'] ) ? $r['agent'] : '' );
 			}
 

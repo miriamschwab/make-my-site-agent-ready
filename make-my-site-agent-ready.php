@@ -3,7 +3,7 @@
  * Plugin Name:       Make My Site Agent-Ready
  * Plugin URI:        https://miriamschwab.me/plugins/make-my-site-agent-ready
  * Description:       Makes your WordPress site ready for AI agents: .md URLs, llms.txt, llms-full.txt, an OpenAPI spec, a read-only MCP server, agent-recoverable 404s, security.txt, api-catalog, Agent Skills discovery, an OKF bundle, Link response headers, Content Signals, a TDMRep reservation header, optional JSON-LD structured data (merges into Yoast's own schema when active), and AI crawler rules in robots.txt.
- * Version:           1.41.0
+ * Version:           1.45.1
  * Author:            Miriam Schwab
  * Author URI:        https://miriamschwab.me
  * License:           GPL-2.0-or-later
@@ -19,7 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'MMSAR_VERSION', '1.41.0' );
+define( 'MMSAR_VERSION', '1.45.1' );
 define( 'MMSAR_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'MMSAR_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'MMSAR_PLUGIN_FILE', __FILE__ );
@@ -676,6 +676,12 @@ function mmsar_robots_txt( $output, $is_public ) {
 	// are documented as never crawling for training and are not listed for that reason: naming them
 	// here would add nothing the site's general rules do not already say.
 	//
+	// CCBot is Common Crawl's crawler, and it is the plainest training case of the list: Common
+	// Crawl does not train anything itself, it publishes the corpus that others train on, so a page
+	// it collects ends up in datasets belonging to operators this site will never see a request
+	// from. Naming it is the only place the site gets to state its terms to all of them at once,
+	// which is why it belongs here rather than being left to the general rules.
+	//
 	// LinkupBot is here on the other rationale, the one PerplexityBot is here on: it crawls to
 	// answer questions rather than to train, so what the signal says about training is not the
 	// interesting half — what matters is that the group states the site's terms to an operator that
@@ -689,6 +695,7 @@ function mmsar_robots_txt( $output, $is_public ) {
 		'PerplexityBot',
 		'FacebookBot',
 		'Amazonbot',
+		'CCBot',
 		'LinkupBot',
 	);
 

@@ -150,6 +150,40 @@ class MMSAR_Agent_Log {
 		'facebookexternalhit',
 		// Slack's documentation says it does not honour robots.txt for this bot.
 		'Slackbot-LinkExpanding',
+		// Added 1.43.0. All three already had a reverse-DNS method in
+		// MMSAR_Agent_Log_Verify::VERIFY_HOSTS and an entry in CRAWLER_CATEGORIES, and were missing
+		// only here — the one list that decides whether an address is kept. So every page view from
+		// the three largest search crawlers on the web was stored at network precision and could
+		// never be verified afterwards, and under the `agents` page-view mode was not recorded at
+		// all. Nothing about them was ever unrecognised except this.
+		//
+		// `Applebot` must stay below `Applebot-Extended`: agent_label() returns the first match in
+		// this order and the shorter name is a substring of the longer one, so listing it earlier
+		// would relabel every Applebot-Extended row. Appending is what keeps that safe, which is
+		// the general rule for adding a name that is a prefix of one already here.
+		'Googlebot',
+		'bingbot',
+		'Applebot',
+		// Added 1.45.0, recognise-only: both are named here so their addresses stop being reduced,
+		// and neither gets a verification entry because neither operator publishes a method for the
+		// token it actually sends.
+		//
+		// FeedBurner is Google's, and its traffic is genuinely Google's — the addresses seen here
+		// reverse to `google-proxy-66-249-83-*.google.com`, which is the mask Google documents for
+		// user-triggered fetchers, alongside `user-triggered-fetchers.json`. But Google's list of
+		// fetcher tokens is Feedfetcher, Google-Read-Aloud, Google-NotebookLM and the rest; it does
+		// not include `FeedBurner`. Documented-for-Google's-fetchers is not documented-for-this-name,
+		// and the gap is the whole reason MJ12bot and SemrushBot were declined too.
+		//
+		// Recognition is still worth doing now and verification is not, because the two have
+		// different deadlines: an address reduced today can never be checked against a list
+		// published tomorrow, while a suffix can be added whenever the documentation catches up.
+		// Same reasoning as the SSI-Nutch split.
+		'FeedBurner',
+		// Feedbin publishes no ranges and no hostname convention; its addresses sit in Hurricane
+		// Electric colocation, where the records that do resolve are HE's own routers. Categorised
+		// with Miniflux: a feed reader fetching on behalf of subscribers.
+		'Feedbin',
 	);
 
 	/**
@@ -242,6 +276,8 @@ class MMSAR_Agent_Log {
 		'EtherdeckBot'              => self::CRAWLER_SEARCH,
 		'LyonlBot'                  => self::CRAWLER_SEARCH,
 		'Miniflux'                  => self::CRAWLER_OTHER,
+		'FeedBurner'                => self::CRAWLER_OTHER,
+		'Feedbin'                   => self::CRAWLER_OTHER,
 		'Twitterbot'                => self::CRAWLER_OTHER,
 		'facebookexternalhit'       => self::CRAWLER_OTHER,
 		'Slackbot-LinkExpanding'    => self::CRAWLER_OTHER,
@@ -2265,13 +2301,36 @@ class MMSAR_Agent_Log {
 			return;
 		}
 
-		// Unrecognised user-agents are mostly people. Their address is reduced to its network before
-		// storage; a recognised crawler keeps its full one, which is what verification runs against.
+		// Unrecognised user-agents are mostly people, so their address is reduced to its network
+		// before storage. A recognised crawler keeps its full one, which is what verification runs
+		// against.
+		//
+		// **Anything detect_client_type() calls a crawler keeps its full address, even when this
+		// release has never heard of the name** (1.43.0). Reduction is not reversible, so a row
+		// stored that way can never be verified — not when the operator is recognised in a later
+		// release, not when its published ranges are added, never. The cost is only visible in
+		// hindsight: LinkupBot arrived in August announcing `bot@linkup.so`, was recognised weeks
+		// later, and by then 303 of its page views were on file at network precision against a
+		// published /32 they could no longer be tested against. `unverifiable` on those rows is a
+		// fact about this log, not about Linkup.
+		//
+		// **Why the client type and not is_self_declared_bot() directly.** That test matches a
+		// `bot`/`crawler`/`spider`/`scraper` token at a word ending, which is how these names are
+		// really written and also how a phone called CUBOT is written. Wrong there costs a mislabelled
+		// row; wrong *here* costs a person's full address, so the looser test is not good enough on
+		// its own. detect_client_type() runs the browser shapes first — `Sec-Fetch-Mode: navigate`,
+		// `Sec-Fetch-Dest: document`, `Sec-CH-UA` — and a phone browser sends them, so CUBOT resolves
+		// as a browser and keeps the reduction. What reaches the bot-name test is a request that is
+		// already not browser-shaped.
+		//
+		// So this keeps no address it would not already have kept had the plugin known the name, and
+		// an agent driving a headless browser still reduces — indistinguishable from a reader, which
+		// is the right way for that one to fail.
 		self::record(
 			'HTML page view (' . self::accept_summary() . ')',
 			self::requested_url(),
 			true,
-			! $known,
+			self::CLIENT_CRAWLER !== self::detect_client_type(),
 			self::page_view_path()
 		);
 	}
@@ -2373,7 +2432,75 @@ class MMSAR_Agent_Log {
 				return $needle;
 			}
 		}
-		return mb_substr( $ua, 0, 80 );
+		return self::trimmed_user_agent( $ua );
+	}
+
+	/**
+	 * An unrecognised user-agent, reduced to the part that identifies the caller.
+	 *
+	 * **The cut used to discard the wrong end.** `mb_substr( $ua, 0, 80 )` keeps the first 80
+	 * characters, and in a browser user-agent every one of those is boilerplate that each browser
+	 * of that family sends identically — while the version and product that tell two callers apart
+	 * sit past the cut:
+	 *
+	 *     Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like |Gecko) Chrome/141.0.0.0 Safari/537.36
+	 *     \_____________________________ stored ______________________________________/ \______ discarded ______/
+	 *
+	 * On the site this was found on, one such label covered 725 requests from 339 different
+	 * addresses: the rows were not merely displayed the same, they were stored the same.
+	 *
+	 * So the boilerplate is removed first and the truncation applied to what is left. Nothing is
+	 * stored that was not being stored before — this keeps *less* of the string, not more, which is
+	 * the reason it is a safe change to make to a column that holds human traffic. Widening the cap,
+	 * or synthesising a `Chrome 141 (macOS)` signature, would both make ordinary visitors more
+	 * distinguishable from one another, and this log records them as a denominator rather than as
+	 * subjects.
+	 *
+	 * Only exact, well-known stanzas are removed, and the platform comment is deliberately kept —
+	 * `(Macintosh; Intel Mac OS X 10_15_7)` says which OS, which is real information. A bot name
+	 * living in a comment, as in `(compatible; SomeBot/1.0; +https://example.com/bot)`, is never
+	 * touched, so a name added to AGENTS later still matches rows stored before it was recognised.
+	 *
+	 * **Not retroactive.** Rows already written keep the old truncation; there is no un-cutting a
+	 * string.
+	 *
+	 * Public because it is a pure string function and the only part of this path worth asserting
+	 * directly — `agent_label()` reads `$_SERVER`. Same reasoning as `anonymize_ip()`.
+	 *
+	 * @param string $ua Raw user-agent.
+	 * @return string Label of at most 80 characters.
+	 */
+	public static function trimmed_user_agent( $ua ) {
+		$ua = (string) $ua;
+
+		$trimmed = preg_replace(
+			array(
+				// The version token every browser opens with, and nothing else starts with.
+				'~^Mozilla/\d+\.\d+\s*~i',
+				// The WebKit stanza, whole. Chrome, Safari and every Chromium derivative send it
+				// byte-identically, so it separates nothing.
+				'~AppleWebKit/[\d.]+\s*\(KHTML,\s*like\s+Gecko\)\s*~i',
+				// The same comment where it appears without the AppleWebKit token in front of it.
+				'~\(KHTML,\s*like\s+Gecko\)\s*~i',
+			),
+			'',
+			$ua
+		);
+
+		// Removing a stanza from the middle can leave a dangling separator — `Mozilla/5.0
+		// AppleWebKit/537.36 (KHTML, like Gecko); compatible; ShapBot/0.1.0` becomes `; compatible;
+		// ShapBot/0.1.0`. Tidy the joint rather than the whole string, so the caller's own
+		// punctuation survives.
+		$trimmed = is_string( $trimmed ) ? trim( preg_replace( '~\s+~', ' ', $trimmed ) ) : '';
+		$trimmed = ltrim( $trimmed, ';, ' );
+
+		// A user-agent that was nothing but boilerplate has nothing left to identify it by, so keep
+		// the original rather than storing an empty string and losing the row's only evidence.
+		if ( '' === $trimmed ) {
+			$trimmed = trim( $ua );
+		}
+
+		return mb_substr( $trimmed, 0, 80 );
 	}
 
 	/**

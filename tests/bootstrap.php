@@ -13,3 +13,4 @@ require_once dirname( __DIR__, 2 ) . '/.audit-tools/tests-bootstrap/wp-stubs.php
 
 require_once dirname( __DIR__ ) . '/includes/class-mmsar-agent-log.php';
 require_once dirname( __DIR__ ) . '/includes/class-mmsar-agent-log-verify.php';
+require_once dirname( __DIR__ ) . '/includes/class-mmsar-agent-log-attribution.php';

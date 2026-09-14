@@ -38,6 +38,17 @@ final class CrawlerVerdictTest extends TestCase {
 	/** An address belonging to nobody in particular, for "not in the published range". */
 	private const ELSEWHERE = '203.0.113.7';
 
+	/** Inside Common Crawl's published 18.97.14.80/29, from includes/data/crawler-ranges.php. */
+	private const CCBOT_IP = '18.97.14.84';
+
+	/**
+	 * Inside Common Crawl's published 2600:1f28:365:8000::/56.
+	 *
+	 * The only shape where the range file is the sole evidence: Common Crawl states that CCBot has
+	 * no reverse DNS over IPv6, so nothing follows a range miss here.
+	 */
+	private const CCBOT_IP6 = '2600:1f28:365:8000::2b';
+
 	protected function setUp(): void {
 		parent::setUp();
 		wp_stub_reset();
@@ -112,8 +123,14 @@ final class CrawlerVerdictTest extends TestCase {
 				=> array( 'GPTBot control', 'GPTBot', self::ELSEWHERE, 'failed' ),
 			'ClaudeBot outside Anthropic ranges'
 				=> array( 'ClaudeBot control', 'ClaudeBot', self::ELSEWHERE, 'failed' ),
-			'CCBot is recognised with no verification method'
-				=> array( 'CCBot control', 'CCBot', self::ELSEWHERE, 'unverifiable' ),
+			'CCBot inside Common Crawl\'s published v4 range'
+				=> array( 'CCBot in range', 'CCBot', self::CCBOT_IP, 'verified' ),
+			'CCBot inside the published v6 range, where rDNS does not exist'
+				=> array( 'CCBot in v6 range', 'CCBot', self::CCBOT_IP6, 'verified' ),
+			'CCBot from outside the range, with no reverse record'
+				=> array( 'CCBot control', 'CCBot', self::ELSEWHERE, 'failed' ),
+			'CCBot raw user-agent, in range'
+				=> array( 'CCBot raw UA', 'CCBot/2.0 (https://commoncrawl.org/faq/)', self::CCBOT_IP, 'verified' ),
 			'an ordinary browser claims nothing'
 				=> array( 'browser control', 'Mozilla/5.0 (Macintosh) Chrome/140', self::ELSEWHERE, 'unclaimed' ),
 		);
@@ -155,8 +172,48 @@ final class CrawlerVerdictTest extends TestCase {
 	public function test_has_method_is_false_without_a_published_method(): void {
 		$this->assertTrue( MMSAR_Agent_Log_Verify::has_method( 'LinkupBot' ), 'LinkupBot has a range file' );
 		$this->assertFalse( MMSAR_Agent_Log_Verify::has_method( 'SSI-Nutch' ), 'SSI publishes no method' );
-		$this->assertFalse( MMSAR_Agent_Log_Verify::has_method( 'CCBot' ), 'CCBot has no method' );
+		$this->assertTrue( MMSAR_Agent_Log_Verify::has_method( 'CCBot' ), 'Common Crawl publishes both' );
 		$this->assertFalse( MMSAR_Agent_Log_Verify::has_method( 'Mozilla/5.0 Chrome/140' ), 'claims nothing' );
+	}
+
+	/**
+	 * A crawler that publishes both methods is still verified when the bundled range goes stale.
+	 *
+	 * The standing cost of bundling range data rather than fetching it is that a prefix added after
+	 * capture reads as `failed` — a real operator accused of forging itself. For an operator that
+	 * documents rDNS as well, the second method is what removes that cost, and this asserts the
+	 * order that makes it work: a range miss falls through to the reverse lookup instead of
+	 * deciding. CCBot is the case, because Common Crawl publishes both and its v4 ranges are small
+	 * enough that a change is likely rather than hypothetical.
+	 */
+	public function test_both_method_crawler_survives_a_stale_range(): void {
+		wp_stub_reset();
+		add_filter( 'mmsar_agent_log_reverse_lookup', static fn() => '18-97-99-99.crawl.commoncrawl.org' );
+		add_filter( 'mmsar_agent_log_forward_lookup', static fn() => array( self::ELSEWHERE ) );
+
+		$this->assertSame(
+			'verified',
+			MMSAR_Agent_Log_Verify::verdict_for( 'CCBot', self::ELSEWHERE ),
+			'A forward-confirmed crawl.commoncrawl.org host verifies an address the bundled range misses'
+		);
+	}
+
+	/**
+	 * Forward confirmation is still required, so the suffix alone proves nothing.
+	 *
+	 * Without this, anyone able to set a PTR record on their own address could claim CCBot by
+	 * naming it `something.crawl.commoncrawl.org`.
+	 */
+	public function test_unconfirmed_commoncrawl_host_is_failed(): void {
+		wp_stub_reset();
+		add_filter( 'mmsar_agent_log_reverse_lookup', static fn() => '18-97-99-99.crawl.commoncrawl.org' );
+		add_filter( 'mmsar_agent_log_forward_lookup', static fn() => array( '198.51.100.9' ) );
+
+		$this->assertSame(
+			'failed',
+			MMSAR_Agent_Log_Verify::verdict_for( 'CCBot', self::ELSEWHERE ),
+			'A PTR that does not forward-confirm is a forgery, not a verification'
+		);
 	}
 
 	/**

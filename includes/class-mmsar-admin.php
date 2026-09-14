@@ -612,7 +612,7 @@ class MMSAR_Admin {
 		echo '</fieldset>';
 
 		echo '<p class="description">';
-		esc_html_e( 'Recording every page view means the log holds human traffic too. Those rows are stored against a network rather than a full address (203.0.113.4 becomes 203.0.113.0), and against the page they resolved to, never the raw URL a visitor typed. A recognized crawler keeps its full address, which is what identity verification runs against.', 'make-my-site-agent-ready' );
+		esc_html_e( 'Recording every page view means the log holds human traffic too. Those rows are stored against a network rather than a full address (203.0.113.4 becomes 203.0.113.0), and against the page they resolved to, never the raw URL a visitor typed. Anything the log reads as a crawler keeps its full address, which is what identity verification runs against — whether or not this version recognizes its name, since an address reduced now can never be verified later.', 'make-my-site-agent-ready' );
 		echo '</p>';
 		echo '<p class="description">';
 		esc_html_e( 'One entry per visitor, per page, per five minutes. Keeping everything is a reasonable choice if the log is being used to answer a question about agent behaviour over time, and the retention limit on the Agent Log screen is there if the table ever outgrows its usefulness.', 'make-my-site-agent-ready' );
@@ -1206,7 +1206,7 @@ class MMSAR_Admin {
 			echo '</strong></p><p>';
 			esc_html_e( 'This plugin is not touching your robots.txt at all — whatever served it before (a static file, your SEO plugin, or WordPress itself) is serving it unchanged. Because of that, your site is not publishing:', 'make-my-site-agent-ready' );
 			echo '</p><ul style="list-style:disc;margin-left:22px;">';
-			echo '<li>' . esc_html__( 'Explicit Allow rules for AI crawlers (GPTBot, ClaudeBot, Anthropic-AI, GoogleOther, PerplexityBot, FacebookBot, Amazonbot, LinkupBot). Without them, these crawlers fall back to your general rules, which may be more restrictive than you intend.', 'make-my-site-agent-ready' ) . '</li>';
+			echo '<li>' . esc_html__( 'Explicit Allow rules for AI crawlers (GPTBot, ClaudeBot, Anthropic-AI, GoogleOther, PerplexityBot, FacebookBot, Amazonbot, CCBot, LinkupBot). Without them, these crawlers fall back to your general rules, which may be more restrictive than you intend.', 'make-my-site-agent-ready' ) . '</li>';
 			echo '<li>' . esc_html__( 'The Content-Signal directive declaring how AI systems may use your content. The Content Signals settings below have no effect while this is off, because those directives are written into robots.txt.', 'make-my-site-agent-ready' ) . '</li>';
 			echo '<li>' . esc_html__( 'A Sitemap directive, if nothing else on your site already adds one.', 'make-my-site-agent-ready' ) . '</li>';
 			echo '<li>' . esc_html__( 'An Llms-txt directive pointing at your llms.txt, for agents that read robots.txt first.', 'make-my-site-agent-ready' ) . '</li>';

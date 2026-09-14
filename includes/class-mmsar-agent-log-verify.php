@@ -149,13 +149,39 @@ class MMSAR_Agent_Log_Verify {
 		// Ahrefs also publishes a range API; it is deliberately not bundled, because a stale range
 		// file turns a range miss on a PTR-less address into `failed`, and rDNS is proven here.
 		'AhrefsBot'         => array( 'ahrefs.com', 'ahrefs.net' ),
+		// Common Crawl — https://commoncrawl.org/ccbot. Documents both methods, so CCBot is in
+		// VERIFY_RANGES too and the range is tested first. Confirmed 2026-09-14 against three
+		// addresses from the published list: 18.97.14.84, 18.97.9.170 and 3.41.188.34 all resolve
+		// under crawl.commoncrawl.org and forward-confirm. **IPv4 only** — Common Crawl states
+		// plainly that CCBot has no reverse DNS over IPv6, which is why the range group carries a
+		// v6 prefix and why resolve_verdict()'s range-first order is load-bearing here rather than
+		// incidental: an IPv6 caller is settled by the range or not at all.
+		'CCBot'             => array( 'crawl.commoncrawl.org' ),
 		// Babbar — https://www.babbar.tech/crawler. Confirmed 2026-09-14: c187.babbar.eu and
 		// c188.babbar.eu, both forward-confirmed. Its range file dates from 2024-10 and is not used,
 		// for the same reason as Ahrefs'.
 		'Barkrowler'        => array( 'babbar.eu' ),
-		// PetalBot is deliberately absent. Huawei's only documented method is rDNS under
-		// aspiegel.com, and no full address had been seen to confirm it against when it was added.
-		// Add it only after a fresh, full-precision hit resolves and forward-confirms.
+		// Huawei — https://aspiegel.com/petalbot. Documents forward-confirmed reverse DNS as the
+		// check and publishes no ranges, so this suffix list is the only evidence a PetalBot row
+		// can be settled by. **Both suffixes are documented**, and the live one is the newer:
+		// confirmed 2026-09-14 on 114.119.144.17 from this site's log, which resolves to
+		// petalbot-114-119-144-17.petalsearch.com and forward-confirms. `aspiegel.com` is kept
+		// because Huawei still documents it — Aspiegel SE is the Huawei subsidiary the crawler was
+		// registered under, and dropping the older suffix would fail a caller Huawei still vouches
+		// for. This closes the 1.41.0 open item, which recorded the suffix as aspiegel.com alone;
+		// the address that finally arrived was under the other one.
+		'PetalBot'          => array( 'petalsearch.com', 'aspiegel.com' ),
+		// You.com — https://you.com/docs/youbot. Documents both methods, so YouBot is in
+		// VERIFY_RANGES too and the range is tested first. The published hostname pattern is
+		// `youbot-{octets}.search.you.com`; confirmed 2026-09-14 on 68.67.112.111 from this site's
+		// log, which resolves to youbot-68-67-112-111.search.you.com, forward-confirms, and sits
+		// inside the published /24.
+		//
+		// This one earns its entry twice over, because the same name arrived forged: 34.139.213.96
+		// also claimed YouBot, resolves to googleusercontent.com, and additionally claimed
+		// cohere-ai in the same window. Before this entry both rows read `unverifiable` and were
+		// indistinguishable. They no longer are.
+		'YouBot'            => array( 'search.you.com' ),
 	);
 
 	/**
@@ -177,6 +203,7 @@ class MMSAR_Agent_Log_Verify {
 		'PerplexityBot'         => 'perplexity',
 		'Perplexity-User'       => 'perplexity',
 		'LinkupBot'             => 'linkup',
+		'CCBot'                 => 'commoncrawl',
 		// DuckDuckBot shares DuckAssistBot's group because DuckDuckGo publishes the same list for
 		// both. See the note on that group in crawler-ranges.php. DuckDuckGo says reverse DNS is
 		// unreliable for this crawler, so it has no suffix entry.
@@ -186,6 +213,9 @@ class MMSAR_Agent_Log_Verify {
 		'SERankingBacklinksBot' => 'seranking',
 		'ShapBot'               => 'parallel',
 		'SofyaBot'              => 'sofya',
+		// You.com documents a reverse-DNS convention too, so a range miss falls through to the
+		// suffix above rather than deciding — the same both-methods shape as CCBot and Perplexity.
+		'YouBot'                => 'youcom',
 	);
 
 	/**
@@ -612,11 +642,13 @@ class MMSAR_Agent_Log_Verify {
 	 *
 	 * **The candidate list is every crawler the log recognises, not only the ones we can verify.**
 	 * That difference is what keeps `unclaimed` and `unverifiable` apart, and they are not
-	 * interchangeable: CCBot, Bytespider, meta-externalagent and several others are names this
-	 * plugin knows and has no verification method for. Matching only against the verification maps
-	 * would file all of them as `unclaimed` — "nothing was claimed" — when something very
-	 * definitely was. The honest answer is `unverifiable`, and it only comes out that way if the
-	 * claim is recognised here first.
+	 * interchangeable: Bytespider, meta-externalagent and several others are names this plugin
+	 * knows and has no verification method for. Matching only against the verification maps would
+	 * file all of them as `unclaimed` — "nothing was claimed" — when something very definitely was.
+	 * The honest answer is `unverifiable`, and it only comes out that way if the claim is
+	 * recognised here first. (CCBot was the standing example here until 1.42.2, when Common Crawl
+	 * turned out to publish both a range file and rDNS. Worth re-checking the others the same way
+	 * rather than assuming an operator that published nothing once still publishes nothing.)
 	 *
 	 * @param string $agent Stored agent value.
 	 * @return string The claimed crawler name, or an empty string when nothing is claimed.

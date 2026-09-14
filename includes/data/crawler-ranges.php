@@ -26,7 +26,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 return array(
 	// Anthropic — ClaudeBot, Claude-User, Claude-SearchBot.
 	// Source: https://claude.com/crawling/bots.json.
-	'anthropic'  => array(
+	'anthropic'   => array(
 		'captured' => '2026-08-18',
 		'v4'       => array(
 			'16.58.26.69/32',
@@ -60,7 +60,7 @@ return array(
 	),
 	// OpenAI — GPTBot, OAI-SearchBot, ChatGPT-User.
 	// Source: https://openai.com/gptbot.json, https://openai.com/searchbot.json, https://openai.com/chatgpt-user.json.
-	'openai'     => array(
+	'openai'      => array(
 		'captured' => '2026-09-07',
 		'v4'       => array(
 			'4.151.71.176/28',
@@ -325,7 +325,7 @@ return array(
 	),
 	// Perplexity — PerplexityBot, Perplexity-User.
 	// Source: https://www.perplexity.ai/perplexitybot.json, https://www.perplexity.ai/perplexity-user.json.
-	'perplexity' => array(
+	'perplexity'  => array(
 		'captured' => '2026-09-07',
 		'v4'       => array(
 			'3.211.124.183/32',
@@ -347,7 +347,7 @@ return array(
 	// (2026-09-14: 486 prefixes each, same creationTime, full overlap), so they share one group. If
 	// they ever diverge, split this into two groups rather than unioning them.
 	// Source: https://duckduckgo.com/duckassistbot.json, https://duckduckgo.com/duckduckbot.json.
-	'duckduckgo' => array(
+	'duckduckgo'  => array(
 		'captured' => '2026-09-01',
 		'v4'       => array(
 			'4.144.148.23/32',
@@ -844,7 +844,7 @@ return array(
 	// One prefix, and Linkup's own documentation says to verify against this file rather than by
 	// reverse DNS — 35.198.113.100 has no PTR record. A single address is unusually narrow, so
 	// expect this one to churn: re-fetch at release time like the rest.
-	'linkup'     => array(
+	'linkup'      => array(
 		'captured' => '2026-09-13',
 		'v4'       => array(
 			'35.198.113.100/32',
@@ -852,7 +852,7 @@ return array(
 		'v6'       => array(),
 	),  // SeznamBot.
 	// Source: https://search.seznam.cz/ipranges/seznambot.json.
-	'seznam'     => array(
+	'seznam'      => array(
 		'captured' => '2026-09-14',
 		'v4'       => array(
 			'77.75.72.26/32',
@@ -953,7 +953,7 @@ return array(
 	),
 	// MojeekBot.
 	// Source: https://www.mojeek.com/mojeekbot.json.
-	'mojeek'     => array(
+	'mojeek'      => array(
 		'captured' => '2026-09-14',
 		'v4'       => array(
 			'5.102.173.64/28',
@@ -962,7 +962,7 @@ return array(
 	),
 	// SERankingBacklinksBot. Published as a list of bare addresses, stored here as /32s.
 	// Source: https://api.seranking.com/backlinks-bot-ips.
-	'seranking'  => array(
+	'seranking'   => array(
 		'captured' => '2026-09-14',
 		'v4'       => array(
 			'95.217.114.159/32',
@@ -1053,7 +1053,7 @@ return array(
 	),
 	// ShapBot.
 	// Source: https://docs.parallel.ai/resources/shapbot.json.
-	'parallel'   => array(
+	'parallel'    => array(
 		'captured' => '2026-09-14',
 		'v4'       => array(
 			'23.251.146.115/32',
@@ -1069,9 +1069,46 @@ return array(
 		),
 		'v6'       => array(),
 	),
+	// Common Crawl — CCBot.
+	// Source: https://index.commoncrawl.org/ccbot.json (linked from https://commoncrawl.org/ccbot).
+	// The upstream file carries its own vintage — creationTime 2026-08-11T13:40:00Z at capture —
+	// which is not the same fact as `captured` below and is worth re-reading on a refresh: a
+	// synctoken that has not moved means the list itself has not changed.
+	//
+	// Common Crawl documents rDNS as well, so CCBot is in VERIFY_HOSTS too and this group is the
+	// first of the two tests. The IPv6 prefix matters more here than in most groups: rDNS under
+	// crawl.commoncrawl.org is IPv4-only by Common Crawl's own statement, so for an IPv6 caller
+	// this list is the only evidence there is.
+	'commoncrawl' => array(
+		'captured' => '2026-09-14',
+		'v4'       => array(
+			'3.41.188.32/29',
+			'18.97.9.168/29',
+			'18.97.14.80/29',
+			'18.97.14.88/30',
+		),
+		'v6'       => array(
+			'2600:1f28:365:8000::/56',
+		),
+	),
+	// You.com — YouBot.
+	// Source: https://you.com/docs/youbot, which states plainly that "Legitimate YouBot requests
+	// originate from 68.67.112.0/24". A single documented /24 rather than a fetchable feed, so
+	// re-read the page at release time rather than re-fetching a file. Confirmed 2026-09-14 against
+	// 68.67.112.111 from this site's log, inside the prefix and forward-confirming under
+	// search.you.com. You.com also publishes Ed25519 keys for Cloudflare's Web Bot Auth at
+	// /.well-known/http-message-signatures-directory; that is a third method this plugin does not
+	// implement, and it is noted here so the next person does not re-derive it.
+	'youcom'      => array(
+		'captured' => '2026-09-14',
+		'v4'       => array(
+			'68.67.112.0/24',
+		),
+		'v6'       => array(),
+	),
 	// SofyaBot.
 	// Source: https://sofya.co/bot/ips.json.
-	'sofya'      => array(
+	'sofya'       => array(
 		'captured' => '2026-09-14',
 		'v4'       => array(
 			'159.195.72.86/32',
