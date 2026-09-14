@@ -144,6 +144,18 @@ class MMSAR_Agent_Log_Verify {
 		// Perplexity documents both methods; the range data below covers it as well.
 		'PerplexityBot'     => array( 'perplexity.ai', 'perplexity.com' ),
 		'Perplexity-User'   => array( 'perplexity.ai', 'perplexity.com' ),
+		// Ahrefs — https://ahrefs.com/robot/. Confirmed 2026-09-14 on two addresses from this site's
+		// log: proxy-de002-cip10.ahrefs.net and proxy-de009-cip8.ahrefs.net, both forward-confirmed.
+		// Ahrefs also publishes a range API; it is deliberately not bundled, because a stale range
+		// file turns a range miss on a PTR-less address into `failed`, and rDNS is proven here.
+		'AhrefsBot'         => array( 'ahrefs.com', 'ahrefs.net' ),
+		// Babbar — https://www.babbar.tech/crawler. Confirmed 2026-09-14: c187.babbar.eu and
+		// c188.babbar.eu, both forward-confirmed. Its range file dates from 2024-10 and is not used,
+		// for the same reason as Ahrefs'.
+		'Barkrowler'        => array( 'babbar.eu' ),
+		// PetalBot is deliberately absent. Huawei's only documented method is rDNS under
+		// aspiegel.com, and no full address had been seen to confirm it against when it was added.
+		// Add it only after a fresh, full-precision hit resolves and forward-confirms.
 	);
 
 	/**
@@ -154,17 +166,26 @@ class MMSAR_Agent_Log_Verify {
 	 * so that absence from it is meaningful.
 	 */
 	const VERIFY_RANGES = array(
-		'DuckAssistBot'    => 'duckduckgo',
-		'ClaudeBot'        => 'anthropic',
-		'Claude-User'      => 'anthropic',
-		'Claude-SearchBot' => 'anthropic',
-		'Anthropic-AI'     => 'anthropic',
-		'GPTBot'           => 'openai',
-		'OAI-SearchBot'    => 'openai',
-		'ChatGPT-User'     => 'openai',
-		'PerplexityBot'    => 'perplexity',
-		'Perplexity-User'  => 'perplexity',
-		'LinkupBot'        => 'linkup',
+		'DuckAssistBot'         => 'duckduckgo',
+		'ClaudeBot'             => 'anthropic',
+		'Claude-User'           => 'anthropic',
+		'Claude-SearchBot'      => 'anthropic',
+		'Anthropic-AI'          => 'anthropic',
+		'GPTBot'                => 'openai',
+		'OAI-SearchBot'         => 'openai',
+		'ChatGPT-User'          => 'openai',
+		'PerplexityBot'         => 'perplexity',
+		'Perplexity-User'       => 'perplexity',
+		'LinkupBot'             => 'linkup',
+		// DuckDuckBot shares DuckAssistBot's group because DuckDuckGo publishes the same list for
+		// both. See the note on that group in crawler-ranges.php. DuckDuckGo says reverse DNS is
+		// unreliable for this crawler, so it has no suffix entry.
+		'DuckDuckBot'           => 'duckduckgo',
+		'SeznamBot'             => 'seznam',
+		'MojeekBot'             => 'mojeek',
+		'SERankingBacklinksBot' => 'seranking',
+		'ShapBot'               => 'parallel',
+		'SofyaBot'              => 'sofya',
 	);
 
 	/**
@@ -566,6 +587,20 @@ class MMSAR_Agent_Log_Verify {
 		// A crawler name we recognise well enough to log but whose operator publishes neither
 		// method here. Not a judgement about the caller — an admission about this plugin.
 		return self::UNVERIFIABLE;
+	}
+
+	/**
+	 * The recognised crawler name a stored agent value claims, for display and grouping.
+	 *
+	 * A public door onto claimed_operator_key(), so the crawler category shown beside a row is
+	 * derived by exactly the matching that decides its verdict — the disclosure guard included —
+	 * and a row can never be labelled as one crawler while being judged as another.
+	 *
+	 * @param string $agent Stored agent value, either shape.
+	 * @return string Canonical crawler name, or an empty string when nothing is claimed.
+	 */
+	public static function claimed_name( $agent ) {
+		return self::claimed_operator_key( $agent );
 	}
 
 	/**

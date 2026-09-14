@@ -347,6 +347,7 @@ class MMSAR_Agent_Log_Page {
 			'verdicts'   => $pick( 'verdict', array_merge( MMSAR_Agent_Log_Verify::verdicts(), array( 'pending' ) ) ),
 			'clients'    => $pick( 'client', array_merge( MMSAR_Agent_Log::client_types(), array( 'unrecorded' ) ) ),
 			'categories' => $pick( 'surface', MMSAR_Agent_Log::categories() ),
+			'crawlers'   => $pick( 'crawler', array_merge( MMSAR_Agent_Log::crawler_categories(), array( MMSAR_Agent_Log::CRAWLER_UNRECOGNISED ) ) ),
 		);
 	}
 
@@ -409,6 +410,7 @@ class MMSAR_Agent_Log_Page {
 			'verdicts'   => $pick( 'verdict', array_merge( MMSAR_Agent_Log_Verify::verdicts(), array( 'pending' ) ) ),
 			'clients'    => $pick( 'client', array_merge( MMSAR_Agent_Log::client_types(), array( 'unrecorded' ) ) ),
 			'categories' => $pick( 'surface', MMSAR_Agent_Log::categories() ),
+			'crawlers'   => $pick( 'crawler', array_merge( MMSAR_Agent_Log::crawler_categories(), array( MMSAR_Agent_Log::CRAWLER_UNRECOGNISED ) ) ),
 		);
 	}
 
@@ -466,7 +468,7 @@ class MMSAR_Agent_Log_Page {
 	 * @return bool
 	 */
 	private static function filters_active( $filters ) {
-		return (bool) ( $filters['verdicts'] || $filters['clients'] || $filters['categories'] );
+		return (bool) ( $filters['verdicts'] || $filters['clients'] || $filters['categories'] || $filters['crawlers'] );
 	}
 
 	/**
@@ -484,6 +486,7 @@ class MMSAR_Agent_Log_Page {
 			'verdict' => 'verdicts',
 			'client'  => 'clients',
 			'surface' => 'categories',
+			'crawler' => 'crawlers',
 		) as $arg => $key ) {
 			if ( $filters[ $key ] ) {
 				$args[ $arg ] = $filters[ $key ];
@@ -513,6 +516,23 @@ class MMSAR_Agent_Log_Page {
 			'ip'     => $ip,
 			'single' => ( 'journeys' === $view && ! self::current_multi_only() ) ? '1' : '',
 		);
+	}
+
+	/**
+	 * The small crawler-category line shown under an agent name.
+	 *
+	 * Empty for a row that names no recognised crawler: "Unrecognised" under every browser and
+	 * script would be noise on the rows that are most of the log.
+	 *
+	 * @param string $agent Stored agent value.
+	 * @return string Escaped HTML, or an empty string.
+	 */
+	private static function crawler_tag( $agent ) {
+		$category = MMSAR_Agent_Log::crawler_category( $agent );
+		if ( '' === $category ) {
+			return '';
+		}
+		return '<br><span style="font-size:11px;color:#8c8f94;">' . esc_html( MMSAR_Agent_Log::crawler_category_label( $category ) ) . '</span>';
 	}
 
 	/**
@@ -629,6 +649,16 @@ class MMSAR_Agent_Log_Page {
 		$verdict_opts['pending'] = MMSAR_Agent_Log_Verify::label( MMSAR_Agent_Log_Verify::PENDING );
 		self::render_filter_group( 'verdict', __( 'Identity', 'make-my-site-agent-ready' ), $verdict_opts, $filters['verdicts'] );
 
+		// What kind of bot the row names, which is what separates AI traffic from search and SEO
+		// crawlers. Counts are requests over the whole log, like the Surface counts.
+		$crawler_opts   = array();
+		$crawler_counts = array();
+		foreach ( MMSAR_Agent_Log::get_crawler_category_counts() as $cc => $row ) {
+			$crawler_opts[ $cc ]   = MMSAR_Agent_Log::crawler_category_label( $cc );
+			$crawler_counts[ $cc ] = $row['requests'];
+		}
+		self::render_filter_group( 'crawler', __( 'Crawler type', 'make-my-site-agent-ready' ), $crawler_opts, $filters['crawlers'], $crawler_counts );
+
 		echo '<div style="clear:both;padding-top:.6rem;border-top:1px solid #f0f0f1;margin-top:.4rem;">';
 		echo '<span id="mmsar-filter-apply">';
 		submit_button( __( 'Apply filters', 'make-my-site-agent-ready' ), 'primary', 'submit', false );
@@ -642,6 +672,7 @@ class MMSAR_Agent_Log_Page {
 						'verdicts'   => array(),
 						'clients'    => array(),
 						'categories' => array(),
+						'crawlers'   => array(),
 					),
 					$extra
 				),
@@ -923,6 +954,7 @@ class MMSAR_Agent_Log_Page {
 			echo '<td>' . esc_html( $stamp ? wp_date( 'Y-m-d H:i', $stamp ) : '—' ) . '</td>';
 			$attributed = isset( $entry['attributed_to'] ) ? (string) $entry['attributed_to'] : '';
 			echo '<td>' . esc_html( isset( $entry['agent'] ) ? $entry['agent'] : '—' );
+			echo self::crawler_tag( isset( $entry['agent'] ) ? (string) $entry['agent'] : '' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Built from esc_html() in crawler_tag().
 			if ( '' !== $attributed ) {
 				// The claim stays as the cell's main text. This is appended, not substituted, because the
 				// agent column's job is to say what the request claimed to be — replacing it would hide
@@ -1105,6 +1137,7 @@ class MMSAR_Agent_Log_Page {
 		echo '<td>' . esc_html( wp_date( 'Y-m-d H:i', $visit['started'] ) ) . '</td>';
 
 		echo '<td>' . esc_html( '' !== $visit['agent'] ? $visit['agent'] : '—' );
+		echo self::crawler_tag( (string) $visit['agent'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Built from esc_html() in crawler_tag().
 		$attributed = isset( $sample['attributed_to'] ) ? (string) $sample['attributed_to'] : '';
 		if ( '' !== $attributed ) {
 			echo '<br><span style="font-size:11px;color:#8c8f94;">'
@@ -1583,6 +1616,7 @@ class MMSAR_Agent_Log_Page {
 			'verdict' => 'verdicts',
 			'client'  => 'clients',
 			'surface' => 'categories',
+			'crawler' => 'crawlers',
 		) as $arg => $key ) {
 			foreach ( ( $filters[ $key ] ?? array() ) as $value ) {
 				printf( '<input type="hidden" name="%1$s[]" value="%2$s">', esc_attr( $arg ), esc_attr( $value ) );

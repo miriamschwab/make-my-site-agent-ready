@@ -475,37 +475,43 @@ function mmsar_register_abilities() {
 			'input_schema'        => array(
 				'type'       => 'object',
 				'properties' => array(
-					'limit'        => array(
+					'limit'            => array(
 						'type'        => 'integer',
 						'minimum'     => 1,
 						'maximum'     => 500,
 						'default'     => 50,
 						'description' => 'How many individual entries to return, newest first. Ignored when summary_only is true.',
 					),
-					'offset'       => array(
+					'offset'           => array(
 						'type'        => 'integer',
 						'minimum'     => 0,
 						'default'     => 0,
 						'description' => 'Entries to skip before returning any, for paging back through the log.',
 					),
-					'summary_only' => array(
+					'summary_only'     => array(
 						'type'        => 'boolean',
 						'default'     => false,
 						'description' => 'Return the aggregates and omit individual entries. The aggregates carry no IP addresses, so this is also the way to read the log without handling them.',
 					),
-					'surface'      => array(
+					'surface'          => array(
 						'type'        => 'string',
 						'enum'        => array( '', 'docs', 'markdown', 'html', 'notfound' ),
 						'default'     => '',
 						'description' => 'Restrict entries by what kind of surface was requested. "docs" is the agent-facing documents: llms.txt and its scoped variants, api-catalog, the MCP descriptors, Agent Skills and SKILL.md, openapi.json, auth.md, ai-catalog, schema-map, nlweb and ?mode=agent. "markdown" is the .md mirrors and content-negotiated Markdown. "html" is ordinary page views. "notfound" is the agent 404s. Empty string is all of them. Combine with client="crawler" or a verified filter to ask the question this log exists for: did anything real read the agent-facing documents.',
 					),
-					'client'       => array(
+					'client'           => array(
 						'type'        => 'string',
 						'enum'        => array( '', 'crawler', 'browser', 'http', 'all' ),
 						'default'     => '',
 						'description' => 'Restrict entries by what kind of client made the request, judged from the shape of the request rather than its name. "crawler" named a recognised crawler, or announced itself as a bot. "browser" made a document navigation, which is a shape the Fetch API cannot ask for. "http" is a script, CLI or agent fetch tool, which is what an agent using a fetch tool looks like. Empty string is the default and returns everything except browsers, because this is an agent log and browser page views are recorded as a denominator rather than as agent traffic; pass "all" to include them. A browser signature identifies the software, not a person: an agent driving a headless Chrome is indistinguishable from a human reader here.',
 					),
-					'verified'     => array(
+					'crawler_category' => array(
+						'type'        => 'string',
+						'enum'        => array( '', 'ai-training', 'ai-search', 'ai-assistant', 'search-engine', 'seo-tool', 'monitoring', 'scanner', 'other', 'unrecognised', 'ai' ),
+						'default'     => '',
+						'description' => 'Restrict entries by what kind of bot the entry names. "ai-training" collects content to train models; "ai-search" builds or queries an index for AI answers; "ai-assistant" fetches a page because a person asked an assistant right then; "search-engine", "seo-tool", "monitoring" and "scanner" are what they say; "other" is link-preview and similar named bots; "unrecognised" names no bot this plugin knows. "ai" is shorthand for all three AI categories — the way to separate AI traffic from search and SEO traffic. The category is a claim\'s category, not a proof: combine with verified="verified" before attributing traffic to an operator. Empty string means no filter. Applies to entries only.',
+					),
+					'verified'         => array(
 						'type'        => 'string',
 						'enum'        => array( '', 'verified', 'failed', 'unverifiable', 'unclaimed', 'nodns', 'pending' ),
 						'default'     => '',
@@ -523,7 +529,7 @@ function mmsar_register_abilities() {
 					'page_views_recorded' => array(
 						'type'        => 'string',
 						'enum'        => array( 'off', 'agents', 'all' ),
-						'description' => 'How much ordinary HTML page-view traffic is recorded, which decides what a share of this log can legitimately be compared against. "off": only requests for agent-facing files appear, so no share is meaningful. "agents": page views are recorded for recognized AI crawlers only — a correct denominator for those, and a **badly skewed one for everybody else**, because an unrecognized client\'s agent-file requests are recorded while its page views are not, making anything unbranded look as though it reads nothing but agent-facing files. "all": every page view is recorded, including human traffic, so shares are comparable across every client. Check this before computing any percentage from these counts.',
+						'description' => 'How much ordinary HTML page-view traffic is recorded, which decides what a share of this log can legitimately be compared against. "off": only requests for agent-facing files appear, so no share is meaningful. "agents": page views are recorded for recognized crawlers only (every named bot, AI or not — see crawler_category) — a correct denominator for those, and a **badly skewed one for everybody else**, because an unrecognized client\'s agent-file requests are recorded while its page views are not, making anything unbranded look as though it reads nothing but agent-facing files. "all": every page view is recorded, including human traffic, so shares are comparable across every client. Check this before computing any percentage from these counts.',
 					),
 					'retention_limit'     => array(
 						'type'        => 'integer',
@@ -612,18 +618,35 @@ function mmsar_register_abilities() {
 						'items'       => array(
 							'type'       => 'object',
 							'properties' => array(
-								'agent'        => array( 'type' => 'string' ),
-								'requests'     => array( 'type' => 'integer' ),
-								'surfaces'     => array( 'type' => 'integer' ),
-								'unique_ips'   => array( 'type' => 'integer' ),
-								'verified'     => array( 'type' => 'integer' ),
-								'failed'       => array( 'type' => 'integer' ),
-								'unverifiable' => array( 'type' => 'integer' ),
-								'unclaimed'    => array( 'type' => 'integer' ),
-								'nodns'        => array( 'type' => 'integer' ),
-								'pending'      => array( 'type' => 'integer' ),
-								'first_seen'   => array( 'type' => 'string' ),
-								'last_seen'    => array( 'type' => 'string' ),
+								'agent'            => array( 'type' => 'string' ),
+								'crawler_category' => array(
+									'type'        => 'string',
+									'description' => 'What kind of bot this agent is — see by_crawler_category. Empty when it names no recognised crawler.',
+								),
+								'requests'         => array( 'type' => 'integer' ),
+								'surfaces'         => array( 'type' => 'integer' ),
+								'unique_ips'       => array( 'type' => 'integer' ),
+								'verified'         => array( 'type' => 'integer' ),
+								'failed'           => array( 'type' => 'integer' ),
+								'unverifiable'     => array( 'type' => 'integer' ),
+								'unclaimed'        => array( 'type' => 'integer' ),
+								'nodns'            => array( 'type' => 'integer' ),
+								'pending'          => array( 'type' => 'integer' ),
+								'first_seen'       => array( 'type' => 'string' ),
+								'last_seen'        => array( 'type' => 'string' ),
+							),
+						),
+					),
+					'by_crawler_category' => array(
+						'type'                 => 'object',
+						'description'          => 'Traffic by what kind of bot each entry names, over the whole log: ai-training, ai-search, ai-assistant, search-engine, seo-tool, monitoring, scanner, other, and unrecognised (names no bot this plugin knows — browsers, scripts and unbranded tools). This is the breakdown that separates AI traffic from search and SEO traffic. A category comes from the name an entry claimed, so read "verified" and "failed" beside "requests": a category whose failed count is high is a name being worn by something else. Categories are assigned by what the operator documents that specific bot doing, not by the operator\'s business overall, and are derived on read, so entries logged before a bot was recognised are counted under its category too.',
+						'additionalProperties' => array(
+							'type'       => 'object',
+							'properties' => array(
+								'requests' => array( 'type' => 'integer' ),
+								'agents'   => array( 'type' => 'integer' ),
+								'verified' => array( 'type' => 'integer' ),
+								'failed'   => array( 'type' => 'integer' ),
 							),
 						),
 					),
@@ -674,29 +697,35 @@ function mmsar_register_abilities() {
 						'items'       => array(
 							'type'       => 'object',
 							'properties' => array(
-								'logged_at'     => array( 'type' => 'string' ),
-								'agent'         => array( 'type' => 'string' ),
-								'surface'       => array( 'type' => 'string' ),
-								'detail'        => array(
+								'logged_at'        => array( 'type' => 'string' ),
+								'agent'            => array( 'type' => 'string' ),
+								'crawler_category' => array(
+									'type'        => 'string',
+									'description' => 'What kind of bot the agent names — see by_crawler_category. Empty when it names no recognised crawler.',
+								),
+								'surface'          => array( 'type' => 'string' ),
+								'detail'           => array(
 									'type'        => 'string',
 									'description' => 'What was asked for within the surface — a 404 path, an MCP method, or the permalink path of the post served on a Markdown surface. Empty string on surfaces where the surface name is the whole request.',
 								),
-								'ip'            => array( 'type' => 'string' ),
-								'client_type'   => array(
+								'ip'               => array( 'type' => 'string' ),
+								'client_type'      => array(
 									'type'        => 'string',
 									'enum'        => array( '', 'crawler', 'browser', 'http' ),
 									'description' => 'What kind of software made the request. Empty on entries recorded before 1.26.0.',
 								),
-								'verified'      => array(
+								'verified'         => array(
 									'type'        => 'string',
 									'enum'        => array( '', 'verified', 'failed', 'unverifiable', 'unclaimed', 'nodns' ),
 									'description' => 'This entry\'s verification verdict. "failed" means the claimed crawler identity was forged. "unverifiable" means this release has no way to check that operator and is not an accusation. "unclaimed" means no crawler was named. "nodns" means the resolver gave no answer and the entry will be retried. An empty string means it has not been checked yet, so it is not evidence of anything.',
 								),
-								'verified_at'   => array(
-									'type'        => 'string',
+								'verified_at'      => array(
+									// Nullable: an unchecked row stores NULL, and a plain 'string' type made the
+									// whole call fail output validation whenever a page held a pending entry.
+									'type'        => array( 'string', 'null' ),
 									'description' => 'UTC datetime the verdict was reached, "Y-m-d H:i:s", or null when unchecked. Compare it against logged_at: reverse-DNS assignments and published ranges both change, so a verdict reached days after the request is weaker evidence than one reached in the same hour, and a "failed" verdict on an old entry is suggestive rather than proof.',
 								),
-								'attributed_to' => array(
+								'attributed_to'    => array(
 									'type'        => 'string',
 									'description' => 'Who the forged identity most likely belonged to, or "" when nothing explains it. Only ever set on a "failed" entry: the `agent` column keeps what the request claimed to be, and this says what the evidence suggests it was, so a row reads as "GPTBot, spoofed by Ora". Derived per read from neighbouring rows rather than stored, and bounded to a 30-minute burst on the same network — a datacenter address is reassigned, so an attribution that outlived its evidence would start accusing whoever holds the address next. Two sources feed it: a configured scanner signature (a token the operator owns, such as its own domain in the user-agent or a probe path it invented), or correlation — the same network, in the same burst, also presenting a self-declared bot name that no operator publishes a check for. A **verified** crawler is never used as an attributor, so this can never claim one real operator forged another.',
 								),
@@ -729,6 +758,10 @@ function mmsar_register_abilities() {
 				$verified     = isset( $input['verified'] ) ? sanitize_key( $input['verified'] ) : '';
 				$client       = isset( $input['client'] ) ? sanitize_key( $input['client'] ) : '';
 				$category     = isset( $input['surface'] ) ? sanitize_key( $input['surface'] ) : '';
+				$crawler      = isset( $input['crawler_category'] ) ? sanitize_key( $input['crawler_category'] ) : '';
+				$crawlers     = 'ai' === $crawler
+					? array( MMSAR_Agent_Log::CRAWLER_AI_TRAINING, MMSAR_Agent_Log::CRAWLER_AI_SEARCH, MMSAR_Agent_Log::CRAWLER_AI_ASSISTANT )
+					: ( '' === $crawler ? array() : array( $crawler ) );
 
 				// Decide a few identities before reading, so a caller that keeps asking gradually
 				// verifies the log rather than being told forever that everything is pending. Same
@@ -762,6 +795,7 @@ function mmsar_register_abilities() {
 					),
 					'client_types'        => MMSAR_Agent_Log::get_client_type_counts(),
 					'surface_categories'  => MMSAR_Agent_Log::get_category_counts(),
+					'by_crawler_category' => MMSAR_Agent_Log::get_crawler_category_counts(),
 					'by_agent'            => $summary['by_agent'],
 					'by_surface'          => $summary['by_surface'],
 					'by_detail'           => $summary['by_detail'],
@@ -779,8 +813,12 @@ function mmsar_register_abilities() {
 						'verdicts'   => '' === $verified ? array() : array( $verified ),
 						'clients'    => 'all' === $client ? array_merge( MMSAR_Agent_Log::client_types(), array( 'unrecorded' ) ) : ( '' === $client ? array() : array( $client ) ),
 						'categories' => '' === $category ? array() : array( $category ),
+						'crawlers'   => $crawlers,
 					)
 				);
+				foreach ( $entries as $i => $entry ) {
+					$entries[ $i ]['crawler_category'] = MMSAR_Agent_Log::crawler_category( isset( $entry['agent'] ) ? (string) $entry['agent'] : '' );
+				}
 				$result['entries']  = MMSAR_Agent_Log_Attribution::annotate( $entries );
 				$result['returned'] = count( $entries );
 				$result['limit']    = $limit;

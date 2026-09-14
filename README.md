@@ -49,7 +49,7 @@ Every feature below can be switched off individually under **Settings > Agent-Re
 ### Configuration and operations
 - **Settings page** (Settings > Agent-Ready) — per-feature on/off toggles, post type selector, CSS root selector, robots.txt preview and extra-rules textarea, security contact, Content Signals toggles, a TDMRep policy URL, a structured data (JSON-LD) toggle, and a "View" link to every endpoint currently being served
 - **Bulk regeneration** — "Regenerate All" button on the settings page
-- **Agent request log** (off by default) — records which agents fetch the surfaces above, on its own screen at Settings > Agent Log, with a retention setting, a dashboard widget, a CSV export of the whole log, and a read-only ability so an agent can read it too. See [The agent log](#the-agent-log)
+- **Agent request log** (off by default) — records which agents fetch the surfaces above, on its own screen at Settings > Agent Log, with filters, a Journeys view, a retention setting, a dashboard widget, a CSV export, and a read-only ability so an agent can read it too. Verifies each claimed crawler identity and tags every recognised bot with a category, so AI traffic can be separated from search and SEO traffic. See [The agent log](#the-agent-log)
 - **Proper HTTP headers** — `Content-Type: text/markdown`, `X-Robots-Tag: noindex`, `X-Content-Type-Options: nosniff`, canonical link
 - **Password protection** — password-protected posts return 403 on `.md` URLs, and are excluded from every aggregate document (`llms-full.txt`, the OKF bundle) and the agent log
 - **Clean uninstall** — removes all plugin data (post meta, options, transients)
@@ -251,8 +251,9 @@ the Agent Skills index, a `SKILL.md` — is recorded with the time, the requesti
 There is no user-agent test on those: anything fetching `llms.txt` is agent traffic whatever it
 calls itself, and filtering on user-agent would hide exactly the clients worth knowing about.
 
-An optional sub-setting also records ordinary HTML page views from recognized AI crawlers. That one
-supplies the denominator. Without it the log shows only the agents that asked for an agent-facing
+An optional sub-setting also records ordinary HTML page views — from recognized crawlers only, or
+from everything including human visitors (stored against the network, not the full address). That
+one supplies the denominator. Without it the log shows only the agents that asked for an agent-facing
 file, and "which agents ask for markdown" cannot be answered without also knowing which ones came
 and did not. In practice this is where the interesting answer lives — on the author's own site, the
 best-known AI crawlers turned out to fetch HTML and ignore every agent-facing file, while the
@@ -292,16 +293,46 @@ Since 1.24.0 each entry carries a verdict, shown as a badge in an *Identity* col
 
 Two methods, chosen per operator, because the operators are split on which they publish:
 
-- **Published IP ranges** for Anthropic, OpenAI and Perplexity. None of them publishes reverse-DNS
-  records for its crawlers, so this is the only method their documentation describes. The ranges are
-  bundled with the plugin rather than fetched, so nothing calls a third-party service and
-  verification works on a host with no outbound HTTP. The trade-off is that they age: the capture
-  date is reported alongside the verdicts, and `mmsar_agent_log_verify_ranges` lets you add a prefix
-  without waiting for a release.
-- **Forward-confirmed reverse DNS** for Google, Apple, Amazon, Microsoft and DuckDuckGo. The address
-  is reversed to a hostname, that hostname is resolved forward and must come back to the same
-  address, and it must sit under a domain the claimed operator owns. Anyone can put any string in a
-  `User-Agent`; nobody can put a record in someone else's DNS zone.
+- **Published IP ranges** for Anthropic, OpenAI, Perplexity, DuckDuckGo (DuckAssistBot and
+  DuckDuckBot), Linkup, Seznam, Mojeek, SE Ranking, Parallel (ShapBot) and Sofya. Most of them
+  publish no reverse-DNS records for their crawlers, so this is the only method their documentation
+  describes. The ranges are bundled with the plugin rather than fetched, so nothing calls a
+  third-party service and verification works on a host with no outbound HTTP. The trade-off is that
+  they age: the capture date is reported alongside the verdicts, and `mmsar_agent_log_verify_ranges`
+  lets you add a prefix without waiting for a release.
+- **Forward-confirmed reverse DNS** for Google, Apple, Amazon, Microsoft, Ahrefs and Babbar
+  (Barkrowler). The address is reversed to a hostname, that hostname is resolved forward and must
+  come back to the same address, and it must sit under a domain the claimed operator owns. Anyone
+  can put any string in a `User-Agent`; nobody can put a record in someone else's DNS zone.
+
+Every other recognised crawler reads as **Unverifiable** — its operator publishes no method this
+release knows about. A suffix or range is only added once it has been confirmed against the
+operator's own documentation *and* a real address from a live log, because a wrong entry produces
+confident "Spoofed" verdicts against genuine crawlers.
+
+### What kind of bot it was
+
+Recognised crawlers are not all AI crawlers. Search indexes feed AI answers and SEO companies run AI
+products, so rather than keep separate lists, every recognised bot sits in one list and carries a
+category:
+
+| Category | Meaning |
+|---|---|
+| **AI training** | Collects content to train models (GPTBot, ClaudeBot, CCBot…) |
+| **AI search** | Builds or queries an index used to answer questions (OAI-SearchBot, PerplexityBot, LinkupBot…) |
+| **AI assistant** | Fetches a page because a person asked an assistant right then (ChatGPT-User, Claude-User…) |
+| **Search engine** | Conventional web search (SeznamBot, DuckDuckBot, MojeekBot…) |
+| **SEO tool** | SEO and backlink platforms (AhrefsBot, SemrushBot, Barkrowler…) |
+| **Monitoring** | Brand and media monitoring (AwarioBot, trendictionbot) |
+| **Scanner** | Readiness and site scanners (OraBot) |
+| **Other** | Link previews and everything else named (Twitterbot, facebookexternalhit, Slackbot…) |
+
+A category goes by what the operator documents *that specific bot* doing, not by the operator's
+business overall. It is shown under the agent name, filterable as **Crawler type**, and returned by
+the ability as `crawler_category` and `by_crawler_category`. It is derived on read with the same
+matching that decides the verdict, so entries logged before a crawler was recognised are categorised
+too. A category describes a *claim* — read it alongside the verdict before attributing traffic to an
+operator.
 
 **No lookup ever happens while a page is being served.** DNS can block for seconds, and the log
 records requests while content is going out to the caller. There is no cron either. Verification
@@ -312,7 +343,7 @@ authenticated admin contexts, and all of them bounded by a wall-clock budget.
 ### Reading it
 
 The screen paginates at 50 entries. **Export CSV** writes the whole log — columns `logged_at_utc`,
-`agent`, `surface`, `detail`, `ip`, `verified`, `verified_at_utc` — streamed in batches so peak
+`agent`, `surface`, `detail`, `ip`, `verified`, `verified_at_utc`, `client_type` — streamed in batches so peak
 memory does not grow with the log. Columns are only ever appended, never reordered. The
 timestamp column is named for its timezone on purpose: rows are stored in UTC and the screen renders
 them in the site's timezone. Cells whose value begins `=`, `+`, `-`, `@`, tab or CR are written with
@@ -354,6 +385,6 @@ This plugin exposes abilities for the [WordPress Abilities API](https://develope
 | `make-my-site-agent-ready/list-endpoints` | Always on | Lists every endpoint being published, flagging which are managed on the settings page and which a plugin or theme registered in code, plus where each is actually appearing right now. |
 | `make-my-site-agent-ready/set-endpoint` | Always on | Adds an endpoint, or updates one already managed on the settings page. Send only the fields you want changed when updating. |
 | `make-my-site-agent-ready/delete-endpoint` | Always on (destructive) | Removes an endpoint managed on the settings page. |
-| `make-my-site-agent-ready/get-agent-log` | Always on (read-only) | Reads the agent request log: counts by agent, by surface, by requested detail and by day across the whole log, a verification breakdown, plus a page of individual entries. Pass `summary_only` for the aggregates alone, which carry counts of distinct IPs but no addresses, or `verified` to list only entries with a given verdict — `failed` lists the requests that forged a crawler identity. |
+| `make-my-site-agent-ready/get-agent-log` | Always on (read-only) | Reads the agent request log: counts by agent, by surface, by requested detail and by day across the whole log, a verification breakdown, plus a page of individual entries. Pass `summary_only` for the aggregates alone, which carry counts of distinct IPs but no addresses, or `verified` to list only entries with a given verdict — `failed` lists the requests that forged a crawler identity. Every entry and `by_agent` row carries a `crawler_category`, `by_crawler_category` breaks traffic down by kind of bot, and the `crawler_category` input filter (`ai` for all three AI categories) separates AI traffic from search and SEO traffic. |
 
 Endpoints a plugin or theme registered in code are read-only to `set-endpoint` and `delete-endpoint`: both return a `409` explaining that the owning plugin or theme has to be edited instead. Reporting success for a write that changed nothing would be worse than refusing it.

@@ -2,6 +2,14 @@
 
 All notable changes to Make My Site Agent-Ready.
 
+## 1.41.0 — 2026-09-14
+
+- **New: every recognised crawler carries a category** — AI training, AI search, AI assistant, search engine, SEO tool, monitoring, scanner, or other bot. Shown under the agent name in the Agent Log list and Journeys, filterable as **Crawler type**, and returned by `get-agent-log` as `crawler_category` (per entry and per `by_agent` row), a `by_crawler_category` breakdown, and a `crawler_category` input filter (`ai` selects all three AI categories). Assigned by what the operator documents that specific bot doing.
+- **Derived on read, never stored**, through the same matching that decides the identity verdict — so entries logged before a crawler was recognised are categorised too, and a tag can be corrected without touching the table.
+- **New: 27 more crawlers recognised.** Verified by reverse DNS: AhrefsBot, Barkrowler. Verified against published IP lists: SeznamBot, MojeekBot, SERankingBacklinksBot, DuckDuckBot, ShapBot, SofyaBot. Recognised only (read as Unverifiable): PetalBot, ExaSearchBot, SemrushBot, MJ12bot, AwarioBot, Screaming Frog SEO Spider, PublicWWWBot, mwmbl, trendictionbot, Pandalytics, Google-CloudVertexBot, OraBot, EtherdeckBot, LyonlBot, Miniflux, Twitterbot, facebookexternalhit, Slackbot-LinkExpanding.
+- **Recognition changes what is stored**: a recognised crawler's page views keep the full address instead of the network, which is what makes verification possible. Not retroactive — rows already stored at network precision stay that way, and a re-check reads them as Unverifiable rather than judging an address it no longer has.
+- **Fixed:** `get-agent-log` failed its own output validation whenever the returned page included a not-yet-checked entry, because `verified_at` is null there and the schema only allowed a string.
+
 ## 1.40.0 — 2026-09-14
 
 - **New: an Open Knowledge Format (OKF v0.2) bundle at `/okf/`.** Publishes this site's content as a browsable tree of typed Markdown "concept" files — one per published post/page, each with YAML front matter (`type`, `title`, `description`, `resource`, `tags`, `modified`) — plus a per-post-type index and a root index, so an agent can ingest the whole corpus in one pass instead of scraping page by page.

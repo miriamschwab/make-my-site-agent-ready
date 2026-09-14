@@ -4,7 +4,7 @@ Tags: markdown, llm, ai, llms-txt, agents
 Requires at least: 6.2
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.40.0
+Stable tag: 1.41.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -43,10 +43,11 @@ Every feature below can be switched off individually under Settings > Agent-Read
 * **llms.txt discovery in robots.txt** — Adds an `Llms-txt:` directive pointing at your `/llms.txt`, so agents that fetch `robots.txt` first are told where the index is. Skipped if llms.txt is switched off, or if `robots.txt` already mentions it
 * **Endpoints stay reachable** — If `robots.txt` disallows a path one of your published endpoints lives on (several SEO plugins disallow `/wp-json/` by default), an `Allow:` line for that individual endpoint is added above the rule blocking it. The endpoint stays reachable to agents that found it in your api-catalog, llms.txt or Agent Skills index; the rest of the REST API stays disallowed
 * **Deprecation/Sunset headers** — For surfaces you schedule for retirement (via a filter), responses carry `Deprecation` and `Sunset` headers so an agent is told a URL is going away before it does. Empty, and inactive, until you fill in a schedule
+* **Agent request log** — Optional (off by default). Records which agents fetch the surfaces above, and optionally page views, on its own screen at Settings > Agent Log, with filters, a Journeys view, CSV export, a dashboard widget and a read-only ability. Each entry's claimed crawler identity is checked against the operator's published IP ranges or forward-confirmed reverse DNS, and every recognised bot carries a category — AI training, AI search, AI assistant, search engine, SEO tool, monitoring, scanner or other — so AI traffic can be read apart from search and SEO traffic
 * **YAML frontmatter** — Title, date, author, URL, excerpt, categories, and tags
 * **Pre-generated** — Markdown is generated when posts are saved, so `.md` requests are instant
 * **Discoverable** — Adds `<link rel="alternate" type="text/markdown">` to page headers
-* **Lightweight** — No cron jobs, no frontend JavaScript. The optional agent request log is the only feature that adds a database table, and only once you switch it on
+* **Lightweight** — No cron jobs, no frontend JavaScript. The agent request log's table is the plugin's only database table
 
 **How it works:**
 
@@ -124,6 +125,16 @@ Yes. Plugin and theme authors can register one so it works on any site without t
 Use the `mmsar_registered_endpoints` filter for the same thing without a direct call. Add `'surfaces' => array( 'llms_txt' )` to limit where it appears, and `'rel'` to set its api-catalog link relation. Endpoints that publish a SKILL.md of their own can pass `'skill_url'` to get their own entry in the Agent Skills index. Code-registered endpoints appear read-only under "Added by Plugins" on the settings page. Full documentation is in the plugin's README on GitHub.
 
 == Changelog ==
+
+= 1.41.0 - 2026-09-14 =
+
+* New: every recognised crawler carries a category — AI training, AI search, AI assistant, search engine, SEO tool, monitoring, scanner, or other bot. The Agent Log shows it under each agent name in the list and in Journeys, and a new Crawler type filter separates AI traffic from search and SEO traffic. Categories are assigned by what the operator documents that specific bot doing, not by the operator's business overall.
+* The category is worked out when the log is read, never stored, using the same matching that decides the identity verdict. Entries logged before a crawler was recognised — stored as its raw user-agent — are categorised too, and a category can be corrected in a later release without touching the table.
+* New in the `get-agent-log` ability: `crawler_category` on every entry and `by_agent` row, a `by_crawler_category` breakdown with verified and failed counts per category, and a `crawler_category` input filter (`ai` selects all three AI categories).
+* New: 27 more crawlers are recognised. Verified by reverse DNS: AhrefsBot, Barkrowler. Verified against the operator's published IP list: SeznamBot, MojeekBot, SERankingBacklinksBot, DuckDuckBot, ShapBot, SofyaBot. Recognised without a verification method, so they read as Unverifiable: PetalBot, ExaSearchBot, SemrushBot, MJ12bot, AwarioBot, Screaming Frog SEO Spider, PublicWWWBot, mwmbl, trendictionbot, Pandalytics, Google-CloudVertexBot, OraBot, EtherdeckBot, LyonlBot, Miniflux, Twitterbot, facebookexternalhit, Slackbot-LinkExpanding.
+* Recognising a crawler means its page views are stored with the full address rather than reduced to the network, which is what makes verifying it possible. That applies from now on; entries already stored at network precision stay that way, and a re-check reads them as Unverifiable rather than judging an address it no longer has.
+* The page-view setting's middle option now says "recognized crawlers" rather than "AI agents", because it covers every named bot.
+* Fixed: the `get-agent-log` ability failed its own output check whenever the returned page included an entry not yet identity-checked, because `verified_at` is empty for those and the schema only allowed a string.
 
 = 1.40.0 - 2026-09-14 =
 

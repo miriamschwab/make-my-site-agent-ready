@@ -113,6 +113,141 @@ class MMSAR_Agent_Log {
 		'Diffbot',
 		'LinkupBot',
 		'SSI-Nutch',
+		// Added 2026-09-14 from the agent-log-bot-watch report. Not all of these are AI crawlers,
+		// deliberately: recognition, verification and full-address storage work the same way for
+		// every named bot, and CRAWLER_CATEGORIES is what tells them apart.
+		'AhrefsBot',
+		'Barkrowler',
+		'SeznamBot',
+		'MojeekBot',
+		'SERankingBacklinksBot',
+		'DuckDuckBot',
+		'PetalBot',
+		'ExaSearchBot',
+		'ShapBot',
+		'SofyaBot',
+		'SemrushBot',
+		'MJ12bot',
+		'AwarioBot',
+		// Desktop software run by whoever installed it, with a user-editable user-agent. Never
+		// verifiable by design: recognising it only says the software identified itself.
+		'Screaming Frog SEO Spider',
+		'PublicWWWBot',
+		// Decentralised, volunteer-run crawler with no fixed addresses. Never verifiable by design.
+		'mwmbl',
+		'trendictionbot',
+		'Pandalytics',
+		'Google-CloudVertexBot',
+		// Ora's own documentation says it also sends requests under other crawlers' names to test
+		// AI-crawler access, which is part of why GPTBot and ClaudeBot carry `failed` rows here.
+		'OraBot',
+		'EtherdeckBot',
+		'LyonlBot',
+		// Self-hosted feed reader software rather than one operator: name-only recognition.
+		'Miniflux',
+		'Twitterbot',
+		// Meta's documentation says this may bypass robots.txt for security and integrity checks.
+		'facebookexternalhit',
+		// Slack's documentation says it does not honour robots.txt for this bot.
+		'Slackbot-LinkExpanding',
+	);
+
+	/**
+	 * Crawler categories — what kind of bot a recognised name is.
+	 *
+	 * The line between AI crawlers, search engines and SEO tools is not a clean one — search indexes
+	 * feed AI answers and SEO companies run AI products — so every recognised bot sits in one list
+	 * and carries a tag here instead of being kept in a separate one. See the decisions log,
+	 * "Recognised crawlers carry a category".
+	 *
+	 * Assigned by what the operator documents that specific bot doing, not by the operator's
+	 * business overall. Confirmed per name on 2026-09-14.
+	 */
+	const CRAWLER_AI_TRAINING  = 'ai-training';
+	const CRAWLER_AI_SEARCH    = 'ai-search';
+	const CRAWLER_AI_ASSISTANT = 'ai-assistant';
+	const CRAWLER_SEARCH       = 'search-engine';
+	const CRAWLER_SEO          = 'seo-tool';
+	const CRAWLER_MONITORING   = 'monitoring';
+	const CRAWLER_SCANNER      = 'scanner';
+	const CRAWLER_OTHER        = 'other';
+
+	/**
+	 * The filter value for rows that name no recognised crawler.
+	 */
+	const CRAWLER_UNRECOGNISED = 'unrecognised';
+
+	/**
+	 * Category per recognised name.
+	 *
+	 * Covers every name in AGENTS, plus the three the verifier knows but AGENTS does not
+	 * (Googlebot, Applebot, bingbot) — those are verifiable when they appear on an agent surface,
+	 * and are deliberately not in AGENTS, which would switch their page views to full-address
+	 * storage. A test asserts that every AGENTS entry has a category here.
+	 */
+	const CRAWLER_CATEGORIES = array(
+		'ClaudeBot'                 => self::CRAWLER_AI_TRAINING,
+		'Claude-User'               => self::CRAWLER_AI_ASSISTANT,
+		'Claude-SearchBot'          => self::CRAWLER_AI_SEARCH,
+		'Anthropic-AI'              => self::CRAWLER_AI_TRAINING,
+		'GPTBot'                    => self::CRAWLER_AI_TRAINING,
+		'ChatGPT-User'              => self::CRAWLER_AI_ASSISTANT,
+		'OAI-SearchBot'             => self::CRAWLER_AI_SEARCH,
+		'PerplexityBot'             => self::CRAWLER_AI_SEARCH,
+		'Perplexity-User'           => self::CRAWLER_AI_ASSISTANT,
+		// A robots.txt control token rather than a crawler that visits; a row under it is a claim.
+		'Google-Extended'           => self::CRAWLER_AI_TRAINING,
+		// General-purpose crawler for Google product and research teams.
+		'GoogleOther'               => self::CRAWLER_OTHER,
+		'Gemini'                    => self::CRAWLER_AI_ASSISTANT,
+		// Also a control token, like Google-Extended.
+		'Applebot-Extended'         => self::CRAWLER_AI_TRAINING,
+		'meta-externalagent'        => self::CRAWLER_AI_TRAINING,
+		'Bytespider'                => self::CRAWLER_AI_TRAINING,
+		// An open dataset, used mostly for model training.
+		'CCBot'                     => self::CRAWLER_AI_TRAINING,
+		'cohere-ai'                 => self::CRAWLER_AI_TRAINING,
+		'DuckAssistBot'             => self::CRAWLER_AI_SEARCH,
+		// Amazon says it may train models; it also feeds Alexa answers.
+		'Amazonbot'                 => self::CRAWLER_AI_TRAINING,
+		'YouBot'                    => self::CRAWLER_AI_SEARCH,
+		// Builds a knowledge graph sold largely for AI use.
+		'Diffbot'                   => self::CRAWLER_AI_TRAINING,
+		'LinkupBot'                 => self::CRAWLER_AI_SEARCH,
+		// Inferred: SSI publishes no crawler documentation.
+		'SSI-Nutch'                 => self::CRAWLER_AI_TRAINING,
+		'AhrefsBot'                 => self::CRAWLER_SEO,
+		'Barkrowler'                => self::CRAWLER_SEO,
+		'SeznamBot'                 => self::CRAWLER_SEARCH,
+		'MojeekBot'                 => self::CRAWLER_SEARCH,
+		'SERankingBacklinksBot'     => self::CRAWLER_SEO,
+		'DuckDuckBot'               => self::CRAWLER_SEARCH,
+		'PetalBot'                  => self::CRAWLER_SEARCH,
+		'ExaSearchBot'              => self::CRAWLER_AI_SEARCH,
+		'ShapBot'                   => self::CRAWLER_AI_SEARCH,
+		'SofyaBot'                  => self::CRAWLER_AI_SEARCH,
+		'SemrushBot'                => self::CRAWLER_SEO,
+		'MJ12bot'                   => self::CRAWLER_SEO,
+		'AwarioBot'                 => self::CRAWLER_MONITORING,
+		'Screaming Frog SEO Spider' => self::CRAWLER_SEO,
+		// Indexes source code rather than general content.
+		'PublicWWWBot'              => self::CRAWLER_SEARCH,
+		'mwmbl'                     => self::CRAWLER_SEARCH,
+		// Also does general search-engine crawling.
+		'trendictionbot'            => self::CRAWLER_MONITORING,
+		'Pandalytics'               => self::CRAWLER_OTHER,
+		// On-demand, customer-triggered Vertex AI Agent fetches.
+		'Google-CloudVertexBot'     => self::CRAWLER_OTHER,
+		'OraBot'                    => self::CRAWLER_SCANNER,
+		'EtherdeckBot'              => self::CRAWLER_SEARCH,
+		'LyonlBot'                  => self::CRAWLER_SEARCH,
+		'Miniflux'                  => self::CRAWLER_OTHER,
+		'Twitterbot'                => self::CRAWLER_OTHER,
+		'facebookexternalhit'       => self::CRAWLER_OTHER,
+		'Slackbot-LinkExpanding'    => self::CRAWLER_OTHER,
+		'Googlebot'                 => self::CRAWLER_SEARCH,
+		'Applebot'                  => self::CRAWLER_SEARCH,
+		'bingbot'                   => self::CRAWLER_SEARCH,
 	);
 
 	/**
@@ -295,8 +430,8 @@ class MMSAR_Agent_Log {
 	 * excludes browser page views. This is an agent log, and once every page view is recorded a
 	 * default that lists them all answers a different question. Tick Browsers to see them.
 	 *
-	 * @param array $filters Keys 'verdicts', 'clients', 'categories', each an array of values.
-	 * @return array{verdicts: string, clients: string, categories: string}
+	 * @param array $filters Keys 'verdicts', 'clients', 'categories', 'crawlers', each an array of values.
+	 * @return array{verdicts: string, clients: string, categories: string, crawlers: string}
 	 */
 	private static function normalize_filters( $filters ) {
 		$filters = is_array( $filters ) ? $filters : array();
@@ -333,11 +468,68 @@ class MMSAR_Agent_Log {
 			$categories = array();
 		}
 
+		$crawlers = array_values(
+			array_intersect(
+				array_map( 'strval', (array) ( $filters['crawlers'] ?? array() ) ),
+				array_merge( self::crawler_categories(), array( self::CRAWLER_UNRECOGNISED ) )
+			)
+		);
+		if ( count( $crawlers ) === count( self::crawler_categories() ) + 1 ) {
+			$crawlers = array();
+		}
+
 		return array(
 			'verdicts'   => implode( ',', $verdicts ),
 			'clients'    => implode( ',', $clients ),
 			'categories' => implode( ',', $categories ),
+			'crawlers'   => $crawlers ? self::crawler_filter_hashes( $crawlers ) : '',
 		);
+	}
+
+	/**
+	 * The stored agent values in the chosen crawler categories, as a list the queries can take.
+	 *
+	 * A crawler category is not stored — it is derived from the agent value by the same matching
+	 * that decides the verdict, so a row logged as a raw user-agent before its crawler was
+	 * recognised is categorised too. That derivation lives in PHP, so the filter is resolved here:
+	 * the distinct agent values are categorised and the matching ones handed to SQL.
+	 *
+	 * They are passed as MD5 hashes to `FIND_IN_SET( MD5( agent ), %s )` rather than as the values
+	 * themselves, because a raw user-agent routinely contains commas (`KHTML, like Gecko`) and
+	 * FIND_IN_SET splits on them. A hash never does, and the SQL stays a fixed string.
+	 *
+	 * @param string[] $crawlers Chosen categories, validated.
+	 * @return string Comma-joined hashes, or 'none' when nothing matches — a value no hash equals,
+	 *                so an empty selection narrows to nothing rather than falling back to everything.
+	 */
+	private static function crawler_filter_hashes( $crawlers ) {
+		$hashes = array();
+		foreach ( self::distinct_agents() as $agent ) {
+			$category = self::crawler_category( $agent );
+			$key      = '' === $category ? self::CRAWLER_UNRECOGNISED : $category;
+			if ( in_array( $key, $crawlers, true ) ) {
+				$hashes[] = md5( $agent );
+			}
+		}
+		return $hashes ? implode( ',', $hashes ) : 'none';
+	}
+
+	/**
+	 * Every distinct agent value in the log, memoized for the request.
+	 *
+	 * A few hundred values on a busy site, which is what makes categorising them in PHP cheap.
+	 *
+	 * @return string[]
+	 */
+	private static function distinct_agents() {
+		static $agents = null;
+		if ( null === $agents ) {
+			global $wpdb;
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- This plugin's own table.
+			$agents = $wpdb->get_col( $wpdb->prepare( 'SELECT DISTINCT agent FROM %i', self::table() ) );
+			$agents = is_array( $agents ) ? array_map( 'strval', $agents ) : array();
+		}
+		return $agents;
 	}
 
 	/**
@@ -367,6 +559,7 @@ class MMSAR_Agent_Log {
 				             WHEN surface LIKE %s THEN 'markdown'
 				             WHEN surface LIKE %s THEN 'notfound'
 				             ELSE 'docs' END, %s ) > 0 )
+				  AND ( %s = '' OR FIND_IN_SET( MD5( agent ), %s ) > 0 )
 				ORDER BY id DESC LIMIT %d OFFSET %d",
 				self::table(),
 				$f['verdicts'],
@@ -378,6 +571,8 @@ class MMSAR_Agent_Log {
 				$like_md,
 				$like_404,
 				$f['categories'],
+				$f['crawlers'],
+				$f['crawlers'],
 				absint( $per_page ),
 				absint( $offset )
 			),
@@ -409,7 +604,8 @@ class MMSAR_Agent_Log {
 				        CASE WHEN surface LIKE %s THEN 'html'
 				             WHEN surface LIKE %s THEN 'markdown'
 				             WHEN surface LIKE %s THEN 'notfound'
-				             ELSE 'docs' END, %s ) > 0 )",
+				             ELSE 'docs' END, %s ) > 0 )
+				  AND ( %s = '' OR FIND_IN_SET( MD5( agent ), %s ) > 0 )",
 				self::table(),
 				$f['verdicts'],
 				$f['verdicts'],
@@ -419,7 +615,9 @@ class MMSAR_Agent_Log {
 				$like_html,
 				$like_md,
 				$like_404,
-				$f['categories']
+				$f['categories'],
+				$f['crawlers'],
+				$f['crawlers']
 			)
 		);
 	}
@@ -687,6 +885,7 @@ class MMSAR_Agent_Log {
 				             WHEN surface LIKE %s THEN 'markdown'
 				             WHEN surface LIKE %s THEN 'notfound'
 				             ELSE 'docs' END, %s ) > 0 )
+				  AND ( %s = '' OR FIND_IN_SET( MD5( agent ), %s ) > 0 )
 				ORDER BY id DESC LIMIT %d",
 				self::table(),
 				$ip,
@@ -701,6 +900,8 @@ class MMSAR_Agent_Log {
 				$like_md,
 				$like_404,
 				$f['categories'],
+				$f['crawlers'],
+				$f['crawlers'],
 				self::JOURNEY_WINDOW
 			),
 			ARRAY_A
@@ -1327,6 +1528,7 @@ class MMSAR_Agent_Log {
 				             WHEN surface LIKE %s THEN 'markdown'
 				             WHEN surface LIKE %s THEN 'notfound'
 				             ELSE 'docs' END, %s ) > 0 )
+				  AND ( %s = '' OR FIND_IN_SET( MD5( agent ), %s ) > 0 )
 				ORDER BY id DESC LIMIT %d",
 				self::table(),
 				$cursor,
@@ -1339,6 +1541,8 @@ class MMSAR_Agent_Log {
 				$like_md,
 				$like_404,
 				$f['categories'],
+				$f['crawlers'],
+				$f['crawlers'],
 				$limit
 			),
 			ARRAY_A
@@ -1432,13 +1636,18 @@ class MMSAR_Agent_Log {
 			ARRAY_A
 		);
 
+		$by_agent = self::int_columns( $by_agent, array( 'requests', 'surfaces', 'unique_ips', 'verified', 'failed', 'unverifiable', 'unclaimed', 'nodns', 'pending' ) );
+		foreach ( $by_agent as $i => $row ) {
+			$by_agent[ $i ]['crawler_category'] = self::crawler_category( isset( $row['agent'] ) ? (string) $row['agent'] : '' );
+		}
+
 		return array(
 			'total'           => isset( $totals['total'] ) ? (int) $totals['total'] : 0,
 			'unique_agents'   => isset( $totals['unique_agents'] ) ? (int) $totals['unique_agents'] : 0,
 			'unique_ips'      => isset( $totals['unique_ips'] ) ? (int) $totals['unique_ips'] : 0,
 			'first_logged_at' => isset( $totals['first_logged_at'] ) ? (string) $totals['first_logged_at'] : '',
 			'last_logged_at'  => isset( $totals['last_logged_at'] ) ? (string) $totals['last_logged_at'] : '',
-			'by_agent'        => self::int_columns( $by_agent, array( 'requests', 'surfaces', 'unique_ips', 'verified', 'failed', 'unverifiable', 'unclaimed', 'nodns', 'pending' ) ),
+			'by_agent'        => $by_agent,
 			'by_surface'      => self::int_columns( $by_surface, array( 'requests', 'agents' ) ),
 			'by_detail'       => self::int_columns( $by_detail, array( 'requests', 'agents' ) ),
 			'by_day'          => self::int_columns( $by_day, array( 'requests', 'agents' ) ),
@@ -1548,6 +1757,112 @@ class MMSAR_Agent_Log {
 			default:
 				return __( 'All surfaces', 'make-my-site-agent-ready' );
 		}
+	}
+
+	/**
+	 * Every crawler category, for schemas and filters.
+	 *
+	 * @return string[]
+	 */
+	public static function crawler_categories() {
+		return array(
+			self::CRAWLER_AI_TRAINING,
+			self::CRAWLER_AI_SEARCH,
+			self::CRAWLER_AI_ASSISTANT,
+			self::CRAWLER_SEARCH,
+			self::CRAWLER_SEO,
+			self::CRAWLER_MONITORING,
+			self::CRAWLER_SCANNER,
+			self::CRAWLER_OTHER,
+		);
+	}
+
+	/**
+	 * Human-readable label for a crawler category.
+	 *
+	 * @param string $category Category value.
+	 * @return string
+	 */
+	public static function crawler_category_label( $category ) {
+		switch ( $category ) {
+			case self::CRAWLER_AI_TRAINING:
+				return __( 'AI training', 'make-my-site-agent-ready' );
+			case self::CRAWLER_AI_SEARCH:
+				return __( 'AI search', 'make-my-site-agent-ready' );
+			case self::CRAWLER_AI_ASSISTANT:
+				return __( 'AI assistant', 'make-my-site-agent-ready' );
+			case self::CRAWLER_SEARCH:
+				return __( 'Search engine', 'make-my-site-agent-ready' );
+			case self::CRAWLER_SEO:
+				return __( 'SEO tool', 'make-my-site-agent-ready' );
+			case self::CRAWLER_MONITORING:
+				return __( 'Monitoring', 'make-my-site-agent-ready' );
+			case self::CRAWLER_SCANNER:
+				return __( 'Scanner', 'make-my-site-agent-ready' );
+			case self::CRAWLER_OTHER:
+				return __( 'Other bot', 'make-my-site-agent-ready' );
+			default:
+				return __( 'Unrecognised', 'make-my-site-agent-ready' );
+		}
+	}
+
+	/**
+	 * The crawler category of a stored agent value.
+	 *
+	 * Derived on read, never stored, and through MMSAR_Agent_Log_Verify::claimed_name() — the same
+	 * matching that decides the row's verdict — so both stored shapes (the bare canonical name and a
+	 * raw user-agent logged before the crawler was recognised) come out the same, and a tag can be
+	 * corrected in a release without touching a single row.
+	 *
+	 * @param string $agent Stored agent value.
+	 * @return string A crawler category, or an empty string when no recognised crawler is named.
+	 */
+	public static function crawler_category( $agent ) {
+		$name = MMSAR_Agent_Log_Verify::claimed_name( (string) $agent );
+		return ( '' !== $name && isset( self::CRAWLER_CATEGORIES[ $name ] ) ) ? self::CRAWLER_CATEGORIES[ $name ] : '';
+	}
+
+	/**
+	 * Request counts by crawler category across the whole log.
+	 *
+	 * Grouped by agent in SQL and bucketed in PHP, for the same reason as the filter: the category
+	 * is derived from the agent value, not stored. Verified and failed ride along so an AI-traffic
+	 * figure can be read against how much of it was proven.
+	 *
+	 * @return array<string, array{requests: int, agents: int, verified: int, failed: int}> Keyed by
+	 *         category, plus `unrecognised`.
+	 */
+	public static function get_crawler_category_counts() {
+		global $wpdb;
+		$empty = array(
+			'requests' => 0,
+			'agents'   => 0,
+			'verified' => 0,
+			'failed'   => 0,
+		);
+		$out   = array_fill_keys( array_merge( self::crawler_categories(), array( self::CRAWLER_UNRECOGNISED ) ), $empty );
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- This plugin's own table; a cached count would be stale.
+		$rows = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT agent, COUNT(*) AS requests,
+					SUM(CASE WHEN verified = 'verified' THEN 1 ELSE 0 END) AS verified,
+					SUM(CASE WHEN verified = 'failed' THEN 1 ELSE 0 END) AS failed
+				FROM %i GROUP BY agent",
+				self::table()
+			),
+			ARRAY_A
+		);
+
+		foreach ( (array) $rows as $row ) {
+			$category                 = self::crawler_category( isset( $row['agent'] ) ? (string) $row['agent'] : '' );
+			$key                      = '' === $category ? self::CRAWLER_UNRECOGNISED : $category;
+			$out[ $key ]['requests'] += (int) $row['requests'];
+			$out[ $key ]['verified'] += (int) $row['verified'];
+			$out[ $key ]['failed']   += (int) $row['failed'];
+			++$out[ $key ]['agents'];
+		}
+		return $out;
 	}
 
 	/**

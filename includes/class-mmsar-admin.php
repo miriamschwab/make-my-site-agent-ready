@@ -587,7 +587,7 @@ class MMSAR_Admin {
 		$mode    = MMSAR_Agent_Log::page_view_mode();
 		$choices = array(
 			'off'    => __( 'Don\'t record page views', 'make-my-site-agent-ready' ),
-			'agents' => __( 'Only from recognized AI agents and crawlers', 'make-my-site-agent-ready' ),
+			'agents' => __( 'Only from recognized crawlers (AI, search, SEO and other named bots)', 'make-my-site-agent-ready' ),
 			'all'    => __( 'Every page view, including people', 'make-my-site-agent-ready' ),
 		);
 		$notes   = array(
