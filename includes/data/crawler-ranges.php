@@ -1118,4 +1118,31 @@ return array(
 		),
 		'v6'       => array(),
 	),
+	// Palo Alto Networks — Cortex Xpanse.
+	// Source: https://cortex-docs.paloaltonetworks.com/cortex-xpanse/reference/scanning-activity.
+	// A documented list on a docs page rather than a fetchable feed, so re-read the page at release
+	// time. Nine IPv4 prefixes and three IPv6 /64s on the day of capture. Two of this site's logged
+	// networks, 147.185.132.0 and 198.235.24.0,
+	// sit inside it; both were stored at network precision (the user-agent reads as a script, not a
+	// bot), so no verdict could be reached on them. The IPv6 entries are the page's /64s, written
+	// compressed.
+	'xpanse'      => array(
+		'captured' => '2026-09-22',
+		'v4'       => array(
+			'35.203.210.0/23',
+			'144.86.173.0/24',
+			'147.185.132.0/23',
+			'162.216.149.0/24',
+			'162.216.150.0/24',
+			'172.105.147.0/24',
+			'198.235.24.0/24',
+			'205.210.31.0/24',
+			'216.25.88.0/21',
+		),
+		'v6'       => array(
+			'2604:a940:300:5b6::/64',
+			'2604:a940:301:225::/64',
+			'2604:a940:302:118::/64',
+		),
+	),
 );

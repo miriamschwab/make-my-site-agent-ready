@@ -21,7 +21,7 @@ Every feature below can be switched off individually under **Settings > Agent-Re
 - **`/llms-full.txt`** — full site content concatenated as markdown in a single file, for LLMs that want everything at once
 - **OKF bundle** at `/okf/` — the same content as an [Open Knowledge Format](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md) v0.2 tree: a root index, one index per post type, and one typed Markdown "concept" file per post/page (YAML front matter: `type`, `title`, `description`, `resource`, `tags`, `modified`), plus a `log.md` change log. Lets an agent fetch and address individual pieces of the corpus rather than either scraping HTML or downloading everything in `llms-full.txt`. Reuses the same generated markdown as the `.md` URLs — nothing is converted twice.
 - **`<link rel="alternate">`** — HTML pages include a link tag pointing to their markdown version
-- **Markdown from the canonical URL** — opt-in, off by default. Answers a request for an ordinary page with its markdown when the request's `Accept` header prefers markdown, which is how AI fetch tools actually ask; the `.md` mirror only helps a client that already knows the mirror exists. The `Accept` parsing is strict — markdown must be named explicitly and outrank HTML, a wildcard counts only towards HTML, and a tie goes to HTML. `Vary: Accept` is sent on both representations. Ships with a self-check (see Architecture notes) because whether this is safe depends on infrastructure the plugin cannot see.
+- **Markdown from the canonical URL** — opt-in, off by default. Answers a request for an ordinary page with its markdown when the request's `Accept` header prefers markdown, which is how AI fetch tools actually ask; the `.md` mirror only helps a client that already knows the mirror exists. The `Accept` parsing is strict where it protects people — markdown must be named explicitly, which no browser does, and a wildcard counts only towards HTML — and generous where it does not: markdown weighted equally with HTML (`text/markdown, text/html, */*`) gets markdown, since naming it at all is a choice only an agent makes. The same rule decides the Markdown body of an agent-recoverable 404. `Vary: Accept` is sent on both representations. Ships with a self-check (see Architecture notes) because whether this is safe depends on infrastructure the plugin cannot see.
 - **`?mode=agent`** — appended to any URL, returns that page as Markdown; on the homepage, returns a summary of every machine-readable surface the site has. A convention rather than a standard, but it gives a client the one lever it always has (a query parameter) when it's handed a bare URL and doesn't already know the site's other conventions.
 
 ### Discovery
@@ -296,14 +296,15 @@ Two methods, chosen per operator, because the operators are split on which they 
 
 - **Published IP ranges** for Anthropic, OpenAI, Perplexity, DuckDuckGo (DuckAssistBot and
   DuckDuckBot), Common Crawl (CCBot), Linkup, Seznam, Mojeek, SE Ranking, Parallel (ShapBot),
-  Sofya and You.com (YouBot). Most of them
+  Sofya, You.com (YouBot) and Palo Alto Networks (Cortex Xpanse). Most of them
   publish no reverse-DNS records for their crawlers, so this is the only method their documentation
   describes. The ranges are bundled with the plugin rather than fetched, so nothing calls a
   third-party service and verification works on a host with no outbound HTTP. The trade-off is that
   they age: the capture date is reported alongside the verdicts, and `mmsar_agent_log_verify_ranges`
   lets you add a prefix without waiting for a release.
 - **Forward-confirmed reverse DNS** for Google, Apple, Amazon, Microsoft, Ahrefs, Babbar
-  (Barkrowler), Common Crawl, Huawei (PetalBot) and You.com (YouBot). The address is reversed to a hostname, that hostname is resolved
+  (Barkrowler), Common Crawl, Huawei (PetalBot), You.com (YouBot), Yandex, Censys, LeakIX (l9scan)
+  and the Internet Archive (archive.org_bot). The address is reversed to a hostname, that hostname is resolved
   forward and must come back to the same address, and it must sit under a domain the claimed
   operator owns. Anyone
   can put any string in a `User-Agent`; nobody can put a record in someone else's DNS zone.
@@ -325,7 +326,10 @@ meta-externalagent and Bytespider all have working reverse DNS on *some* address
 operators document no convention at all, so adopting one would verify those addresses and turn
 every genuine caller without the matching hostname into an accusation of forgery. Majestic says
 plainly that it cannot restrict MJ12bot to fixed addresses; Semrush says it uses no consecutive IP
-blocks. Both stay unverifiable on purpose.
+blocks. Both stay unverifiable on purpose. AgentTrustBot is the reverse case: its operator does
+document reverse DNS, but the address it actually crawled from is on the operator's own published
+list and does not resolve under that domain, so following the documentation would have accused the
+genuine crawler.
 
 **Unverifiable** also covers a second case that says nothing about the operator: a row whose address
 was reduced to its network at storage time cannot be tested against a published range, so the
@@ -345,11 +349,11 @@ category:
 | **AI training** | Collects content to train models (GPTBot, ClaudeBot, CCBot…) |
 | **AI search** | Builds or queries an index used to answer questions (OAI-SearchBot, PerplexityBot, LinkupBot…) |
 | **AI assistant** | Fetches a page because a person asked an assistant right then (ChatGPT-User, Claude-User…) |
-| **Search engine** | Conventional web search (SeznamBot, DuckDuckBot, MojeekBot…) |
+| **Search engine** | Conventional web search (SeznamBot, DuckDuckBot, YandexBot, MojeekBot…) |
 | **SEO tool** | SEO and backlink platforms (AhrefsBot, SemrushBot, Barkrowler…) |
-| **Monitoring** | Brand and media monitoring (AwarioBot, trendictionbot) |
-| **Scanner** | Readiness and site scanners (OraBot) |
-| **Other** | Link previews and everything else named (Twitterbot, facebookexternalhit, Slackbot…) |
+| **Monitoring** | Brand and media monitoring (AwarioBot, trendictionbot, YaK, um-LN) |
+| **Scanner** | Readiness, security and attack-surface scanners (OraBot, CensysInspect, Cortex Xpanse, l9scan, AgentTrustBot) |
+| **Other** | Link previews, archiving and everything else named (Twitterbot, facebookexternalhit, archive.org_bot…) |
 
 A category goes by what the operator documents *that specific bot* doing, not by the operator's
 business overall. It is shown under the agent name, filterable as **Crawler type**, and returned by

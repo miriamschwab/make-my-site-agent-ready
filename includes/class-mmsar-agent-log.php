@@ -184,6 +184,63 @@ class MMSAR_Agent_Log {
 		// Electric colocation, where the records that do resolve are HE's own routers. Categorised
 		// with Miniflux: a feed reader fetching on behalf of subscribers.
 		'Feedbin',
+		// Added 1.46.0 from the agent-log-bot-watch reports of 2026-09-18 and 2026-09-21. Appended,
+		// not inserted, for the ordering reason given above Googlebot.
+		//
+		// Censys's internet-wide scanner. Verified by reverse DNS under censys-scanner.com.
+		'CensysInspect',
+		// Palo Alto Networks' Cortex Xpanse scanner. Its user-agent is a sentence with no product
+		// token — "Hello from Palo Alto Networks, find out more about our scans in https://…" — so
+		// the operator's name is the only stable thing to match. Stored under the fuller label in
+		// AGENT_LABELS, so the log says which Palo Alto product it was. Verified by the ranges
+		// Palo Alto publishes for Xpanse scanning; the addresses have no reverse DNS.
+		'Palo Alto Networks',
+		// LeakIX's scanner. The version after `l9scan/` is randomised per request, so only the
+		// token is matched. Verified by reverse DNS under leakix.org (hosts are *.scan.leakix.org).
+		'l9scan',
+		// The Internet Archive's Wayback Machine crawler. Archival, so categorised `other`.
+		'archive.org_bot',
+		'YandexBot',
+		// agenttru.st documents forward-confirmed reverse DNS under agenttru.st, and eight of the ten
+		// addresses it publishes do resolve there — but 129.121.133.131, which is on its list and is
+		// the address that actually called this site, reverses to ip-129-121-133-131.local
+		// (checked 2026-09-22). Adding the suffix would call the operator's own crawler a forgery,
+		// so this is recognise-only until the documentation and the DNS agree.
+		'AgentTrustBot',
+		// Small independent search engine; publishes no verification method.
+		'fyndbot',
+		// Site-benchmarking service in early access; publishes no crawler documentation yet.
+		'TheWebReport',
+		// A National Taiwan University course project, disclosing a student contact. No operator
+		// domain to check, and likely short-lived — expect it to stop appearing.
+		'ntu-sa-crawler',
+		// Linkfluence (now part of Meltwater). Guarded in AGENT_DISCLOSURES: a three-letter token
+		// matched case-insensitively would otherwise claim "Kayak" and "Yakima". linkfluence.com
+		// now redirects to Meltwater, which has no crawler page, so the category and the claim that
+		// it honours robots.txt rest on the operator's business and third-party sources, not on any
+		// documentation of this bot.
+		'YaK',
+		// Ubermetrics Technologies. Guarded for the same reason — a short token — and with the same
+		// caveat: the operator's site does not document the crawler, so its category and
+		// robots.txt behaviour rest on the company's business and third-party sources. Seen so far
+		// only as a "Script or fetch tool" from 88.99.144.0/24, so every row before this release is
+		// stored at network precision.
+		'um-LN',
+	);
+
+	/**
+	 * The label stored for a recognised name, where it differs from the name that is matched.
+	 *
+	 * The matched name is normally the right thing to store — it is what the operator calls its
+	 * bot. The exception is a user-agent with no product token, where the only stable substring is
+	 * the operator's name and storing that alone would be less precise than what is known.
+	 *
+	 * **Every label must contain its key.** Verification and categorisation re-derive the claim from
+	 * the stored value by substring (see MMSAR_Agent_Log_Verify::claimed_name()), so a label that
+	 * dropped the matched name would read as unclaimed. A test asserts it.
+	 */
+	const AGENT_LABELS = array(
+		'Palo Alto Networks' => 'Cortex Xpanse (Palo Alto Networks)',
 	);
 
 	/**
@@ -284,6 +341,23 @@ class MMSAR_Agent_Log {
 		'Googlebot'                 => self::CRAWLER_SEARCH,
 		'Applebot'                  => self::CRAWLER_SEARCH,
 		'bingbot'                   => self::CRAWLER_SEARCH,
+		// Added 1.46.0; confirmed per name by Miriam on 2026-09-22.
+		'CensysInspect'             => self::CRAWLER_SCANNER,
+		'Palo Alto Networks'        => self::CRAWLER_SCANNER,
+		'l9scan'                    => self::CRAWLER_SCANNER,
+		// Archival rather than AI, search or SEO.
+		'archive.org_bot'           => self::CRAWLER_OTHER,
+		'YandexBot'                 => self::CRAWLER_SEARCH,
+		// Probes for agent cards rather than collecting content; the overlap with `ai-search` is
+		// real but it is discovery behaviour.
+		'AgentTrustBot'             => self::CRAWLER_SCANNER,
+		'fyndbot'                   => self::CRAWLER_SEARCH,
+		'TheWebReport'              => self::CRAWLER_OTHER,
+		'ntu-sa-crawler'            => self::CRAWLER_OTHER,
+		// Both from the operator's business and third-party descriptions; neither operator
+		// documents the bot itself.
+		'YaK'                       => self::CRAWLER_MONITORING,
+		'um-LN'                     => self::CRAWLER_MONITORING,
 	);
 
 	/**
@@ -314,6 +388,13 @@ class MMSAR_Agent_Log {
 	const AGENT_DISCLOSURES = array(
 		'LinkupBot' => 'linkup.so',
 		'SSI-Nutch' => 'ssi.inc',
+		// Short tokens, guarded against accidental substrings rather than a known collision. Both
+		// domains sit inside the first 80 characters of the user-agent in either stored shape — the
+		// pre-1.45.1 cut that kept `Mozilla/5.0 ` and the current one that drops it — so rows logged
+		// before recognition still satisfy the guard. CrawlerCategoryTest asserts it for um-LN,
+		// whose user-agent is the long one.
+		'YaK'       => 'linkfluence.com',
+		'um-LN'     => 'ubermetrics-technologies.com',
 	);
 
 	/**
@@ -2423,13 +2504,27 @@ class MMSAR_Agent_Log {
 	 * @return string
 	 */
 	private static function agent_label() {
-		$ua = self::user_agent();
+		return self::label_for( self::user_agent() );
+	}
+
+	/**
+	 * The stored label for a user-agent.
+	 *
+	 * Public because it is a pure string function and the stored value is what every later read —
+	 * verdict, category, journey — is derived from, so it is worth asserting directly with real
+	 * user-agents. Same reasoning as `trimmed_user_agent()`.
+	 *
+	 * @param string $ua Raw user-agent.
+	 * @return string The recognised name (or its AGENT_LABELS label), else a trimmed user-agent.
+	 */
+	public static function label_for( $ua ) {
+		$ua = (string) $ua;
 		if ( '' === $ua ) {
 			return 'unknown';
 		}
 		foreach ( self::AGENTS as $needle ) {
 			if ( self::agent_matches( $ua, $needle ) ) {
-				return $needle;
+				return isset( self::AGENT_LABELS[ $needle ] ) ? self::AGENT_LABELS[ $needle ] : $needle;
 			}
 		}
 		return self::trimmed_user_agent( $ua );
@@ -2506,15 +2601,30 @@ class MMSAR_Agent_Log {
 	/**
 	 * Whether the request asked for markdown, HTML, or expressed no preference.
 	 *
+	 * Only ever called for a page that was answered with HTML, so the two Markdown labels describe
+	 * why a client that mentioned Markdown did not get it — and they must use the serving rule, not
+	 * a looser one. Until 1.46.1 any mention of `markdown` read "asked for markdown", which on a
+	 * negotiable page looked like the plugin refusing a request it had in fact read as "no
+	 * preference".
+	 *
+	 * - `wanted markdown`: Markdown won under MMSAR_Accept's rule, so this page has no Markdown
+	 *   version to give — an archive, a post type that is not enabled, or negotiation switched off.
+	 * - `accepts markdown`: Markdown was named but HTML outranked it, so HTML was the right answer.
+	 *
+	 * Rows written before 1.46.1 keep "asked for markdown"; the surface is stored, not derived.
+	 *
 	 * @return string
 	 */
 	private static function accept_summary() {
-		$accept = isset( $_SERVER['HTTP_ACCEPT'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_ACCEPT'] ) ) : '';
+		$accept = MMSAR_Accept::request_header();
 		if ( '' === $accept ) {
 			return 'no Accept';
 		}
+		if ( MMSAR_Accept::prefers_markdown( $accept ) ) {
+			return 'wanted markdown';
+		}
 		if ( false !== stripos( $accept, 'markdown' ) ) {
-			return 'asked for markdown';
+			return 'accepts markdown';
 		}
 		if ( false !== stripos( $accept, 'text/html' ) ) {
 			return 'asked for HTML';

@@ -4,7 +4,7 @@ Tags: markdown, llm, ai, llms-txt, agents
 Requires at least: 6.2
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.45.1
+Stable tag: 1.46.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -20,7 +20,7 @@ Every feature below can be switched off individually under Settings > Agent-Read
 
 * **Individual feature toggles** — Turn off any output the plugin publishes. A disabled feature registers nothing at all — no rewrite rule, no filter, no header — so the site behaves as if that part of the plugin did not exist.
 * **`.md` URLs** — Append `.md` to any post or page URL to get a clean markdown version
-* **Markdown from the normal page URL** — Optional (off by default). Answers a request for an ordinary page with its markdown when the request's `Accept` header asks for markdown, which is how AI clients ask. Comes with a self-check that requests one of your own pages as an agent and then as a browser, reports which version came back and what cache headers survived, and switches the feature off by itself if a browser-style request is ever answered with markdown. Leave it off if your site is behind a CDN that ignores `Vary: Accept` — Cloudflare does
+* **Markdown from the normal page URL** — Optional (off by default). Answers a request for an ordinary page with its markdown when the request's `Accept` header names markdown at least as highly as HTML, which is how AI clients ask. Browsers never name markdown, so they always get the page. Comes with a self-check that requests one of your own pages as an agent and then as a browser, reports which version came back and what cache headers survived, and switches the feature off by itself if a browser-style request is ever answered with markdown. Leave it off if your site is behind a CDN that ignores `Vary: Accept` — Cloudflare does
 * **`?mode=agent`** — Appended to any URL, returns that page as Markdown; on the homepage, a summary of every machine-readable surface the site has
 * **llms.txt** — Auto-generated site index at `/llms.txt` listing all available markdown content, per v2 of the llms.txt proposal (scoped indexes per section, discoverable by link relation)
 * **llms-full.txt** — Full site content in one file at `/llms-full.txt` for LLMs that want everything
@@ -125,6 +125,21 @@ Yes. Plugin and theme authors can register one so it works on any site without t
 Use the `mmsar_registered_endpoints` filter for the same thing without a direct call. Add `'surfaces' => array( 'llms_txt' )` to limit where it appears, and `'rel'` to set its api-catalog link relation. Endpoints that publish a SKILL.md of their own can pass `'skill_url'` to get their own entry in the Agent Skills index. Code-registered endpoints appear read-only under "Added by Plugins" on the settings page. Full documentation is in the plugin's README on GitHub.
 
 == Changelog ==
+
+= 1.46.1 - 2026-09-22 =
+
+* Changed: a request whose `Accept` header weights markdown equally with HTML now gets markdown. `text/markdown, text/html, */*` names markdown, which no browser ever does, and gives it the same weight as HTML. Until now that tie went to HTML. On a host whose edge converts pages to markdown, the agent then got the edge's version, with the site's navigation in it, instead of the plugin's clean one. What protects visitors is unchanged: markdown must be named explicitly, and a wildcard never counts towards it.
+* The same rule now decides the Markdown body of an agent-recoverable 404, so a client that gets markdown for a page gets it for that page's 404 too. JSON 404s keep the stricter rule, where a tie still goes to HTML.
+* Changed: the Agent Log labels for HTML page views that mentioned markdown now say why markdown was not served. "Wanted markdown" means markdown won but the page has no markdown version, such as an archive or a post type that is not enabled. "Accepts markdown" means markdown was named but HTML was preferred. Entries recorded before this release keep the old "asked for markdown" label.
+
+= 1.46.0 - 2026-09-22 =
+
+* New: 11 more crawlers are recognised, each with a category. Verified by reverse DNS: CensysInspect (scanner), l9scan from LeakIX (scanner), archive.org_bot from the Internet Archive (other) and YandexBot (search engine). Verified against the operator's published IP list: Cortex Xpanse from Palo Alto Networks (scanner). Recognised without a verification method, so they read as Unverifiable: AgentTrustBot (scanner), fyndbot (search engine), TheWebReport (other), ntu-sa-crawler (other), YaK from Linkfluence (monitoring) and um-LN from Ubermetrics (monitoring).
+* Cortex Xpanse's user-agent is a sentence with no product name in it — "Hello from Palo Alto Networks, find out more about our scans in…" — so it is matched on the operator's name and shown in the log as "Cortex Xpanse (Palo Alto Networks)".
+* YaK and um-LN are short tokens, so each is only recognised when the user-agent also names its operator's domain, the same guard LinkupBot and SSI-Nutch have. Without it, YaK would have matched names like "Kayak". Entries logged before this release still match, including ones whose stored label was cut at 80 characters.
+* AgentTrustBot documents reverse-DNS verification under agenttru.st, and was deliberately left unverified. The address it actually called this site from is on the operator's own published list and does not resolve under agenttru.st, so following the documentation would have called its genuine crawler a forgery.
+* Recognising a crawler means its page views are stored with the full address rather than reduced to the network. That applies from now on. Entries already stored at network precision stay that way — which includes every earlier Cortex Xpanse and um-LN entry, because neither user-agent looks like a bot's.
+* Existing entries for the five verifiable crawlers get their verdict when you press Re-check on Settings > Agent Log. The six recognise-only crawlers pick up their category straight away but keep the Unclaimed verdict they were logged with, since there is nothing to check them against.
 
 = 1.45.1 - 2026-09-14 =
 

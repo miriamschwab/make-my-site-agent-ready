@@ -382,66 +382,24 @@ class MMSAR_Not_Found {
 	}
 
 	/**
-	 * Whether the request explicitly asked for Markdown over HTML.
+	 * Whether the request asked for Markdown rather than HTML — the same rule the page-level
+	 * negotiation uses, so a client that gets Markdown for a page gets it for that page's 404 too.
 	 *
-	 * @return bool True when Markdown is explicitly preferred.
+	 * @return bool
 	 */
 	private static function prefers_markdown() {
-		return self::prefers( 'text/markdown' );
+		return MMSAR_Accept::prefers_markdown( MMSAR_Accept::request_header() );
 	}
 
 	/**
-	 * Whether the request's `Accept` header names the given type and ranks it above HTML.
+	 * Whether the request's `Accept` header names the given type and ranks it strictly above HTML.
 	 *
-	 * The same strict test MMSAR_Server applies to page requests, generalized over the type: it has
-	 * to be named explicitly and has to outrank HTML, a wildcard counts towards HTML and never
-	 * towards the requested type, and a tie goes to HTML. Strictness is the whole point: a browser's
-	 * Accept header leads with text/html and covers everything else with a low-q wildcard, so it
-	 * names neither markdown nor JSON and can never match — which is what keeps a person from being
-	 * handed a file download in place of a page.
+	 * Used for JSON, which keeps the strict tie rule; see MMSAR_Accept::prefers().
 	 *
 	 * @param string $wanted Media type to test for.
-	 * @return bool True when $wanted is explicitly preferred over HTML.
+	 * @return bool
 	 */
 	private static function prefers( $wanted ) {
-		$header = isset( $_SERVER['HTTP_ACCEPT'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_ACCEPT'] ) ) : '';
-		if ( '' === $header ) {
-			return false;
-		}
-
-		// The spellings each type travels under. Clients are inconsistent about all of them, and a
-		// request that says `application/problem+json` has unambiguously asked for a JSON error.
-		$aliases = array(
-			'text/markdown'    => array( 'text/markdown', 'text/x-markdown' ),
-			'application/json' => array( 'application/json', 'application/problem+json', 'text/json' ),
-		);
-		$names   = isset( $aliases[ $wanted ] ) ? $aliases[ $wanted ] : array( $wanted );
-
-		$wanted_q = -1.0;
-		$html_q   = -1.0;
-
-		foreach ( explode( ',', $header ) as $part ) {
-			$bits = explode( ';', $part );
-			$type = strtolower( trim( array_shift( $bits ) ) );
-			if ( '' === $type ) {
-				continue;
-			}
-
-			$q = 1.0;
-			foreach ( $bits as $param ) {
-				$param = strtolower( trim( $param ) );
-				if ( 0 === strpos( $param, 'q=' ) ) {
-					$q = (float) substr( $param, 2 );
-				}
-			}
-
-			if ( in_array( $type, $names, true ) ) {
-				$wanted_q = max( $wanted_q, $q );
-			} elseif ( 'text/html' === $type || 'text/*' === $type || '*/*' === $type ) {
-				$html_q = max( $html_q, $q );
-			}
-		}
-
-		return $wanted_q > 0 && $wanted_q > $html_q;
+		return MMSAR_Accept::prefers( MMSAR_Accept::request_header(), $wanted );
 	}
 }

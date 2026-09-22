@@ -465,46 +465,16 @@ class MMSAR_Server {
 	}
 
 	/**
-	 * Whether the request's `Accept` header prefers Markdown over HTML.
+	 * Whether the request's `Accept` header asks for Markdown rather than HTML.
 	 *
-	 * Deliberately strict, because getting this wrong serves Markdown to a browser. Markdown must be
-	 * named explicitly and outrank HTML: a wildcard counts towards HTML but never towards Markdown,
-	 * so the browsers and bots that accept anything keep getting HTML, and a tie goes to HTML
-	 * because that is the representation a human reader expects.
+	 * Markdown must be named explicitly — which no browser does — and weighted at least as highly as
+	 * HTML. The rule itself lives in MMSAR_Accept so this path and the 404 path share it. **Do not
+	 * let a wildcard count towards Markdown**: that is the part that keeps a person from being handed
+	 * a file.
 	 *
-	 * @return bool True when Markdown is explicitly preferred over HTML.
+	 * @return bool
 	 */
 	private static function prefers_markdown() {
-		$header = isset( $_SERVER['HTTP_ACCEPT'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_ACCEPT'] ) ) : '';
-		if ( '' === $header ) {
-			return false;
-		}
-
-		$markdown_q = -1.0;
-		$html_q     = -1.0;
-
-		foreach ( explode( ',', $header ) as $part ) {
-			$bits = explode( ';', $part );
-			$type = strtolower( trim( array_shift( $bits ) ) );
-			if ( '' === $type ) {
-				continue;
-			}
-
-			$q = 1.0;
-			foreach ( $bits as $param ) {
-				$param = strtolower( trim( $param ) );
-				if ( 0 === strpos( $param, 'q=' ) ) {
-					$q = (float) substr( $param, 2 );
-				}
-			}
-
-			if ( 'text/markdown' === $type || 'text/x-markdown' === $type ) {
-				$markdown_q = max( $markdown_q, $q );
-			} elseif ( 'text/html' === $type || 'text/*' === $type || '*/*' === $type ) {
-				$html_q = max( $html_q, $q );
-			}
-		}
-
-		return $markdown_q > 0 && $markdown_q > $html_q;
+		return MMSAR_Accept::prefers_markdown( MMSAR_Accept::request_header() );
 	}
 }

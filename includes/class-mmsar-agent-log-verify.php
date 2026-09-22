@@ -182,6 +182,27 @@ class MMSAR_Agent_Log_Verify {
 		// cohere-ai in the same window. Before this entry both rows read `unverifiable` and were
 		// indistinguishable. They no longer are.
 		'YouBot'            => array( 'search.you.com' ),
+		// Added 1.46.0. Each confirmed the two ways this map requires.
+		//
+		// Censys — https://about.censys.io/. Censys documents the scanning and publishes subnets
+		// for opt-out, but names no rDNS convention on that page; the suffix is what three live
+		// addresses from this site's log resolved to and forward-confirmed (bot-watch, 2026-09-18).
+		// Weaker footing than an operator-documented suffix, noted here for that reason.
+		'CensysInspect'     => array( 'censys-scanner.com' ),
+		// LeakIX — https://leakix.net/about. Confirmed 2026-09-22 on 165.227.39.235 and
+		// 209.97.180.8 from this site's log: c53df711d7.scan.leakix.org and
+		// a0d8574844.scan.leakix.org, both forward-confirmed.
+		'l9scan'            => array( 'leakix.org' ),
+		// Internet Archive — https://archive.org/details/archive.org_bot. Confirmed on the one
+		// address in this site's log, k8s-worker-711100.ca.archive.org, forward-confirmed
+		// (bot-watch, 2026-09-18).
+		'archive.org_bot'   => array( 'archive.org' ),
+		// Yandex — https://yandex.com/support/webmaster/en/robot-workings/check-yandex-robots, which
+		// documents all three. Confirmed 2026-09-22 on four addresses from this site's log —
+		// 213.180.203.245, 87.250.224.245, 87.250.224.248 and 95.108.213.163 — each reversing to
+		// *.spider.yandex.com and forward-confirming. yandex.net and yandex.ru are unexercised
+		// here and rest on the documentation, like bingbot above.
+		'YandexBot'         => array( 'yandex.com', 'yandex.net', 'yandex.ru' ),
 	);
 
 	/**
@@ -216,6 +237,9 @@ class MMSAR_Agent_Log_Verify {
 		// You.com documents a reverse-DNS convention too, so a range miss falls through to the
 		// suffix above rather than deciding — the same both-methods shape as CCBot and Perplexity.
 		'YouBot'                => 'youcom',
+		// Cortex Xpanse. Range-only: Palo Alto publishes no reverse DNS, and the two addresses in
+		// this site's log have no PTR record.
+		'Palo Alto Networks'    => 'xpanse',
 	);
 
 	/**

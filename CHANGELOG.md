@@ -2,6 +2,21 @@
 
 All notable changes to Make My Site Agent-Ready.
 
+## 1.46.1 — 2026-09-22
+
+- **Changed: markdown weighted equally with HTML now gets markdown.** `text/markdown, text/html, */*` names markdown, which no browser does, and gives it the same weight as HTML. That tie used to go to HTML, and on a host whose edge converts pages to markdown the agent then received the edge's noisier conversion instead of the plugin's clean one. What protects visitors is unchanged: markdown must be named explicitly, and a wildcard never counts towards it.
+- **The 404 path follows the same rule** for its Markdown body, so a page and its 404 can't disagree about what a client wanted. JSON 404s keep the strict rule: a tie still goes to HTML.
+- **Changed: clearer Agent Log labels.** HTML page views that mentioned markdown now read "wanted markdown" (markdown won, but the page has no markdown version) or "accepts markdown" (HTML was preferred), instead of "asked for markdown" for both. Older entries keep the old label.
+
+## 1.46.0 — 2026-09-22
+
+- **New: 11 more crawlers recognised, each with a category.** Verified by reverse DNS: CensysInspect (scanner), l9scan from LeakIX (scanner), archive.org_bot from the Internet Archive (other) and YandexBot (search engine). Verified against the operator's published IP list: Cortex Xpanse from Palo Alto Networks (scanner). Recognised without a verification method, so they read as Unverifiable: AgentTrustBot (scanner), fyndbot (search engine), TheWebReport (other), ntu-sa-crawler (other), YaK from Linkfluence (monitoring) and um-LN from Ubermetrics (monitoring).
+- **Cortex Xpanse is shown as "Cortex Xpanse (Palo Alto Networks)".** Its user-agent is a sentence with no product name in it, so it is matched on the operator's name and stored under the more precise label.
+- **YaK and um-LN are only recognised when the user-agent also names the operator's domain,** the same guard LinkupBot and SSI-Nutch carry. Without it, the three-letter `YaK` would have matched names like "Kayak". Older entries still match, including ones whose stored label was cut at 80 characters.
+- **AgentTrustBot was deliberately left unverified.** Its operator documents reverse DNS under `agenttru.st`, but the address it actually crawled from is on the operator's own published list and does not resolve there. Following the documentation would have called the genuine crawler a forgery.
+- **Recognising a crawler keeps its future page views at full address** rather than reduced to the network. Not retroactive: earlier Cortex Xpanse and um-LN entries were stored at network precision, because neither user-agent reads as a bot, and stay that way.
+- **Press Re-check on Settings > Agent Log** to give existing entries for the five verifiable crawlers their verdict. The six recognise-only crawlers show their category straight away and keep the Unclaimed verdict they were logged with.
+
 ## 1.45.1 — 2026-09-14
 
 - **Fixed: unrecognised callers are no longer all stored under the same label.** The Agent column showed page after page of identical `Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like` rows — and they were identical in the database, not just on screen. An unrecognised user-agent was kept as its first 80 characters, and in a browser user-agent every one of those is boilerplate that each browser of that family sends identically, while the version and product that tell two callers apart sit past the cut. On one site a single label covered 725 requests from 339 different addresses.

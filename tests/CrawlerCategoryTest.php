@@ -204,6 +204,28 @@ final class CrawlerCategoryTest extends TestCase {
 			'linkup.com impostor has no category' => array( 'LinkUpBot (job aggregator; linkup.com)', '' ),
 			'browser has no category'    => array( 'Mozilla/5.0 (Macintosh) Chrome/140', '' ),
 			'OWLer is held, not recognised' => array( 'OWLer', '' ),
+
+			// Added 1.46.0. Raw shapes are the ones actually stored before recognition.
+			'CensysInspect, raw'               => array( '(compatible; CensysInspect/1.1; +https://about.censys.io/)', 'scanner' ),
+			'Cortex Xpanse, stored label'      => array( 'Cortex Xpanse (Palo Alto Networks)', 'scanner' ),
+			'Cortex Xpanse, raw sentence'      => array( 'Hello from Palo Alto Networks, find out more about our scans in https://docs-cor', 'scanner' ),
+			'l9scan, randomised version'       => array( '(l9scan/2.0.93e2733313e2935313e2236313; +https://leakix.net)', 'scanner' ),
+			'archive.org_bot, raw'             => array( '(compatible; archive.org_bot +http://archive.org/details/archive.org_bot) Zeno/1', 'other' ),
+			'YandexBot, raw'                   => array( '(compatible; YandexBot/3.0; +http://yandex.com/bots)', 'search-engine' ),
+			'AgentTrustBot, raw'               => array( 'AgentTrustBot/1.0 (+https://agenttru.st/crawler; purpose=AI Agent Discovery; con', 'scanner' ),
+			'fyndbot, raw'                     => array( 'fyndbot (crawler; https://fynd.bot)', 'search-engine' ),
+			'TheWebReport, raw'                => array( 'TheWebReport/1.0; +https://theweb.report', 'other' ),
+			'ntu-sa-crawler, raw'              => array( 'ntu-sa-crawler/1.0 (NTU IM academic course project; contact: r14725023@ntu.edu.t', 'other' ),
+			'YaK, bare label'                  => array( 'YaK', 'monitoring' ),
+			'YaK, raw with disclosure'         => array( '(compatible; YaK/1.0; http://linkfluence.com/; bot@linkfluence.com)', 'monitoring' ),
+			// The guard's reason for existing: a three-letter token inside an unrelated name.
+			'Kayak is not YaK'                 => array( 'KayakBot/1.0 (+https://www.kayak.com/bot)', '' ),
+			'um-LN, bare label'                => array( 'um-LN', 'monitoring' ),
+			// Both stored shapes of the long um-LN user-agent, each cut at 80 characters. The
+			// disclosure must survive the cut in both or pre-recognition rows read as unclaimed.
+			'um-LN, current 80-char label'     => array( '(compatible; um-LN/1.0; https://www.ubermetrics-technologies.com/; Windows NT 6.', 'monitoring' ),
+			'um-LN, pre-1.45.1 80-char label'  => array( 'Mozilla/5.0 (compatible; um-LN/1.0; https://www.ubermetrics-technologies.com/; W', 'monitoring' ),
+			'um-LN without its domain'         => array( 'Mozilla/5.0 (compatible; um-LN/1.0)', '' ),
 		);
 	}
 
@@ -296,6 +318,81 @@ final class CrawlerCategoryTest extends TestCase {
 			'FeedBurner stays recognise-only'          => array( 'FeedBurner', '66.249.83.10', 'google-proxy-66-249-83-10.google.com', array( '66.249.83.10' ), 'unverifiable' ),
 			'FeedBurner raw user-agent, same verdict'  => array( 'FeedBurner/1.0 (http://www.FeedBurner.com)', '66.249.83.10', 'google-proxy-66-249-83-10.google.com', array( '66.249.83.10' ), 'unverifiable' ),
 			'Feedbin stays recognise-only'             => array( 'Feedbin', '64.71.157.20', '', array(), 'unverifiable' ),
+
+			// Added 1.46.0. Addresses are the real ones from the live log where one existed.
+			'CensysInspect, forward-confirmed'         => array( 'CensysInspect', '167.94.138.60', 'scanner-60.ch1.censys-scanner.com', array( '167.94.138.60' ), 'verified' ),
+			'CensysInspect, lookalike host'            => array( 'CensysInspect', '167.94.138.60', 'censys-scanner.com.attacker.example', array( '167.94.138.60' ), 'failed' ),
+			'l9scan, forward-confirmed'                => array( 'l9scan', '165.227.39.235', 'c53df711d7.scan.leakix.org', array( '165.227.39.235' ), 'verified' ),
+			'l9scan, raw user-agent'                   => array( '(l9scan/2.0.93e2733313e2935313e2236313; +https://leakix.net)', '209.97.180.8', 'a0d8574844.scan.leakix.org', array( '209.97.180.8' ), 'verified' ),
+			'archive.org_bot, forward-confirmed'       => array( 'archive.org_bot', '207.241.232.10', 'k8s-worker-711100.ca.archive.org', array( '207.241.232.10' ), 'verified' ),
+			'YandexBot, forward-confirmed'             => array( 'YandexBot', '213.180.203.245', '213-180-203-245.spider.yandex.com', array( '213.180.203.245' ), 'verified' ),
+			'YandexBot, reverse without forward'       => array( 'YandexBot', '213.180.203.245', '213-180-203-245.spider.yandex.com', array( '203.0.113.9' ), 'failed' ),
+			'YandexBot, lookalike host'                => array( 'YandexBot', self::ELSEWHERE, 'yandex.com.attacker.example', array( self::ELSEWHERE ), 'failed' ),
+			// Range-only: a hit is conclusive, a miss is the spoofing signal.
+			'Cortex Xpanse, inside a published /23'    => array( 'Cortex Xpanse (Palo Alto Networks)', '147.185.133.12', '', array(), 'verified' ),
+			'Cortex Xpanse, inside a published /64'    => array( 'Cortex Xpanse (Palo Alto Networks)', '2604:a940:301:225::5', '', array(), 'verified' ),
+			'Cortex Xpanse, raw sentence in range'     => array( 'Hello from Palo Alto Networks, find out more about our scans in https://docs-cor', '205.210.31.40', '', array(), 'verified' ),
+			'Cortex Xpanse, outside every range'       => array( 'Cortex Xpanse (Palo Alto Networks)', self::ELSEWHERE, '', array(), 'failed' ),
+			// AgentTrustBot is declined, and this is the reason as a test: 129.121.133.131 is on
+			// agenttru.st's own published list and reverses to a .local name, so the documented
+			// suffix would call the operator's own crawler a forgery.
+			'AgentTrustBot stays recognise-only'       => array( 'AgentTrustBot', '129.121.133.131', 'ip-129-121-133-131.local', array(), 'unverifiable' ),
+			'fyndbot is recognise-only'                => array( 'fyndbot', self::ELSEWHERE, '', array(), 'unverifiable' ),
+			'TheWebReport is recognise-only'           => array( 'TheWebReport', self::ELSEWHERE, '', array(), 'unverifiable' ),
+			'ntu-sa-crawler is recognise-only'         => array( 'ntu-sa-crawler', '34.68.50.129', '', array(), 'unverifiable' ),
+			'YaK is recognise-only'                    => array( 'YaK', '54.39.177.48', '', array(), 'unverifiable' ),
+			'um-LN, truncated label, recognise-only'   => array( '(compatible; um-LN/1.0; https://www.ubermetrics-technologies.com/; Windows NT 6.', '88.99.144.12', '', array(), 'unverifiable' ),
+			'Kayak claims nothing'                     => array( 'KayakBot/1.0 (+https://www.kayak.com/bot)', self::ELSEWHERE, '', array(), 'unclaimed' ),
 		);
+	}
+
+	/**
+	 * @dataProvider storedLabels
+	 *
+	 * The label written at record time, from the full user-agent each bot actually sends. This is
+	 * the other half of the stored-shape rule: the cases above read a stored value, these produce
+	 * one.
+	 *
+	 * @param string $ua       Raw user-agent.
+	 * @param string $expected Expected stored label.
+	 */
+	public function test_label_for_user_agent( string $ua, string $expected ): void {
+		$this->assertSame( $expected, MMSAR_Agent_Log::label_for( $ua ), sprintf( 'Wrong stored label for %s', $ua ) );
+	}
+
+	/**
+	 * @return array<string, array{0:string,1:string}>
+	 */
+	public function storedLabels(): array {
+		return array(
+			'CensysInspect'      => array( 'Mozilla/5.0 (compatible; CensysInspect/1.1; +https://about.censys.io/)', 'CensysInspect' ),
+			'Cortex Xpanse'      => array( 'Hello from Palo Alto Networks, find out more about our scans in https://docs-cortex.paloaltonetworks.com/r/1/Cortex-Xpanse/Scanning-activity', 'Cortex Xpanse (Palo Alto Networks)' ),
+			'l9scan'             => array( 'Mozilla/5.0 (l9scan/2.0.93e2733313e2935313e2236313; +https://leakix.net)', 'l9scan' ),
+			'archive.org_bot'    => array( 'Mozilla/5.0 (compatible; archive.org_bot +http://archive.org/details/archive.org_bot) Zeno/abc warc/v0.8', 'archive.org_bot' ),
+			'YandexBot'          => array( 'Mozilla/5.0 (compatible; YandexBot/3.0; +http://yandex.com/bots)', 'YandexBot' ),
+			'AgentTrustBot'      => array( 'AgentTrustBot/1.0 (+https://agenttru.st/crawler; purpose=AI Agent Discovery; contact=admin@agenttru.st)', 'AgentTrustBot' ),
+			'fyndbot'            => array( 'fyndbot (robots; https://fynd.bot)', 'fyndbot' ),
+			'TheWebReport'       => array( 'TheWebReport/1.0; +https://theweb.report', 'TheWebReport' ),
+			'ntu-sa-crawler'     => array( 'ntu-sa-crawler/1.0 (NTU IM academic course project; contact: r14725023@ntu.edu.tw)', 'ntu-sa-crawler' ),
+			'YaK'                => array( 'Mozilla/5.0 (compatible; YaK/1.0; http://linkfluence.com/; bot@linkfluence.com)', 'YaK' ),
+			'um-LN'              => array( 'Mozilla/5.0 (compatible; um-LN/1.0; https://www.ubermetrics-technologies.com/; Windows NT 6.1; Win64; x64)', 'um-LN' ),
+			// Unguarded, this would be labelled YaK and kept at full address.
+			'Kayak falls through' => array( 'KayakBot/1.0 (+https://www.kayak.com/bot)', 'KayakBot/1.0 (+https://www.kayak.com/bot)' ),
+			'empty is unknown'    => array( '', 'unknown' ),
+		);
+	}
+
+	/**
+	 * Every stored label still names what it matched.
+	 *
+	 * Verification and categorisation re-derive the claim from the stored value by substring, so a
+	 * label that dropped its key would be recognised at write time and read as unclaimed forever
+	 * after — with its address kept in full and nothing ever checking it.
+	 */
+	public function test_every_stored_label_resolves_to_its_name(): void {
+		foreach ( MMSAR_Agent_Log::AGENT_LABELS as $name => $label ) {
+			$this->assertContains( $name, MMSAR_Agent_Log::AGENTS, sprintf( '%s has a label but is not recognised', $name ) );
+			$this->assertSame( $name, MMSAR_Agent_Log_Verify::claimed_name( $label ), sprintf( 'Stored label "%s" does not claim %s', $label, $name ) );
+		}
 	}
 }
