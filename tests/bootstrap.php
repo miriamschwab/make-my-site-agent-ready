@@ -15,3 +15,4 @@ require_once dirname( __DIR__ ) . '/includes/class-mmsar-accept.php';
 require_once dirname( __DIR__ ) . '/includes/class-mmsar-agent-log.php';
 require_once dirname( __DIR__ ) . '/includes/class-mmsar-agent-log-verify.php';
 require_once dirname( __DIR__ ) . '/includes/class-mmsar-agent-log-attribution.php';
+require_once dirname( __DIR__ ) . '/includes/class-mmsar-agent-log-signals.php';

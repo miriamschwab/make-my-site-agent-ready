@@ -302,13 +302,14 @@ class MMSAR_Agent_Log_Page {
 		// them in the site's timezone, and a bare "logged_at" would leave a reader comparing an
 		// exported row against the screen with no way to tell which one they were holding.
 		// Appended, never reordered: the column order is documented and something is parsing it.
-		fputcsv( $handle, array( 'logged_at_utc', 'agent', 'surface', 'detail', 'ip', 'verified', 'verified_at_utc', 'client_type' ) );
+		fputcsv( $handle, array( 'logged_at_utc', 'agent', 'surface', 'detail', 'ip', 'verified', 'verified_at_utc', 'client_type', 'signature_agent', 'same_site', 'cloud_network' ) );
 
 		$cursor = 0;
 		do {
 			$rows  = MMSAR_Agent_Log::get_entries_before( $cursor, self::EXPORT_BATCH, $filters );
 			$count = count( $rows );
 			foreach ( $rows as $row ) {
+				$signals = MMSAR_Agent_Log_Signals::for_row( $row );
 				fputcsv(
 					$handle,
 					array(
@@ -320,6 +321,9 @@ class MMSAR_Agent_Log_Page {
 						self::csv_cell( isset( $row['verified'] ) ? $row['verified'] : '' ),
 						self::csv_cell( isset( $row['verified_at'] ) ? (string) $row['verified_at'] : '' ),
 						self::csv_cell( isset( $row['client_type'] ) ? $row['client_type'] : '' ),
+						self::csv_cell( $signals['signature_agent'] ),
+						null === $signals['same_site'] ? '' : ( $signals['same_site'] ? '1' : '0' ),
+						self::csv_cell( null === $signals['cloud_network'] ? '' : $signals['cloud_network'] ),
 					)
 				);
 				$cursor = (int) $row['id'];
@@ -348,6 +352,7 @@ class MMSAR_Agent_Log_Page {
 			'clients'    => $pick( 'client', array_merge( MMSAR_Agent_Log::client_types(), array( 'unrecorded' ) ) ),
 			'categories' => $pick( 'surface', MMSAR_Agent_Log::categories() ),
 			'crawlers'   => $pick( 'crawler', array_merge( MMSAR_Agent_Log::crawler_categories(), array( MMSAR_Agent_Log::CRAWLER_UNRECOGNISED ) ) ),
+			'signals'    => $pick( 'signal', MMSAR_Agent_Log_Signals::signals() ),
 		);
 	}
 
@@ -411,6 +416,7 @@ class MMSAR_Agent_Log_Page {
 			'clients'    => $pick( 'client', array_merge( MMSAR_Agent_Log::client_types(), array( 'unrecorded' ) ) ),
 			'categories' => $pick( 'surface', MMSAR_Agent_Log::categories() ),
 			'crawlers'   => $pick( 'crawler', array_merge( MMSAR_Agent_Log::crawler_categories(), array( MMSAR_Agent_Log::CRAWLER_UNRECOGNISED ) ) ),
+			'signals'    => $pick( 'signal', MMSAR_Agent_Log_Signals::signals() ),
 		);
 	}
 
@@ -468,7 +474,7 @@ class MMSAR_Agent_Log_Page {
 	 * @return bool
 	 */
 	private static function filters_active( $filters ) {
-		return (bool) ( $filters['verdicts'] || $filters['clients'] || $filters['categories'] || $filters['crawlers'] );
+		return (bool) ( $filters['verdicts'] || $filters['clients'] || $filters['categories'] || $filters['crawlers'] || ! empty( $filters['signals'] ) );
 	}
 
 	/**
@@ -487,8 +493,9 @@ class MMSAR_Agent_Log_Page {
 			'client'  => 'clients',
 			'surface' => 'categories',
 			'crawler' => 'crawlers',
+			'signal'  => 'signals',
 		) as $arg => $key ) {
-			if ( $filters[ $key ] ) {
+			if ( ! empty( $filters[ $key ] ) ) {
 				$args[ $arg ] = $filters[ $key ];
 			}
 		}
@@ -604,6 +611,27 @@ class MMSAR_Agent_Log_Page {
 	}
 
 	/**
+	 * Hover text for each Signals option, stating what it can and cannot tell.
+	 *
+	 * The limits are the point of these. Each signal is easy to over-read, and the screen is where
+	 * someone will over-read it.
+	 *
+	 * @return array<string, string> Signal value => hover text.
+	 */
+	private static function signal_hints() {
+		$captured = MMSAR_Agent_Log_Signals::cloud_ranges_captured();
+		return array(
+			MMSAR_Agent_Log_Signals::SIGNED    => __( 'The request carried a Web Bot Auth signature naming an operator, which cloud browser agents such as ChatGPT agent send. The signature is not checked, so this is a claim, not proof: anything can copy the headers. People\'s browsers never sign.', 'make-my-site-agent-ready' ),
+			MMSAR_Agent_Log_Signals::CLOUD     => sprintf(
+				/* translators: %s: capture date of the bundled cloud ranges */
+				__( 'A browser-shaped request from a published cloud-provider range (AWS, Google Cloud, Azure, Oracle, DigitalOcean, Linode, Vultr; ranges captured %s). Browser agents run in the cloud arrive this way; so do some people on VPNs and corporate security proxies. A fact about the network, not a verdict on the visitor. Worked out from the stored address, so it covers older rows too.', 'make-my-site-agent-ready' ),
+				$captured ? $captured : __( 'unknown', 'make-my-site-agent-ready' )
+			),
+			MMSAR_Agent_Log_Signals::SAME_SITE => __( 'The request followed a link on this site, judged from the Referer. Only yes or no is kept, never the address it came from. Recorded from 1.48.0 onwards.', 'make-my-site-agent-ready' ),
+		);
+	}
+
+	/**
 	 * The filter bar above the table.
 	 *
 	 * A plain GET form, so every view is a URL that can be bookmarked or sent to someone, and no
@@ -659,6 +687,22 @@ class MMSAR_Agent_Log_Page {
 		}
 		self::render_filter_group( 'crawler', __( 'Crawler type', 'make-my-site-agent-ready' ), $crawler_opts, $filters['crawlers'], $crawler_counts );
 
+		// Evidence about browser-shaped traffic that the client type cannot see (1.48.0). Ticking one
+		// includes browsers even when Client is left at its default, because browsers are what these
+		// pick out. Counts are over the whole log.
+		$signal_counts = MMSAR_Agent_Log::get_signal_counts();
+		$signal_totals = array_fill_keys( MMSAR_Agent_Log_Signals::signals(), 0 );
+		foreach ( $signal_counts['by_client'] as $counts ) {
+			$signal_totals[ MMSAR_Agent_Log_Signals::SIGNED ]    += $counts['signed'];
+			$signal_totals[ MMSAR_Agent_Log_Signals::CLOUD ]     += $counts['cloud_network'];
+			$signal_totals[ MMSAR_Agent_Log_Signals::SAME_SITE ] += $counts['same_site'];
+		}
+		$signal_opts = array();
+		foreach ( MMSAR_Agent_Log_Signals::signals() as $sig ) {
+			$signal_opts[ $sig ] = MMSAR_Agent_Log_Signals::label( $sig );
+		}
+		self::render_filter_group( 'signal', __( 'Signals', 'make-my-site-agent-ready' ), $signal_opts, $filters['signals'], $signal_totals, self::signal_hints() );
+
 		echo '<div style="clear:both;padding-top:.6rem;border-top:1px solid #f0f0f1;margin-top:.4rem;">';
 		echo '<span id="mmsar-filter-apply">';
 		submit_button( __( 'Apply filters', 'make-my-site-agent-ready' ), 'primary', 'submit', false );
@@ -673,6 +717,7 @@ class MMSAR_Agent_Log_Page {
 						'clients'    => array(),
 						'categories' => array(),
 						'crawlers'   => array(),
+						'signals'    => array(),
 					),
 					$extra
 				),
@@ -943,6 +988,7 @@ class MMSAR_Agent_Log_Page {
 		echo '<th>' . esc_html__( 'Requested', 'make-my-site-agent-ready' ) . '</th>';
 		echo '<th>' . esc_html__( 'Details', 'make-my-site-agent-ready' ) . '</th>';
 		echo '<th>' . esc_html__( 'Client', 'make-my-site-agent-ready' ) . '</th>';
+		echo '<th>' . esc_html__( 'Signals', 'make-my-site-agent-ready' ) . '</th>';
 		echo '<th>' . esc_html__( 'Identity', 'make-my-site-agent-ready' ) . '</th>';
 		echo '<th>' . esc_html__( 'IP', 'make-my-site-agent-ready' ) . '</th>';
 		echo '</tr></thead><tbody>';
@@ -971,6 +1017,7 @@ class MMSAR_Agent_Log_Page {
 			$ctype = isset( $entry['client_type'] ) ? (string) $entry['client_type'] : '';
 			echo '<td><span style="font-size:11px;color:' . ( MMSAR_Agent_Log::CLIENT_BROWSER === $ctype ? '#8c8f94' : 'inherit' ) . ';">'
 				. esc_html( MMSAR_Agent_Log::client_type_label( $ctype ) ) . '</span></td>';
+			echo '<td>' . wp_kses_post( self::signal_badges( $entry ) ) . '</td>';
 			echo '<td>' . wp_kses_post( self::verdict_badge( $entry ) ) . '</td>';
 			echo '<td>' . wp_kses_post( self::ip_cell( isset( $entry['ip'] ) ? (string) $entry['ip'] : '', $filters ) ) . '</td>';
 			echo '</tr>';
@@ -1427,6 +1474,47 @@ class MMSAR_Agent_Log_Page {
 	}
 
 	/**
+	 * The Signals cell: one small badge per signal present on the row, or a dash.
+	 *
+	 * Worded so none of them reads as a verdict. "Signed" always says "claims", the cloud badge
+	 * names a network rather than a kind of visitor, and a stored network that straddles a range
+	 * edge says "possibly" rather than picking a side.
+	 *
+	 * @param array $entry Stored row.
+	 * @return string HTML built from escaped parts.
+	 */
+	private static function signal_badges( $entry ) {
+		$signals = MMSAR_Agent_Log_Signals::for_row( $entry );
+		$badges  = array();
+		$style   = 'display:inline-block;font-size:11px;line-height:1.5;padding:0 .4em;margin:0 .2em .2em 0;border-radius:3px;';
+
+		if ( '' !== $signals['signature_agent'] ) {
+			$badges[] = '<span style="' . esc_attr( $style . 'background:#e7f0f8;color:#1d4e7a;' ) . '" title="' . esc_attr__( 'Carried a Web Bot Auth signature. Not verified: this is what the request claims.', 'make-my-site-agent-ready' ) . '">'
+				/* translators: %s: host the signature claims to come from */
+				. esc_html( sprintf( __( 'Signed, claims %s', 'make-my-site-agent-ready' ), MMSAR_Agent_Log_Signals::signature_agent_label( $signals['signature_agent'] ) ) )
+				. '</span>';
+		}
+		if ( null !== $signals['cloud_network'] && '' !== $signals['cloud_network'] ) {
+			$partial = MMSAR_Agent_Log_Signals::CLOUD_PARTIAL === $signals['cloud_network'];
+			$text    = $partial
+				? __( 'Possibly a cloud network', 'make-my-site-agent-ready' )
+				/* translators: %s: cloud provider name */
+				: sprintf( __( 'Cloud network (%s)', 'make-my-site-agent-ready' ), MMSAR_Agent_Log_Signals::cloud_label( $signals['cloud_network'] ) );
+			$hint     = $partial
+				? __( 'The stored network only partly overlaps a published cloud range, so which side this request came from cannot be told.', 'make-my-site-agent-ready' )
+				: __( 'The address is in this provider\'s published range. Cloud browser agents arrive this way; so do some VPN and corporate-proxy users.', 'make-my-site-agent-ready' );
+			$badges[] = '<span style="' . esc_attr( $style . 'background:#f6f7f7;color:#50575e;' ) . '" title="' . esc_attr( $hint ) . '">' . esc_html( $text ) . '</span>';
+		}
+		if ( true === $signals['same_site'] ) {
+			$badges[] = '<span style="' . esc_attr( $style . 'background:#f6f7f7;color:#50575e;' ) . '" title="' . esc_attr__( 'Followed a link on this site. Only yes or no is kept.', 'make-my-site-agent-ready' ) . '">'
+				. esc_html__( 'From a link here', 'make-my-site-agent-ready' )
+				. '</span>';
+		}
+
+		return $badges ? implode( '', $badges ) : '<span style="color:#8c8f94;">—</span>';
+	}
+
+	/**
 	 * The verification verdict for one row, as a badge.
 	 *
 	 * `failed` is the one verdict that has to be unmissable, because it is the only one that says
@@ -1558,6 +1646,15 @@ class MMSAR_Agent_Log_Page {
 			);
 		}
 
+		$cloud_captured = MMSAR_Agent_Log_Signals::cloud_ranges_captured();
+		if ( $cloud_captured ) {
+			$notes[] = sprintf(
+				/* translators: %s: capture date of the bundled cloud ranges */
+				__( 'The Cloud network signal uses cloud-provider ranges bundled with the plugin (captured %s). A range added since reads as "not a cloud network", so an old date under-flags rather than accuses.', 'make-my-site-agent-ready' ),
+				$cloud_captured
+			);
+		}
+
 		echo '<ul style="margin:0 0 .8rem;list-style:disc;padding-left:1.2rem;" class="description">';
 		foreach ( $notes as $note ) {
 			echo '<li style="margin:0 0 .2rem;">' . esc_html( $note ) . '</li>';
@@ -1631,6 +1728,7 @@ class MMSAR_Agent_Log_Page {
 			'client'  => 'clients',
 			'surface' => 'categories',
 			'crawler' => 'crawlers',
+			'signal'  => 'signals',
 		) as $arg => $key ) {
 			foreach ( ( $filters[ $key ] ?? array() ) as $value ) {
 				printf( '<input type="hidden" name="%1$s[]" value="%2$s">', esc_attr( $arg ), esc_attr( $value ) );

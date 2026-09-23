@@ -2,6 +2,18 @@
 
 All notable changes to Make My Site Agent-Ready.
 
+## 1.48.0 — 2026-09-23
+
+- **New: three signals for browser-shaped traffic in the agent log.** An agent driving a real browser sends exactly what a person's browser sends, so it was filed as a browser, the population every share is measured against. None of the signals is a verdict, and none moves a row out of the browser count.
+- **Signed:** the request carried a Web Bot Auth signature (RFC 9421) naming the operator it claims, as cloud browser agents such as ChatGPT agent do. Recorded, not verified.
+- **Cloud network:** the request came from a published AWS, Google Cloud, Azure, Oracle, DigitalOcean, Linode or Vultr range. That describes the network, not the visitor: some VPN and corporate-proxy users arrive the same way. Worked out from the stored address when the log is read, so it covers older entries too. The ranges are bundled and dated.
+- **Came from a link here:** the request followed a link on the site. Only yes or no is kept, never the Referer.
+- **Not covered:** agents that run inside the person's own browser (Claude for Chrome, Perplexity Comet) remain indistinguishable from a reader.
+- **Screen, export and ability:** a Signals filter and column; `signature_agent`, `same_site` and `cloud_network` CSV columns; a `signals` block, per-entry `signals` and a `signal` filter in `get-agent-log`.
+- **Privacy:** a person following a link on the site to an agent file, such as the footer llms.txt link, is now stored at network level like a page view. New privacy section in the readme.
+- **Corrected:** the page-view setting claimed rows never store the address a visitor typed. They have stored it as requested, query string included, since 1.27.0; the setting now says so. Nothing stored has changed.
+- **Fixed:** IPv6 addresses with a zero group in their first half were reduced to an invalid value that kept part of the interface ID (`2001:db8::1` became `2001:db8::1::`). The reduction now always produces a valid network address. Existing entries are unchanged.
+
 ## 1.47.1 — 2026-09-23
 
 - **Removed: agent log entries are no longer copied into the Activity Log plugin.** The copy predated the log's own table and screen, carried less than the Agent Log screen shows, and passed full IP addresses — including for entries this log stores only at network level, and on sites where Activity Log was set not to collect IPs at all. On some hosts it never ran, because Activity Log's API isn't loaded on front-end requests.

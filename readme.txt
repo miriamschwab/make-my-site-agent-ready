@@ -4,7 +4,7 @@ Tags: markdown, llm, ai, llms-txt, agents
 Requires at least: 6.2
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.47.1
+Stable tag: 1.48.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -43,7 +43,7 @@ Every feature below can be switched off individually under Settings > Agent-Read
 * **llms.txt discovery in robots.txt** — Adds an `Llms-txt:` directive pointing at your `/llms.txt`, so agents that fetch `robots.txt` first are told where the index is. Skipped if llms.txt is switched off, or if `robots.txt` already mentions it
 * **Endpoints stay reachable** — If `robots.txt` disallows a path one of your published endpoints lives on (several SEO plugins disallow `/wp-json/` by default), an `Allow:` line for that individual endpoint is added above the rule blocking it. The endpoint stays reachable to agents that found it in your api-catalog, llms.txt or Agent Skills index; the rest of the REST API stays disallowed
 * **Deprecation/Sunset headers** — For surfaces you schedule for retirement (via a filter), responses carry `Deprecation` and `Sunset` headers so an agent is told a URL is going away before it does. Empty, and inactive, until you fill in a schedule
-* **Agent request log** — Optional (off by default). Records which agents fetch the surfaces above, and optionally page views, on its own screen at Settings > Agent Log, with filters, a Journeys view, CSV export, a dashboard widget and a read-only ability. Each entry's claimed crawler identity is checked against the operator's published IP ranges or forward-confirmed reverse DNS, a user-run client such as Claude Code is labelled as one instead of being called a forgery, and every recognised bot carries a category — AI training, AI search, AI assistant, search engine, SEO tool, monitoring, scanner or other — so AI traffic can be read apart from search and SEO traffic
+* **Agent request log** — Optional (off by default). Records which agents fetch the surfaces above, and optionally page views, on its own screen at Settings > Agent Log, with filters, a Journeys view, CSV export, a dashboard widget and a read-only ability. Each entry's claimed crawler identity is checked against the operator's published IP ranges or forward-confirmed reverse DNS, a user-run client such as Claude Code is labelled as one instead of being called a forgery, and every recognised bot carries a category — AI training, AI search, AI assistant, search engine, SEO tool, monitoring, scanner or other — so AI traffic can be read apart from search and SEO traffic. Browser-shaped traffic, which looks like a person whether or not an agent is driving the browser, carries three signals: a Web Bot Auth signature and the operator it claims (recorded, not verified), a published cloud-provider network, and whether the request followed a link on the site
 * **YAML frontmatter** — Title, date, author, URL, excerpt, categories, and tags
 * **Pre-generated** — Markdown is generated when posts are saved, so `.md` requests are instant
 * **Discoverable** — Adds `<link rel="alternate" type="text/markdown">` to page headers
@@ -124,7 +124,36 @@ Yes. Plugin and theme authors can register one so it works on any site without t
 
 Use the `mmsar_registered_endpoints` filter for the same thing without a direct call. Add `'surfaces' => array( 'llms_txt' )` to limit where it appears, and `'rel'` to set its api-catalog link relation. Endpoints that publish a SKILL.md of their own can pass `'skill_url'` to get their own entry in the Agent Skills index. Code-registered endpoints appear read-only under "Added by Plugins" on the settings page. Full documentation is in the plugin's README on GitHub.
 
+= What does the agent log store about my visitors? (Privacy) =
+
+Nothing, unless you switch it on. The log is off by default. When it is on, it records requests for the files this plugin publishes for agents, and, if you choose, ordinary page views.
+
+For people, this is what it keeps:
+
+* **Page views from browsers and anything else not recognised as a crawler** store the network rather than the full address. 203.0.113.4 becomes 203.0.113.0, and IPv6 keeps its first four groups. The five-minute throttle uses the real address in memory, and that address never reaches the database.
+* **A person who follows a link on your site to one of the agent files**, such as the footer's llms.txt link, is stored at network level too: a real browser, following a link from your own pages, unsigned, and from outside every cloud-provider network. Other requests for agent files keep the full address, because those are almost always automated and the exact address is what identifies a scanner.
+* **Claude Code and other user-run clients** run on a person's own machine, and are stored at network level on every surface.
+* **The page address is kept as requested**, including any query string, so a search on your site is recorded as the visitor typed it.
+* **Whether a request came from a link on your site** is kept as yes or no only. The Referer itself is never stored.
+* **The cloud-network signal stores nothing.** It is worked out, when the log is read, from the network address the log already holds.
+* **Web Bot Auth signatures** are sent by agents, never by people's browsers, so recording that one was present stores nothing about a reader.
+
+Recognised crawlers keep their full address, because verifying who they are needs it. The whole table is removed when you delete the plugin, and the Agent Log screen can clear it at any time.
+
 == Changelog ==
+
+= 1.48.0 - 2026-09-23 =
+
+* New: three signals for browser-shaped traffic in the agent log. An agent driving a real browser sends exactly what a person's browser sends, so until now it was filed as a browser, the population every share is measured against. The signals are evidence about that population; none of them is a verdict, and none moves a row out of the browser count.
+* Signed: the request carried a Web Bot Auth signature (HTTP Message Signatures, RFC 9421) and named the operator it claims to come from, as cloud browser agents such as ChatGPT agent do. The signature is recorded, not checked, so the screen says "claims". Checking it would mean fetching each operator's keys from its own server, which this plugin does not do.
+* Cloud network: the request came from a published AWS, Google Cloud, Azure, Oracle, DigitalOcean, Linode or Vultr address range. Browser agents that run in the cloud arrive this way, and so do some people on VPNs and corporate security proxies, so it describes the network, not the visitor. Cloudflare WARP, iCloud Private Relay and home and mobile networks are not in the list. It is worked out from the stored address when the log is read, so it also covers entries logged before this release. The ranges are bundled with the plugin, and their capture date is shown beside the signal.
+* Came from a link here: the request followed a link on the site, judged from the Referer. Only yes or no is kept.
+* What none of these can see: an agent that runs inside the person's own browser, such as Claude for Chrome or Perplexity Comet. It sends no signature, uses the person's own network and follows links like a person. The screen and the ability say so.
+* New on the Agent Log screen: a Signals filter and column. Ticking a signal includes browsers even when Client is left at its default. The CSV export gains `signature_agent`, `same_site` and `cloud_network` columns, appended at the end.
+* New in the `get-agent-log` ability: a `signals` block with counts per client type and the operators signed requests claimed, a `signals` object on each entry, and a `signal` filter.
+* Privacy: a person who follows a link on the site to one of the agent files, such as the footer llms.txt link, now has their address reduced to its network, like a page view. The readme has a new privacy section setting out what the log keeps about people.
+* Corrected: the page-view setting said rows never store the address a visitor typed. They have stored it as requested, query string included, since 1.27.0, so a search on the site is recorded as typed. The setting now says so; nothing about what is stored has changed.
+* Fixed: IPv6 addresses with a zero group in their first half were stored wrongly when reduced to their network. 2001:db8::1 was stored as "2001:db8::1::", which is not an address and kept part of the interface ID it was meant to drop. The reduction now always produces a valid network address. Entries already stored that way are not changed.
 
 = 1.47.1 - 2026-09-23 =
 

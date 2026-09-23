@@ -24,8 +24,12 @@ class MMSAR_Agent_Log {
 
 	/**
 	 * Schema version. Bump to trigger dbDelta on the next load.
+	 *
+	 * 6 (1.48.0) adds `signature_agent` and `same_site`, the two stored browser signals. Both are
+	 * additive; rows before them read '' and NULL, which the readers treat as "unsigned" and "not
+	 * recorded" respectively.
 	 */
-	const DB_VERSION = 5;
+	const DB_VERSION = 6;
 
 	/**
 	 * How long a caller may go quiet before its next request counts as a new visit, in seconds.
@@ -478,6 +482,8 @@ class MMSAR_Agent_Log {
 			verified varchar(12) NOT NULL DEFAULT '',
 			verified_at datetime DEFAULT NULL,
 			client_type varchar(12) NOT NULL DEFAULT '',
+			signature_agent varchar(100) NOT NULL DEFAULT '',
+			same_site tinyint(1) DEFAULT NULL,
 			PRIMARY KEY  (id),
 			KEY logged_at (logged_at),
 			KEY verified (verified),
@@ -571,11 +577,27 @@ class MMSAR_Agent_Log {
 	 * excludes browser page views. This is an agent log, and once every page view is recorded a
 	 * default that lists them all answers a different question. Tick Browsers to see them.
 	 *
-	 * @param array $filters Keys 'verdicts', 'clients', 'categories', 'crawlers', each an array of values.
-	 * @return array{verdicts: string, clients: string, categories: string, crawlers: string}
+	 * **Except when a signal is ticked** (1.48.0). The signals exist to pick agents out of the
+	 * browser rows, so a signal filter with the default client set would hide the very rows it
+	 * selects. With a signal chosen and no client chosen, every client type is included.
+	 *
+	 * Signals combine with OR among themselves, like every other axis. The cloud signal is derived
+	 * rather than stored, so it is resolved here the way crawler categories are: the distinct
+	 * browser addresses are checked in PHP and the matching ones handed to SQL. Addresses never
+	 * contain a comma, so they go to FIND_IN_SET as themselves.
+	 *
+	 * @param array $filters Keys 'verdicts', 'clients', 'categories', 'crawlers', 'signals', each an array of values.
+	 * @return array{verdicts: string, clients: string, categories: string, crawlers: string, signals: string, cloud_ips: string}
 	 */
 	private static function normalize_filters( $filters ) {
 		$filters = is_array( $filters ) ? $filters : array();
+
+		$signals = array_values(
+			array_intersect(
+				array_map( 'strval', (array) ( $filters['signals'] ?? array() ) ),
+				MMSAR_Agent_Log_Signals::signals()
+			)
+		);
 
 		$verdicts = array_values(
 			array_intersect(
@@ -590,8 +612,10 @@ class MMSAR_Agent_Log {
 				array_merge( self::client_types(), array( 'unrecorded' ) )
 			)
 		);
-		if ( ! $clients ) {
+		if ( ! $clients && ! $signals ) {
 			$clients = array( self::CLIENT_CRAWLER, self::CLIENT_HTTP, 'unrecorded' );
+		} elseif ( ! $clients ) {
+			$clients = array_merge( self::client_types(), array( 'unrecorded' ) );
 		}
 		// Every client type ticked is the same as no client filter, and saying so lets the query
 		// skip the test entirely.
@@ -624,7 +648,45 @@ class MMSAR_Agent_Log {
 			'clients'    => implode( ',', $clients ),
 			'categories' => implode( ',', $categories ),
 			'crawlers'   => $crawlers ? self::crawler_filter_hashes( $crawlers ) : '',
+			'signals'    => implode( ',', $signals ),
+			'cloud_ips'  => in_array( MMSAR_Agent_Log_Signals::CLOUD, $signals, true ) ? self::cloud_filter_ips() : '',
 		);
+	}
+
+	/**
+	 * The stored browser addresses that sit in a cloud range, as a list the queries can take.
+	 *
+	 * An address that only partly overlaps a range is left out: the filter selects what the signal
+	 * says, and for those the signal says "cannot tell".
+	 *
+	 * @return string Comma-joined addresses, or 'none' when there are none — a value no address
+	 *                equals, so the selection narrows to nothing rather than to everything.
+	 */
+	private static function cloud_filter_ips() {
+		$ips = array();
+		foreach ( self::distinct_browser_ips() as $ip ) {
+			$network = MMSAR_Agent_Log_Signals::cloud_network( $ip );
+			if ( '' !== $network && MMSAR_Agent_Log_Signals::CLOUD_PARTIAL !== $network ) {
+				$ips[] = $ip;
+			}
+		}
+		return $ips ? implode( ',', $ips ) : 'none';
+	}
+
+	/**
+	 * Every distinct address stored against a browser row, memoized for the request.
+	 *
+	 * @return string[]
+	 */
+	private static function distinct_browser_ips() {
+		static $ips = null;
+		if ( null === $ips ) {
+			global $wpdb;
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- This plugin's own table.
+			$ips = $wpdb->get_col( $wpdb->prepare( 'SELECT DISTINCT ip FROM %i WHERE client_type = %s', self::table(), self::CLIENT_BROWSER ) );
+			$ips = is_array( $ips ) ? array_map( 'strval', $ips ) : array();
+		}
+		return $ips;
 	}
 
 	/**
@@ -691,7 +753,7 @@ class MMSAR_Agent_Log {
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- This plugin's own table; a cached read would show a stale log.
 		$rows = $wpdb->get_results(
 			$wpdb->prepare(
-				"SELECT logged_at, surface, detail, agent, ip, verified, verified_at, client_type
+				"SELECT logged_at, surface, detail, agent, ip, verified, verified_at, client_type, signature_agent, same_site
 				FROM %i
 				WHERE ( %s = '' OR FIND_IN_SET( IF( verified = '', 'pending', verified ), %s ) > 0 )
 				  AND ( %s = '' OR FIND_IN_SET( IF( client_type = '', 'unrecorded', client_type ), %s ) > 0 )
@@ -701,6 +763,10 @@ class MMSAR_Agent_Log {
 				             WHEN surface LIKE %s THEN 'notfound'
 				             ELSE 'docs' END, %s ) > 0 )
 				  AND ( %s = '' OR FIND_IN_SET( MD5( agent ), %s ) > 0 )
+				  AND ( %s = ''
+				        OR ( FIND_IN_SET( 'signed', %s ) > 0 AND signature_agent <> '' )
+				        OR ( FIND_IN_SET( 'same_site', %s ) > 0 AND same_site = 1 )
+				        OR ( client_type = 'browser' AND FIND_IN_SET( ip, %s ) > 0 ) )
 				ORDER BY id DESC LIMIT %d OFFSET %d",
 				self::table(),
 				$f['verdicts'],
@@ -714,6 +780,10 @@ class MMSAR_Agent_Log {
 				$f['categories'],
 				$f['crawlers'],
 				$f['crawlers'],
+				$f['signals'],
+				$f['signals'],
+				$f['signals'],
+				$f['cloud_ips'],
 				absint( $per_page ),
 				absint( $offset )
 			),
@@ -746,7 +816,11 @@ class MMSAR_Agent_Log {
 				             WHEN surface LIKE %s THEN 'markdown'
 				             WHEN surface LIKE %s THEN 'notfound'
 				             ELSE 'docs' END, %s ) > 0 )
-				  AND ( %s = '' OR FIND_IN_SET( MD5( agent ), %s ) > 0 )",
+				  AND ( %s = '' OR FIND_IN_SET( MD5( agent ), %s ) > 0 )
+				  AND ( %s = ''
+				        OR ( FIND_IN_SET( 'signed', %s ) > 0 AND signature_agent <> '' )
+				        OR ( FIND_IN_SET( 'same_site', %s ) > 0 AND same_site = 1 )
+				        OR ( client_type = 'browser' AND FIND_IN_SET( ip, %s ) > 0 ) )",
 				self::table(),
 				$f['verdicts'],
 				$f['verdicts'],
@@ -758,7 +832,11 @@ class MMSAR_Agent_Log {
 				$like_404,
 				$f['categories'],
 				$f['crawlers'],
-				$f['crawlers']
+				$f['crawlers'],
+				$f['signals'],
+				$f['signals'],
+				$f['signals'],
+				$f['cloud_ips']
 			)
 		);
 	}
@@ -1016,7 +1094,7 @@ class MMSAR_Agent_Log {
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- This plugin's own table; a cached read would show a stale log.
 		$rows = $wpdb->get_results(
 			$wpdb->prepare(
-				"SELECT logged_at, surface, detail, agent, ip, verified, verified_at, client_type
+				"SELECT logged_at, surface, detail, agent, ip, verified, verified_at, client_type, signature_agent, same_site
 				FROM %i
 				WHERE ( %s = '' OR ip = %s OR ip LIKE %s )
 				  AND ( %s = '' OR FIND_IN_SET( IF( verified = '', 'pending', verified ), %s ) > 0 )
@@ -1027,6 +1105,10 @@ class MMSAR_Agent_Log {
 				             WHEN surface LIKE %s THEN 'notfound'
 				             ELSE 'docs' END, %s ) > 0 )
 				  AND ( %s = '' OR FIND_IN_SET( MD5( agent ), %s ) > 0 )
+				  AND ( %s = ''
+				        OR ( FIND_IN_SET( 'signed', %s ) > 0 AND signature_agent <> '' )
+				        OR ( FIND_IN_SET( 'same_site', %s ) > 0 AND same_site = 1 )
+				        OR ( client_type = 'browser' AND FIND_IN_SET( ip, %s ) > 0 ) )
 				ORDER BY id DESC LIMIT %d",
 				self::table(),
 				$ip,
@@ -1043,6 +1125,10 @@ class MMSAR_Agent_Log {
 				$f['categories'],
 				$f['crawlers'],
 				$f['crawlers'],
+				$f['signals'],
+				$f['signals'],
+				$f['signals'],
+				$f['cloud_ips'],
 				self::JOURNEY_WINDOW
 			),
 			ARRAY_A
@@ -1072,6 +1158,93 @@ class MMSAR_Agent_Log {
 			}
 		}
 		return $counts;
+	}
+
+	/**
+	 * The three browser signals, counted per client type over the whole log.
+	 *
+	 * One grouped read by client type and address, then the cloud signal worked out per distinct
+	 * address in PHP, because it is derived rather than stored. The cloud counts are for browser
+	 * rows only — see MMSAR_Agent_Log_Signals::for_row() — so they are zero on every other type.
+	 *
+	 * `same_site_recorded` is how many rows carry the Referer signal at all: rows from before 1.48.0
+	 * hold NULL, and a share of same-site rows is only meaningful over the recorded ones.
+	 *
+	 * @return array{by_client: array, signed_by: array[]}
+	 */
+	public static function get_signal_counts() {
+		global $wpdb;
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- This plugin's own table.
+		$rows = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT client_type, ip, COUNT(*) AS requests,
+					SUM(CASE WHEN signature_agent <> '' THEN 1 ELSE 0 END) AS signed,
+					SUM(CASE WHEN same_site = 1 THEN 1 ELSE 0 END) AS same_site,
+					SUM(CASE WHEN same_site IS NOT NULL THEN 1 ELSE 0 END) AS same_site_recorded
+				FROM %i GROUP BY client_type, ip",
+				self::table()
+			),
+			ARRAY_A
+		);
+
+		$blank = array(
+			'requests'           => 0,
+			'signed'             => 0,
+			'same_site'          => 0,
+			'same_site_recorded' => 0,
+			'cloud_network'      => 0,
+			'cloud_partial'      => 0,
+			'by_cloud_provider'  => array(),
+		);
+		$by    = array();
+		foreach ( array_merge( self::client_types(), array( 'unrecorded' ) ) as $type ) {
+			$by[ $type ] = $blank;
+		}
+
+		foreach ( (array) $rows as $row ) {
+			$type = isset( $row['client_type'] ) && '' !== $row['client_type'] ? (string) $row['client_type'] : 'unrecorded';
+			if ( ! isset( $by[ $type ] ) ) {
+				continue;
+			}
+			$requests                           = (int) $row['requests'];
+			$by[ $type ]['requests']           += $requests;
+			$by[ $type ]['signed']             += (int) $row['signed'];
+			$by[ $type ]['same_site']          += (int) $row['same_site'];
+			$by[ $type ]['same_site_recorded'] += (int) $row['same_site_recorded'];
+
+			if ( self::CLIENT_BROWSER !== $type ) {
+				continue;
+			}
+			$network = MMSAR_Agent_Log_Signals::cloud_network( (string) $row['ip'] );
+			if ( MMSAR_Agent_Log_Signals::CLOUD_PARTIAL === $network ) {
+				$by[ $type ]['cloud_partial'] += $requests;
+			} elseif ( '' !== $network ) {
+				$by[ $type ]['cloud_network'] += $requests;
+				if ( ! isset( $by[ $type ]['by_cloud_provider'][ $network ] ) ) {
+					$by[ $type ]['by_cloud_provider'][ $network ] = 0;
+				}
+				$by[ $type ]['by_cloud_provider'][ $network ] += $requests;
+			}
+		}
+		foreach ( $by as $type => $counts ) {
+			arsort( $counts['by_cloud_provider'] );
+			// An empty map serialises to [] rather than {}; keep it an object in the JSON.
+			$by[ $type ]['by_cloud_provider'] = (object) $counts['by_cloud_provider'];
+		}
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- This plugin's own table.
+		$signed_by = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT signature_agent, COUNT(*) AS requests, MIN(logged_at) AS first_seen, MAX(logged_at) AS last_seen FROM %i WHERE signature_agent <> '' GROUP BY signature_agent ORDER BY requests DESC LIMIT 25",
+				self::table()
+			),
+			ARRAY_A
+		);
+
+		return array(
+			'by_client' => $by,
+			'signed_by' => self::int_columns( $signed_by, array( 'requests' ) ),
+		);
 	}
 
 	/**
@@ -1680,7 +1853,7 @@ class MMSAR_Agent_Log {
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- This plugin's own table; a cached read would show a stale log.
 		$rows = $wpdb->get_results(
 			$wpdb->prepare(
-				"SELECT id, logged_at, surface, detail, agent, ip, verified, verified_at, client_type
+				"SELECT id, logged_at, surface, detail, agent, ip, verified, verified_at, client_type, signature_agent, same_site
 				FROM %i
 				WHERE id < %d
 				  AND ( %s = '' OR FIND_IN_SET( IF( verified = '', 'pending', verified ), %s ) > 0 )
@@ -1691,6 +1864,10 @@ class MMSAR_Agent_Log {
 				             WHEN surface LIKE %s THEN 'notfound'
 				             ELSE 'docs' END, %s ) > 0 )
 				  AND ( %s = '' OR FIND_IN_SET( MD5( agent ), %s ) > 0 )
+				  AND ( %s = ''
+				        OR ( FIND_IN_SET( 'signed', %s ) > 0 AND signature_agent <> '' )
+				        OR ( FIND_IN_SET( 'same_site', %s ) > 0 AND same_site = 1 )
+				        OR ( client_type = 'browser' AND FIND_IN_SET( ip, %s ) > 0 ) )
 				ORDER BY id DESC LIMIT %d",
 				self::table(),
 				$cursor,
@@ -1705,6 +1882,10 @@ class MMSAR_Agent_Log {
 				$f['categories'],
 				$f['crawlers'],
 				$f['crawlers'],
+				$f['signals'],
+				$f['signals'],
+				$f['signals'],
+				$f['cloud_ips'],
 				$limit
 			),
 			ARRAY_A
@@ -2167,6 +2348,10 @@ class MMSAR_Agent_Log {
 	 * exact address is what made the scanner pool identifiable in the first place. Recognized
 	 * crawlers keep theirs too, because verification needs it.
 	 *
+	 * Two exceptions reduce an agent-facing request too: a user-run client such as Claude Code
+	 * (1.47.0), and a real browser that followed a link on this site from outside every cloud range,
+	 * unsigned (1.48.0) — see MMSAR_Agent_Log_Signals::is_probably_reader(). Both are a person.
+	 *
 	 * @param string $ip Client IP.
 	 * @return string Network-level address, or '' when the input will not parse.
 	 */
@@ -2176,8 +2361,17 @@ class MMSAR_Agent_Log {
 			return '';
 		}
 		if ( filter_var( $ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6 ) ) {
-			$groups = explode( ':', (string) inet_ntop( inet_pton( $ip ) ) );
-			return implode( ':', array_slice( $groups, 0, 4 ) ) . '::';
+			// The four groups are read from the packed address, not by splitting its text. Until
+			// 1.48.0 this split inet_ntop()'s output on ':', and that output is compressed: for
+			// `2001:db8::1` the "first four groups" were `2001`, `db8`, `` and `1`, which stored
+			// `2001:db8::1::` — not an address at all, and one that kept the interface-ID bits it
+			// exists to drop. Any address with a zero group in its first half was affected. Written
+			// out uncompressed here, so the result always parses and is its own reduction.
+			$words = unpack( 'n8', (string) inet_pton( $ip ) );
+			if ( ! is_array( $words ) ) {
+				return '';
+			}
+			return implode( ':', array_map( 'dechex', array_slice( array_values( $words ), 0, 4 ) ) ) . '::';
 		}
 		$octets = explode( '.', $ip );
 		if ( 4 !== count( $octets ) ) {
@@ -2291,6 +2485,23 @@ class MMSAR_Agent_Log {
 		// recognised before anybody asked.
 		$anonymize = $anonymize || self::is_user_run_client( $agent );
 
+		// The three browser signals (1.48.0). Two are stored: whether the request carried a Web Bot
+		// Auth signature and whom it claims, and whether it followed a link on this site. The third,
+		// the cloud network, is derived on read from the stored address and is not stored at all.
+		$client_type     = self::detect_client_type();
+		$signature_agent = MMSAR_Agent_Log_Signals::request_signature_agent();
+		$same_site       = MMSAR_Agent_Log_Signals::request_same_site();
+
+		// A real browser, unsigned, that followed a link on this site to an agent-facing file from
+		// outside every cloud range is almost always a person clicking the footer's llms.txt link.
+		// Agent-facing files otherwise keep the full address whoever asks; this person gets the
+		// page-view treatment instead. The cloud check here is the only request-time use of a signal
+		// on the full address, it runs last and only when the cheaper three conditions already hold,
+		// and it stores nothing — its one effect is that less is stored. See the decisions log.
+		if ( ! $anonymize && MMSAR_Agent_Log_Signals::is_probably_reader( $client_type, $same_site, $signature_agent, $ip ) ) {
+			$anonymize = true;
+		}
+
 		// The throttle always keys on the real address, even when a reduced one is stored: it lives
 		// in a transient for five minutes and never reaches the table, and keying it on the network
 		// instead would collapse everyone behind one ISP range into a single entry.
@@ -2324,14 +2535,16 @@ class MMSAR_Agent_Log {
 		$inserted = $wpdb->insert(
 			self::table(),
 			array(
-				'logged_at'   => current_time( 'mysql', true ),
-				'surface'     => mb_substr( $surface, 0, 100 ),
-				'detail'      => self::fit_detail( $detail ),
-				'agent'       => mb_substr( $agent, 0, 120 ),
-				'ip'          => $stored_ip,
-				'client_type' => self::detect_client_type(),
+				'logged_at'       => current_time( 'mysql', true ),
+				'surface'         => mb_substr( $surface, 0, 100 ),
+				'detail'          => self::fit_detail( $detail ),
+				'agent'           => mb_substr( $agent, 0, 120 ),
+				'ip'              => $stored_ip,
+				'client_type'     => $client_type,
+				'signature_agent' => $signature_agent,
+				'same_site'       => $same_site,
 			),
-			array( '%s', '%s', '%s', '%s', '%s', '%s' )
+			array( '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%d' )
 		);
 
 		// Prune every so often rather than on every insert: an append is the cost this request

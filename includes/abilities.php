@@ -503,13 +503,19 @@ function mmsar_register_abilities() {
 						'type'        => 'string',
 						'enum'        => array( '', 'crawler', 'browser', 'http', 'all' ),
 						'default'     => '',
-						'description' => 'Restrict entries by what kind of client made the request, judged from the shape of the request rather than its name. "crawler" named a recognised crawler, or announced itself as a bot. "browser" made a document navigation, which is a shape the Fetch API cannot ask for. "http" is a script, CLI or agent fetch tool, which is what an agent using a fetch tool looks like. Empty string is the default and returns everything except browsers, because this is an agent log and browser page views are recorded as a denominator rather than as agent traffic; pass "all" to include them. A browser signature identifies the software, not a person: an agent driving a headless Chrome is indistinguishable from a human reader here.',
+						'description' => 'Restrict entries by what kind of client made the request, judged from the shape of the request rather than its name. "crawler" named a recognised crawler, or announced itself as a bot. "browser" made a document navigation, which is a shape the Fetch API cannot ask for. "http" is a script, CLI or agent fetch tool, which is what an agent using a fetch tool looks like. Empty string is the default and returns everything except browsers, because this is an agent log and browser page views are recorded as a denominator rather than as agent traffic; pass "all" to include them. A browser signature identifies the software, not a person: an agent driving a headless Chrome is indistinguishable from a human reader here. The signal filter and the signals block carry what evidence there is about which browser rows are agents.',
 					),
 					'crawler_category' => array(
 						'type'        => 'string',
 						'enum'        => array( '', 'ai-training', 'ai-search', 'ai-assistant', 'search-engine', 'seo-tool', 'monitoring', 'scanner', 'other', 'unrecognised', 'ai' ),
 						'default'     => '',
 						'description' => 'Restrict entries by what kind of bot the entry names. "ai-training" collects content to train models; "ai-search" builds or queries an index for AI answers; "ai-assistant" fetches a page because a person asked an assistant right then; "search-engine", "seo-tool", "monitoring" and "scanner" are what they say; "other" is link-preview and similar named bots; "unrecognised" names no bot this plugin knows. "ai" is shorthand for all three AI categories — the way to separate AI traffic from search and SEO traffic. The category is a claim\'s category, not a proof: combine with verified="verified" before attributing traffic to an operator. Empty string means no filter. Applies to entries only.',
+					),
+					'signal'           => array(
+						'type'        => 'string',
+						'enum'        => array( '', 'signed', 'cloud', 'same_site' ),
+						'default'     => '',
+						'description' => 'Restrict entries to one browser signal — evidence about browser-shaped traffic that client_type cannot see. "signed" carried a Web Bot Auth signature (claimed, not verified). "cloud" is a browser-shaped request from a published cloud-provider range. "same_site" followed a link on this site. When a signal is given and client is left empty, browsers are included, since browsers are what the signals pick out. Read the signals block for what each one can and cannot tell before relying on it. Applies to entries only.',
 					),
 					'verified'         => array(
 						'type'        => 'string',
@@ -568,6 +574,48 @@ function mmsar_register_abilities() {
 							'browser'    => array( 'type' => 'integer' ),
 							'http'       => array( 'type' => 'integer' ),
 							'unrecorded' => array( 'type' => 'integer' ),
+						),
+					),
+					'signals'             => array(
+						'type'        => 'object',
+						'description' => 'Three signals about browser-shaped traffic, which client_type alone cannot tell apart from people: an agent driving a real browser sends exactly what a reader sends. **They annotate rows; they move nothing out of the browser count**, so client_types is unchanged by them. None is a verdict. **What they cannot see:** an agent running inside the person\'s own browser (Claude for Chrome, Perplexity Comet and the like) sends no signature, uses the person\'s own home or mobile network, and follows links like a person. It is indistinguishable from a human reader here, and no signal below covers it.',
+						'properties'  => array(
+							'cloud_ranges_captured' => array(
+								'type'        => 'string',
+								'description' => 'The date the bundled cloud-provider ranges were captured, "Y-m-d" — the oldest across providers. A range added after this date reads as "not a cloud network", so an old date under-counts cloud_network rather than inflating it.',
+							),
+							'by_client'             => array(
+								'type'                 => 'object',
+								'description'          => 'Signal counts per client type ("crawler", "browser", "http", "unrecorded"), over the whole log. Each carries requests; signed (Web Bot Auth signature present — the claim, not a verification: no key is fetched and no signature is checked, and anything can copy the headers; human browsers never sign); same_site (followed a link on this site, judged from the Referer host; only yes/no is stored) and same_site_recorded (rows carrying that signal at all — it is recorded from 1.48.0, so compute shares over this, not over requests); cloud_network (the stored address is in a published AWS, Google Cloud, Azure, Oracle, DigitalOcean, Linode or Vultr range — a fact about the network, not the visitor: cloud-hosted browser agents arrive this way, and so do people on some VPNs and corporate security proxies; Cloudflare WARP, iCloud Private Relay and residential networks are not in the list) with by_cloud_provider; and cloud_partial (a stored network that only partly overlaps a narrower cloud range, so which side the request came from cannot be told). The cloud counts are assessed on browser rows only and are zero elsewhere. They are worked out from the stored address on every read, so they cover rows logged before this signal existed, and a refresh of the bundled ranges re-labels old rows too.',
+								'additionalProperties' => array(
+									'type'       => 'object',
+									'properties' => array(
+										'requests'      => array( 'type' => 'integer' ),
+										'signed'        => array( 'type' => 'integer' ),
+										'same_site'     => array( 'type' => 'integer' ),
+										'same_site_recorded' => array( 'type' => 'integer' ),
+										'cloud_network' => array( 'type' => 'integer' ),
+										'cloud_partial' => array( 'type' => 'integer' ),
+										'by_cloud_provider' => array(
+											'type' => 'object',
+											'additionalProperties' => array( 'type' => 'integer' ),
+										),
+									),
+								),
+							),
+							'signed_by'             => array(
+								'type'        => 'array',
+								'description' => 'The operators signed requests claim to come from — the origin in their Signature-Agent header, such as https://chatgpt.com — busiest first. "(unnamed)" is a Web Bot Auth signature that named no usable operator. **Every one of these is a claim.** The signature is recorded, not verified, and copying the headers is trivial, so do not attribute traffic to an operator on this alone.',
+								'items'       => array(
+									'type'       => 'object',
+									'properties' => array(
+										'signature_agent' => array( 'type' => 'string' ),
+										'requests'        => array( 'type' => 'integer' ),
+										'first_seen'      => array( 'type' => 'string' ),
+										'last_seen'       => array( 'type' => 'string' ),
+									),
+								),
+							),
 						),
 					),
 					'verification'        => array(
@@ -734,6 +782,24 @@ function mmsar_register_abilities() {
 									'type'        => 'string',
 									'description' => 'Who the forged identity most likely belonged to, or "" when nothing explains it. Only ever set on a "failed" entry: the `agent` column keeps what the request claimed to be, and this says what the evidence suggests it was, so a row reads as "GPTBot, spoofed by Ora". Derived per read from neighbouring rows rather than stored, and bounded to a 30-minute burst on the same network — a datacenter address is reassigned, so an attribution that outlived its evidence would start accusing whoever holds the address next. Two sources feed it: a configured scanner signature (a token the operator owns, such as its own domain in the user-agent or a probe path it invented), or correlation — the same network, in the same burst, also presenting a self-declared bot name that no operator publishes a check for. A **verified** crawler is never used as an attributor, so this can never claim one real operator forged another.',
 								),
+								'signals'          => array(
+									'type'        => 'object',
+									'description' => 'This entry\'s browser signals. None is a verdict; see the signals block for each one\'s limits.',
+									'properties'  => array(
+										'signature_agent' => array(
+											'type'        => 'string',
+											'description' => 'The operator a Web Bot Auth signature on this request claims, as an origin such as "https://chatgpt.com"; "(unnamed)" when the signature named none; "" when the request was unsigned or predates 1.48.0. Claimed, not verified.',
+										),
+										'cloud_network'   => array(
+											'type'        => array( 'string', 'null' ),
+											'description' => 'On browser rows: the cloud provider whose published range holds the stored address ("aws", "gcp", "azure", "oracle", "digitalocean", "linode", "vultr"), "partial" when the stored network only partly overlaps one, or "" for none. Null on other client types, where it is not assessed. A fact about the network, not the visitor.',
+										),
+										'same_site'       => array(
+											'type'        => array( 'boolean', 'null' ),
+											'description' => 'Whether the request followed a link on this site, judged from the Referer host. False covers both an off-site Referer and none at all. Null on entries recorded before 1.48.0.',
+										),
+									),
+								),
 							),
 						),
 					),
@@ -764,6 +830,7 @@ function mmsar_register_abilities() {
 				$client       = isset( $input['client'] ) ? sanitize_key( $input['client'] ) : '';
 				$category     = isset( $input['surface'] ) ? sanitize_key( $input['surface'] ) : '';
 				$crawler      = isset( $input['crawler_category'] ) ? sanitize_key( $input['crawler_category'] ) : '';
+				$signal       = isset( $input['signal'] ) ? sanitize_key( $input['signal'] ) : '';
 				$crawlers     = 'ai' === $crawler
 					? array( MMSAR_Agent_Log::CRAWLER_AI_TRAINING, MMSAR_Agent_Log::CRAWLER_AI_SEARCH, MMSAR_Agent_Log::CRAWLER_AI_ASSISTANT )
 					: ( '' === $crawler ? array() : array( $crawler ) );
@@ -800,6 +867,10 @@ function mmsar_register_abilities() {
 						'last_checked'    => $verification['verified_last'],
 					),
 					'client_types'        => MMSAR_Agent_Log::get_client_type_counts(),
+					'signals'             => array_merge(
+						array( 'cloud_ranges_captured' => MMSAR_Agent_Log_Signals::cloud_ranges_captured() ),
+						MMSAR_Agent_Log::get_signal_counts()
+					),
 					'surface_categories'  => MMSAR_Agent_Log::get_category_counts(),
 					'by_crawler_category' => MMSAR_Agent_Log::get_crawler_category_counts(),
 					'by_agent'            => $summary['by_agent'],
@@ -820,12 +891,19 @@ function mmsar_register_abilities() {
 						'clients'    => 'all' === $client ? array_merge( MMSAR_Agent_Log::client_types(), array( 'unrecorded' ) ) : ( '' === $client ? array() : array( $client ) ),
 						'categories' => '' === $category ? array() : array( $category ),
 						'crawlers'   => $crawlers,
+						'signals'    => '' === $signal ? array() : array( $signal ),
 					)
 				);
 				foreach ( $entries as $i => $entry ) {
 					$entries[ $i ]['crawler_category'] = MMSAR_Agent_Log::crawler_category( isset( $entry['agent'] ) ? (string) $entry['agent'] : '' );
 				}
-				$result['entries']  = MMSAR_Agent_Log_Attribution::annotate( $entries );
+				$entries = MMSAR_Agent_Log_Signals::annotate( MMSAR_Agent_Log_Attribution::annotate( $entries ) );
+				// The raw columns are carried inside `signals`, in their reported shape; drop the
+				// storage-shaped copies so an entry has one answer to each question.
+				foreach ( $entries as $i => $entry ) {
+					unset( $entries[ $i ]['signature_agent'], $entries[ $i ]['same_site'] );
+				}
+				$result['entries']  = $entries;
 				$result['returned'] = count( $entries );
 				$result['limit']    = $limit;
 				$result['offset']   = $offset;

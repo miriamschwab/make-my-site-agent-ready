@@ -49,7 +49,7 @@ Every feature below can be switched off individually under **Settings > Agent-Re
 ### Configuration and operations
 - **Settings page** (Settings > Agent-Ready) — per-feature on/off toggles, post type selector, CSS root selector, robots.txt preview and extra-rules textarea, security contact, Content Signals toggles, a TDMRep policy URL, a structured data (JSON-LD) toggle, and a "View" link to every endpoint currently being served
 - **Bulk regeneration** — "Regenerate All" button on the settings page
-- **Agent request log** (off by default) — records which agents fetch the surfaces above, on its own screen at Settings > Agent Log, with filters, a Journeys view, a retention setting, a dashboard widget, a CSV export, and a read-only ability so an agent can read it too. Verifies each claimed crawler identity and tags every recognised bot with a category, so AI traffic can be separated from search and SEO traffic. See [The agent log](#the-agent-log)
+- **Agent request log** (off by default) — records which agents fetch the surfaces above, on its own screen at Settings > Agent Log, with filters, a Journeys view, a retention setting, a dashboard widget, a CSV export, and a read-only ability so an agent can read it too. Verifies each claimed crawler identity and tags every recognised bot with a category, so AI traffic can be separated from search and SEO traffic. Browser-shaped rows carry three signals — a Web Bot Auth signature (recorded, not verified), a published cloud-provider network, and whether the request followed a link on the site — because an agent driving a real browser otherwise looks exactly like a reader. See [The agent log](#the-agent-log)
 - **Proper HTTP headers** — `Content-Type: text/markdown`, `X-Robots-Tag: noindex`, `X-Content-Type-Options: nosniff`, canonical link
 - **Password protection** — password-protected posts return 403 on `.md` URLs, and are excluded from every aggregate document (`llms-full.txt`, the OKF bundle) and the agent log
 - **Clean uninstall** — removes all plugin data (post meta, options, transients)
@@ -248,7 +248,8 @@ A pass means no problem was found from this server, not that none exists — the
 Off by default. Once switched on at Settings > Agent-Ready, every request for one of the surfaces
 this plugin publishes — a `.md` URL, `llms.txt`, `llms-full.txt`, `security.txt`, the api-catalog,
 the Agent Skills index, a `SKILL.md` — is recorded with the time, the requesting agent, and the IP
-(reduced to its network for a user-run client such as Claude Code, which is a person's own machine).
+(reduced to its network for a user-run client such as Claude Code, which is a person's own machine,
+and for a person who followed a link on the site to one of those files — see [Privacy](#privacy)).
 There is no user-agent test on those: anything fetching `llms.txt` is agent traffic whatever it
 calls itself, and filtering on user-agent would hide exactly the clients worth knowing about.
 
@@ -391,10 +392,61 @@ runs in a small bounded batch when an administrator opens the Agent Log screen o
 through the ability, and in a larger batch from the **Verify now** button — all of them
 authenticated admin contexts, and all of them bounded by a wall-clock budget.
 
+### Which browser rows are agents
+
+`client_type` separates browser engines from HTTP clients. It cannot separate a person from an agent
+driving a real browser, because that agent *is* a browser and sends everything a reader sends. Since
+1.48.0 browser-shaped traffic carries three signals, shown in a *Signals* column and filterable. None
+is a verdict, and none moves a row out of the browser count; they annotate it.
+
+| Signal | What it is | What it cannot tell you |
+|---|---|---|
+| **Signed** | The request carried a [Web Bot Auth](https://datatracker.ietf.org/doc/draft-ietf-webbotauth-httpsig-protocol/) signature (HTTP Message Signatures, RFC 9421, `tag="web-bot-auth"`) and a `Signature-Agent` naming the operator, stored as its origin — `https://chatgpt.com` for ChatGPT agent. | Whether the claim is true. The signature is recorded, not verified: checking it means fetching the operator's key directory, which is a call to a third party this plugin does not make. Copying the headers is trivial. |
+| **Cloud network** | The address is in a published AWS (EC2), Google Cloud, Azure, Oracle, DigitalOcean, Linode or Vultr range. Cloud browser agents arrive this way. | Whether the visitor is an agent. People on some VPNs and corporate security proxies arrive from the same ranges. Cloudflare WARP, iCloud Private Relay and home and mobile networks are deliberately not in the list. |
+| **Came from a link here** | The Referer's host is this site's. Separates a click, such as the footer's llms.txt link, from a direct fetch. | Where the click came from. Only yes or no is stored. |
+
+**The cloud signal is derived on read, not stored.** Almost all published cloud address space comes in
+blocks of /24 or wider (IPv4) and /64 or wider (IPv6), which is exactly the precision the log reduces
+a reader's address to, so the stored network answers the question. Where a stored /24 only partly
+overlaps a narrower cloud block, the answer is "possibly a cloud network" rather than a guess. Being
+derived makes it retroactive: entries logged before 1.48.0 are covered. The ranges are bundled in
+`includes/data/cloud-ranges.php`, generated by `tools/build-cloud-ranges.py` from each provider's own
+published list, and dated; a stale snapshot misses new ranges rather than accusing anyone. The
+generator drops IANA special-purpose blocks, because Vultr's own feed lists `2002::/16` (6to4), which
+would otherwise label real people as a Vultr network.
+
+**What no signal covers:** an agent that runs inside the person's own browser, such as Claude for
+Chrome or Perplexity Comet. It signs nothing, uses the person's own network and follows links the
+way a person does. Here it is indistinguishable from a human reader.
+
+### Privacy
+
+The log is off by default. When it is on, this is what it keeps about people:
+
+- **Page views from anything not recognised as a crawler** store the network, not the address —
+  `203.0.113.4` becomes `203.0.113.0`, IPv6 keeps its first four groups. The five-minute throttle
+  keys on the real address in memory; it never reaches the database.
+- **A person who follows a link on the site to an agent-facing file** — a real browser, unsigned,
+  following a link from the site's own pages, from outside every cloud network — is stored at
+  network level too (1.48.0). Other agent-file requests keep the full address, because they are
+  almost always automated and the exact address is what identified the scanner pool.
+- **User-run clients such as Claude Code** are a person's own machine, and are stored at network
+  level on every surface.
+- **The page address is kept as requested**, query string included, so an internal search is
+  recorded as typed (1.27.0). The throttle keys on the resolved page instead.
+- **The Referer is never stored.** Only whether it was this site.
+- **The cloud signal stores nothing.** It is derived from the network address already held.
+- **Web Bot Auth signatures come from agents, never from people's browsers**, so recording one stores
+  nothing about a reader.
+
+Recognised crawlers keep their full address, because verification needs it. Uninstalling the plugin
+drops the table, and the Agent Log screen can clear it at any time.
+
 ### Reading it
 
 The screen paginates at 50 entries. **Export CSV** writes the whole log — columns `logged_at_utc`,
-`agent`, `surface`, `detail`, `ip`, `verified`, `verified_at_utc`, `client_type` — streamed in batches so peak
+`agent`, `surface`, `detail`, `ip`, `verified`, `verified_at_utc`, `client_type`, `signature_agent`,
+`same_site`, `cloud_network` — streamed in batches so peak
 memory does not grow with the log. Columns are only ever appended, never reordered. The
 timestamp column is named for its timezone on purpose: rows are stored in UTC and the screen renders
 them in the site's timezone. Cells whose value begins `=`, `+`, `-`, `@`, tab or CR are written with
@@ -437,6 +489,6 @@ This plugin exposes abilities for the [WordPress Abilities API](https://develope
 | `make-my-site-agent-ready/list-endpoints` | Always on | Lists every endpoint being published, flagging which are managed on the settings page and which a plugin or theme registered in code, plus where each is actually appearing right now. |
 | `make-my-site-agent-ready/set-endpoint` | Always on | Adds an endpoint, or updates one already managed on the settings page. Send only the fields you want changed when updating. |
 | `make-my-site-agent-ready/delete-endpoint` | Always on (destructive) | Removes an endpoint managed on the settings page. |
-| `make-my-site-agent-ready/get-agent-log` | Always on (read-only) | Reads the agent request log: counts by agent, by surface, by requested detail and by day across the whole log, a verification breakdown, plus a page of individual entries. Pass `summary_only` for the aggregates alone, which carry counts of distinct IPs but no addresses, or `verified` to list only entries with a given verdict — `failed` lists the requests that forged a crawler identity. Every entry and `by_agent` row carries a `crawler_category`, `by_crawler_category` breaks traffic down by kind of bot, and the `crawler_category` input filter (`ai` for all three AI categories) separates AI traffic from search and SEO traffic. |
+| `make-my-site-agent-ready/get-agent-log` | Always on (read-only) | Reads the agent request log: counts by agent, by surface, by requested detail and by day across the whole log, a verification breakdown, plus a page of individual entries. Pass `summary_only` for the aggregates alone, which carry counts of distinct IPs but no addresses, or `verified` to list only entries with a given verdict — `failed` lists the requests that forged a crawler identity. Every entry and `by_agent` row carries a `crawler_category`, `by_crawler_category` breaks traffic down by kind of bot, and the `crawler_category` input filter (`ai` for all three AI categories) separates AI traffic from search and SEO traffic. A `signals` block, a per-entry `signals` object and a `signal` filter carry the browser signals (signed, cloud network, came from a link on the site), each with its limits stated in the schema. |
 
 Endpoints a plugin or theme registered in code are read-only to `set-endpoint` and `delete-endpoint`: both return a `409` explaining that the owning plugin or theme has to be edited instead. Reporting success for a write that changed nothing would be worse than refusing it.

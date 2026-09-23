@@ -574,7 +574,7 @@ class MMSAR_Admin {
 		echo '</p>';
 
 		echo '<p class="description">';
-		esc_html_e( 'The same agent, file and IP is recorded at most once every five minutes, so a crawler looping on one URL cannot flood the log. Nothing is recorded on an ordinary page view unless the option below is ticked. Two kinds of request carry a detail alongside the file: a 404 records the path the agent asked for, and an MCP call records the method it invoked — including which tool, so the log shows whether the MCP server is being used or only discovered.', 'make-my-site-agent-ready' );
+		esc_html_e( 'The same agent, file and IP is recorded at most once every five minutes, so a crawler looping on one URL cannot flood the log. Nothing is recorded on an ordinary page view unless the option below is ticked. Two kinds of request carry a detail alongside the file: a 404 records the path the agent asked for, and an MCP call records the method it invoked — including which tool, so the log shows whether the MCP server is being used or only discovered. A person who follows a link on this site to one of these files, such as the footer llms.txt link, is stored against their network rather than their full address, and only whether a request came from a link here is kept — never the address it came from.', 'make-my-site-agent-ready' );
 		echo '</p>';
 	}
 
@@ -612,7 +612,7 @@ class MMSAR_Admin {
 		echo '</fieldset>';
 
 		echo '<p class="description">';
-		esc_html_e( 'Recording every page view means the log holds human traffic too. Those rows are stored against a network rather than a full address (203.0.113.4 becomes 203.0.113.0), and against the page they resolved to, never the raw URL a visitor typed. Anything the log reads as a crawler keeps its full address, which is what identity verification runs against — whether or not this version recognizes its name, since an address reduced now can never be verified later.', 'make-my-site-agent-ready' );
+		esc_html_e( 'Recording every page view means the log holds human traffic too. Those rows are stored against a network rather than a full address (203.0.113.4 becomes 203.0.113.0). The address of the page is kept as it was requested, query string included, so a search on your site is recorded as typed. Anything the log reads as a crawler keeps its full address, which is what identity verification runs against — whether or not this version recognizes its name, since an address reduced now can never be verified later.', 'make-my-site-agent-ready' );
 		echo '</p>';
 		echo '<p class="description">';
 		esc_html_e( 'One entry per visitor, per page, per five minutes. Keeping everything is a reasonable choice if the log is being used to answer a question about agent behaviour over time, and the retention limit on the Agent Log screen is there if the table ever outgrows its usefulness.', 'make-my-site-agent-ready' );
