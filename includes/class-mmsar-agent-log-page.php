@@ -1449,6 +1449,7 @@ class MMSAR_Agent_Log_Page {
 		$styles = array(
 			MMSAR_Agent_Log_Verify::VERIFIED     => 'background:#e6f4ea;color:#0a5c2e;border:1px solid #a8d5b8;',
 			MMSAR_Agent_Log_Verify::FAILED       => 'background:#fce8e6;color:#8a1c11;border:1px solid #f0a9a2;font-weight:600;',
+			MMSAR_Agent_Log_Verify::CLIENT       => 'background:#eef4fb;color:#1d4f7c;border:1px solid #b5cfe8;',
 			MMSAR_Agent_Log_Verify::UNVERIFIABLE => 'background:#fff4e5;color:#7a4a00;border:1px solid #f0d0a0;',
 			MMSAR_Agent_Log_Verify::NODNS        => 'background:#f0f0f1;color:#50575e;border:1px solid #dcdcde;',
 			MMSAR_Agent_Log_Verify::UNCLAIMED    => 'background:transparent;color:#8c8f94;border:1px solid #dcdcde;',
@@ -1524,6 +1525,19 @@ class MMSAR_Agent_Log_Page {
 		$notes   = array();
 		$notes[] = __( 'Unverifiable and No DNS mean this plugin had no way to check, not that the caller was suspicious.', 'make-my-site-agent-ready' );
 		$notes[] = __( 'No DNS entries retry themselves within a day. Verified and Spoofed are never re-checked.', 'make-my-site-agent-ready' );
+		$notes[] = __( 'User-run client means software running on a person\'s own machine, such as Claude Code fetching as Claude-User. It is real agent traffic that no published method can confirm, and its address is stored at network level.', 'make-my-site-agent-ready' );
+
+		// Rows written before 1.47.0 stored every Claude-User request under the bare name, so Claude
+		// Code sessions from that period read as Spoofed and cannot be told apart now. Said here,
+		// beside the number it qualifies, rather than left for a reader to discover.
+		$bare_claude_failed = MMSAR_Agent_Log::count_verdict_for_agent( 'Claude-User', MMSAR_Agent_Log_Verify::FAILED );
+		if ( $bare_claude_failed > 0 ) {
+			$notes[] = sprintf(
+				/* translators: %s: number of entries */
+				__( '%s Claude-User entries read Spoofed. Any logged before version 1.47.0 may be Claude Code running on someone\'s own machine: earlier versions could not tell the two apart, and the evidence was not stored.', 'make-my-site-agent-ready' ),
+				number_format_i18n( $bare_claude_failed )
+			);
+		}
 
 		$uncheckable = MMSAR_Agent_Log::get_uncheckable_agents();
 		if ( $uncheckable ) {

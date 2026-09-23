@@ -4,7 +4,7 @@ Tags: markdown, llm, ai, llms-txt, agents
 Requires at least: 6.2
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.46.1
+Stable tag: 1.47.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -43,7 +43,7 @@ Every feature below can be switched off individually under Settings > Agent-Read
 * **llms.txt discovery in robots.txt** — Adds an `Llms-txt:` directive pointing at your `/llms.txt`, so agents that fetch `robots.txt` first are told where the index is. Skipped if llms.txt is switched off, or if `robots.txt` already mentions it
 * **Endpoints stay reachable** — If `robots.txt` disallows a path one of your published endpoints lives on (several SEO plugins disallow `/wp-json/` by default), an `Allow:` line for that individual endpoint is added above the rule blocking it. The endpoint stays reachable to agents that found it in your api-catalog, llms.txt or Agent Skills index; the rest of the REST API stays disallowed
 * **Deprecation/Sunset headers** — For surfaces you schedule for retirement (via a filter), responses carry `Deprecation` and `Sunset` headers so an agent is told a URL is going away before it does. Empty, and inactive, until you fill in a schedule
-* **Agent request log** — Optional (off by default). Records which agents fetch the surfaces above, and optionally page views, on its own screen at Settings > Agent Log, with filters, a Journeys view, CSV export, a dashboard widget and a read-only ability. Each entry's claimed crawler identity is checked against the operator's published IP ranges or forward-confirmed reverse DNS, and every recognised bot carries a category — AI training, AI search, AI assistant, search engine, SEO tool, monitoring, scanner or other — so AI traffic can be read apart from search and SEO traffic
+* **Agent request log** — Optional (off by default). Records which agents fetch the surfaces above, and optionally page views, on its own screen at Settings > Agent Log, with filters, a Journeys view, CSV export, a dashboard widget and a read-only ability. Each entry's claimed crawler identity is checked against the operator's published IP ranges or forward-confirmed reverse DNS, a user-run client such as Claude Code is labelled as one instead of being called a forgery, and every recognised bot carries a category — AI training, AI search, AI assistant, search engine, SEO tool, monitoring, scanner or other — so AI traffic can be read apart from search and SEO traffic
 * **YAML frontmatter** — Title, date, author, URL, excerpt, categories, and tags
 * **Pre-generated** — Markdown is generated when posts are saved, so `.md` requests are instant
 * **Discoverable** — Adds `<link rel="alternate" type="text/markdown">` to page headers
@@ -125,6 +125,20 @@ Yes. Plugin and theme authors can register one so it works on any site without t
 Use the `mmsar_registered_endpoints` filter for the same thing without a direct call. Add `'surfaces' => array( 'llms_txt' )` to limit where it appears, and `'rel'` to set its api-catalog link relation. Endpoints that publish a SKILL.md of their own can pass `'skill_url'` to get their own entry in the Agent Skills index. Code-registered endpoints appear read-only under "Added by Plugins" on the settings page. Full documentation is in the plugin's README on GitHub.
 
 == Changelog ==
+
+= 1.47.1 - 2026-09-23 =
+
+* Removed: agent log entries are no longer copied into the Activity Log plugin. The copy dated from before the log had its own table and screen, carried less than the Agent Log screen shows, and passed full IP addresses — including for entries this log stores only at network level, and on sites where Activity Log was set not to collect IP addresses at all. On some hosts it never ran, because Activity Log's API is not loaded on front-end requests.
+* Copies already written to Activity Log are not touched. They belong to that plugin, and can be cleared from its own screen.
+
+= 1.47.0 - 2026-09-23 =
+
+* Fixed: Claude Code sessions are no longer reported as forged. Claude Code, including the Claude desktop app's Code tab, fetches pages from the user's own machine and still identifies as Claude-User, with a `claude-code/<version>` token in the user-agent. A request from someone's own machine can never come from Anthropic's published IP ranges, so every one of those sessions read Spoofed. On the site this was found on, they were the most engaged agent traffic in the log: reading post after post, asking for markdown, and fetching llms.txt, openapi.json and the Agent Skills index.
+* New: an identity verdict, User-run client, for a crawler name sent by software running on a person's machine. It is neither Verified, because nothing can confirm it, nor an accusation. A Claude-User claim without the token, from outside Anthropic's ranges, is still Spoofed, and a server-side Claude-User fetch from Anthropic's ranges is still Verified.
+* Changed: Claude Code's requests are logged as "Claude-User (claude-code)" and stored against the network rather than the full address, on every surface, because the address is a person's and there is nothing to verify against it.
+* Not retroactive. Earlier versions stored every Claude-User request under the bare name and did not keep the token, so Claude-User entries logged before this release that read Spoofed may include Claude Code sessions, and cannot be told apart now. The Agent Log screen and the `get-agent-log` ability say so beside the count.
+* New in the `get-agent-log` ability: a `client` verdict, count and filter value.
+* ChatGPT-User and Perplexity-User are unchanged. Nothing shows their clients fetching from user machines, and every failed entry under those names that has been examined was a real forgery.
 
 = 1.46.1 - 2026-09-22 =
 

@@ -513,7 +513,7 @@ function mmsar_register_abilities() {
 					),
 					'verified'         => array(
 						'type'        => 'string',
-						'enum'        => array( '', 'verified', 'failed', 'unverifiable', 'unclaimed', 'nodns', 'pending' ),
+						'enum'        => array( '', 'verified', 'failed', 'client', 'unverifiable', 'unclaimed', 'nodns', 'pending' ),
 						'default'     => '',
 						'description' => 'Restrict the returned entries to one verification verdict. Empty string means no filter; use "pending" for entries not yet checked. Applies to entries only — the aggregates always cover the whole log. Asking for "failed" is the direct way to list the requests that forged a crawler identity.',
 					),
@@ -580,7 +580,11 @@ function mmsar_register_abilities() {
 							),
 							'failed'          => array(
 								'type'        => 'integer',
-								'description' => 'Entries that claimed a known crawler and are not it. **This is the spoofing count.** The user-agent named an operator, and the address neither appears in that operator\'s published ranges nor reverse-resolves into its domain. Any per-agent number that includes these rows is inflated by them.',
+								'description' => 'Entries that claimed a known crawler and are not it. **This is the spoofing count.** The user-agent named an operator, and the address neither appears in that operator\'s published ranges nor reverse-resolves into its domain. Any per-agent number that includes these rows is inflated by them. **Claude-User entries recorded before 1.47.0 are the exception**: those versions could not tell Claude Code, which fetches from the user\'s own machine, from a forgery, so their "failed" count includes genuine user-run sessions and cannot be separated after the fact.',
+							),
+							'client'          => array(
+								'type'        => 'integer',
+								'description' => 'Entries from a user-run client of a crawler name — as of 1.47.0, Claude Code, which sends Claude-User with a claude-code/ token from the person\'s own machine rather than from Anthropic\'s published ranges. **Real agent traffic that no published method can confirm, by design**, so it is neither verified nor an accusation. The token is self-declared and can be forged like any user-agent. The address of these entries is stored at network precision, because it belongs to a person.',
 							),
 							'unverifiable'    => array(
 								'type'        => 'integer',
@@ -628,6 +632,7 @@ function mmsar_register_abilities() {
 								'unique_ips'       => array( 'type' => 'integer' ),
 								'verified'         => array( 'type' => 'integer' ),
 								'failed'           => array( 'type' => 'integer' ),
+								'client'           => array( 'type' => 'integer' ),
 								'unverifiable'     => array( 'type' => 'integer' ),
 								'unclaimed'        => array( 'type' => 'integer' ),
 								'nodns'            => array( 'type' => 'integer' ),
@@ -716,8 +721,8 @@ function mmsar_register_abilities() {
 								),
 								'verified'         => array(
 									'type'        => 'string',
-									'enum'        => array( '', 'verified', 'failed', 'unverifiable', 'unclaimed', 'nodns' ),
-									'description' => 'This entry\'s verification verdict. "failed" means the claimed crawler identity was forged. "unverifiable" means this release has no way to check that operator and is not an accusation. "unclaimed" means no crawler was named. "nodns" means the resolver gave no answer and the entry will be retried. An empty string means it has not been checked yet, so it is not evidence of anything.',
+									'enum'        => array( '', 'verified', 'failed', 'client', 'unverifiable', 'unclaimed', 'nodns' ),
+									'description' => 'This entry\'s verification verdict. "failed" means the claimed crawler identity was forged. "client" means a user-run client of that name, such as Claude Code fetching as Claude-User from the person\'s own machine: it can never be checked against the operator\'s ranges and is not an accusation. "unverifiable" means this release has no way to check that operator and is not an accusation. "unclaimed" means no crawler was named. "nodns" means the resolver gave no answer and the entry will be retried. An empty string means it has not been checked yet, so it is not evidence of anything.',
 								),
 								'verified_at'      => array(
 									// Nullable: an unchecked row stores NULL, and a plain 'string' type made the
@@ -785,6 +790,7 @@ function mmsar_register_abilities() {
 					'verification'        => array(
 						'verified'        => (int) $verification['counts'][ MMSAR_Agent_Log_Verify::VERIFIED ],
 						'failed'          => (int) $verification['counts'][ MMSAR_Agent_Log_Verify::FAILED ],
+						'client'          => (int) $verification['counts'][ MMSAR_Agent_Log_Verify::CLIENT ],
 						'unverifiable'    => (int) $verification['counts'][ MMSAR_Agent_Log_Verify::UNVERIFIABLE ],
 						'unclaimed'       => (int) $verification['counts'][ MMSAR_Agent_Log_Verify::UNCLAIMED ],
 						'nodns'           => (int) $verification['counts'][ MMSAR_Agent_Log_Verify::NODNS ],

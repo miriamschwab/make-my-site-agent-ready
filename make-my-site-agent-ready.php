@@ -3,7 +3,7 @@
  * Plugin Name:       Make My Site Agent-Ready
  * Plugin URI:        https://miriamschwab.me/plugins/make-my-site-agent-ready
  * Description:       Makes your WordPress site ready for AI agents: .md URLs, llms.txt, llms-full.txt, an OpenAPI spec, a read-only MCP server, agent-recoverable 404s, security.txt, api-catalog, Agent Skills discovery, an OKF bundle, Link response headers, Content Signals, a TDMRep reservation header, optional JSON-LD structured data (merges into Yoast's own schema when active), and AI crawler rules in robots.txt.
- * Version:           1.46.1
+ * Version:           1.47.1
  * Author:            Miriam Schwab
  * Author URI:        https://miriamschwab.me
  * License:           GPL-2.0-or-later
@@ -19,7 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'MMSAR_VERSION', '1.46.1' );
+define( 'MMSAR_VERSION', '1.47.1' );
 define( 'MMSAR_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'MMSAR_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'MMSAR_PLUGIN_FILE', __FILE__ );
@@ -100,9 +100,9 @@ function mmsar_get_feature_keys() {
 		// Apps host was available to render the template against. Everything else in this plugin was
 		// tested against the thing that consumes it before it shipped.
 		'mcp_ui'               => false,
-		// Also off by default, and for a different reason: it writes rows into the Activity Log
-		// plugin's table, which is the owner's data store rather than ours. Nothing should start
-		// filling someone's log uninvited.
+		// Also off by default, and for a different reason: it writes a row to a database table for
+		// agent requests, and page views too if the owner extends it. Nothing should start filling a
+		// table on someone's site uninvited.
 		'agent_log'            => false,
 		// Off by default because it is the only feature that adds something a visitor can see.
 		// Everything else this plugin publishes is invisible on the page.

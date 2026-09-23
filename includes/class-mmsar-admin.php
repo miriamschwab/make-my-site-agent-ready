@@ -161,7 +161,7 @@ class MMSAR_Admin {
 			),
 			'agent_log'            => array(
 				__( 'Agent request log', 'make-my-site-agent-ready' ),
-				__( 'Records which agents fetch the files above, and what they asked for. Entries appear on the Agent Log screen under Settings, which has its own retention setting, and are also copied to the Activity Log plugin when it is available. On its own it records only requests for these agent-facing files; the Agent request log section below can extend it to ordinary page views as well. Switching this off stops new entries being recorded and nothing else — everything already logged is kept, and stays readable and exportable until you clear it yourself on that screen. Off by default.', 'make-my-site-agent-ready' ),
+				__( 'Records which agents fetch the files above, and what they asked for. Entries appear on the Agent Log screen under Settings, which has its own retention setting. On its own it records only requests for these agent-facing files; the Agent request log section below can extend it to ordinary page views as well. Switching this off stops new entries being recorded and nothing else — everything already logged is kept, and stays readable and exportable until you clear it yourself on that screen. Off by default.', 'make-my-site-agent-ready' ),
 			),
 			'agent_skills'         => array(
 				__( 'Agent Skills discovery', 'make-my-site-agent-ready' ),

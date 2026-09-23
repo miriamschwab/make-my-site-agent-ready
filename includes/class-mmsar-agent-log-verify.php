@@ -49,6 +49,18 @@ class MMSAR_Agent_Log_Verify {
 	const NODNS        = 'nodns';
 
 	/**
+	 * A user-run client of a crawler name — Claude Code sending Claude-User from someone's laptop.
+	 *
+	 * Distinct from `unverifiable` on purpose. That verdict means "this release has no method for
+	 * the operator", and Claude-User *has* one: the range file. Filing a user-run client there would
+	 * make it re-checkable, a re-check would judge it against the range again, and it would come back
+	 * `failed` — the loop 1.24.2 to 1.24.4 spent three releases escaping. `client` says what is true:
+	 * the request came from software a person runs, and no published method can ever confirm it.
+	 * Not an accusation, and not an endorsement either; the token it rests on can be forged.
+	 */
+	const CLIENT = 'client';
+
+	/**
 	 * Distinct IPs resolved per trickle pass, when someone opens the log or reads the ability.
 	 */
 	const TRICKLE_IPS = 10;
@@ -321,7 +333,7 @@ class MMSAR_Agent_Log_Verify {
 	 * @return string[]
 	 */
 	public static function verdicts() {
-		return array( self::VERIFIED, self::FAILED, self::UNVERIFIABLE, self::UNCLAIMED, self::NODNS );
+		return array( self::VERIFIED, self::FAILED, self::CLIENT, self::UNVERIFIABLE, self::UNCLAIMED, self::NODNS );
 	}
 
 	/**
@@ -336,6 +348,8 @@ class MMSAR_Agent_Log_Verify {
 				return __( 'Verified', 'make-my-site-agent-ready' );
 			case self::FAILED:
 				return __( 'Spoofed', 'make-my-site-agent-ready' );
+			case self::CLIENT:
+				return __( 'User-run client', 'make-my-site-agent-ready' );
 			case self::UNVERIFIABLE:
 				return __( 'Unverifiable', 'make-my-site-agent-ready' );
 			case self::UNCLAIMED:
@@ -451,6 +465,14 @@ class MMSAR_Agent_Log_Verify {
 			return self::UNCLAIMED;
 		}
 
+		// A user-run client, answered before anything about the address. Its rows are stored at
+		// network precision, so the reduced-address test below would otherwise call them
+		// `unverifiable`; and no range check could ever pass them, because the request came from
+		// the person's own machine. No lookup, no cache: the answer is in the string.
+		if ( MMSAR_Agent_Log::is_user_run_client( $agent ) ) {
+			return self::CLIENT;
+		}
+
 		if ( '' === $ip || ! filter_var( $ip, FILTER_VALIDATE_IP ) ) {
 			return self::NODNS;
 		}
@@ -540,7 +562,7 @@ class MMSAR_Agent_Log_Verify {
 	 */
 	public static function has_method( $agent ) {
 		$claimed = self::claimed_operator_key( $agent );
-		if ( '' === $claimed ) {
+		if ( '' === $claimed || MMSAR_Agent_Log::is_user_run_client( $agent ) ) {
 			return false;
 		}
 

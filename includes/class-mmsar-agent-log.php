@@ -398,6 +398,30 @@ class MMSAR_Agent_Log {
 	);
 
 	/**
+	 * Crawler names that a user-run client also sends, and the token that says which one it is.
+	 *
+	 * Claude Code fetches from the person's own machine and still identifies as Claude-User. Read
+	 * out of the shipped client (2.1.231, 2.1.236 and 2.1.280 all agree), its WebFetch sends
+	 * `Claude-User (claude-code/2.1.280; +https://support.anthropic.com/)`, with `agent-sdk/…` and
+	 * `client-app/…` added inside the comment when it runs under the Agent SDK. That request can
+	 * never come from Anthropic's published ranges, so judging it against them reported every
+	 * Claude Code session on the site as a forgery — the most engaged agent traffic in the log,
+	 * counted as spoofing.
+	 *
+	 * The token is the signal, not the address. "Residential and unattributed" would also clear a
+	 * real forger who happened not to be caught in a burst, and the token is at least something the
+	 * client says about itself. It can be forged like any user-agent, which is why the verdict it
+	 * earns is `client` — cannot be checked, by design — and never `verified`.
+	 *
+	 * **Add an entry only with evidence that the operator's own client sends it from user
+	 * machines.** ChatGPT-User and Perplexity-User are deliberately absent: every failed row under
+	 * those names on the site this was built for was a real forgery.
+	 */
+	const USER_RUN_CLIENTS = array(
+		'Claude-User' => 'claude-code',
+	);
+
+	/**
 	 * Init.
 	 *
 	 * @return void
@@ -1365,6 +1389,27 @@ class MMSAR_Agent_Log {
 	}
 
 	/**
+	 * Rows stored under one exact agent value with one verdict.
+	 *
+	 * @param string $agent   Agent value as stored.
+	 * @param string $verdict Verdict.
+	 * @return int
+	 */
+	public static function count_verdict_for_agent( $agent, $verdict ) {
+		global $wpdb;
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- This plugin's own table; a cached read would show a stale log.
+		$count = $wpdb->get_var(
+			$wpdb->prepare(
+				'SELECT COUNT(*) FROM %i WHERE agent = %s AND verified = %s',
+				self::table(),
+				(string) $agent,
+				(string) $verdict
+			)
+		);
+		return (int) $count;
+	}
+
+	/**
 	 * Agents holding an `unverifiable` verdict that this release still cannot check.
 	 *
 	 * Surfaced on screen so the absence of a re-check button is explained rather than merely
@@ -1707,6 +1752,7 @@ class MMSAR_Agent_Log {
 				"SELECT agent, COUNT(*) AS requests, COUNT(DISTINCT surface) AS surfaces, COUNT(DISTINCT ip) AS unique_ips,
 					SUM(CASE WHEN verified = 'verified' THEN 1 ELSE 0 END) AS verified,
 					SUM(CASE WHEN verified = 'failed' THEN 1 ELSE 0 END) AS failed,
+					SUM(CASE WHEN verified = 'client' THEN 1 ELSE 0 END) AS client,
 					SUM(CASE WHEN verified = 'unverifiable' THEN 1 ELSE 0 END) AS unverifiable,
 					SUM(CASE WHEN verified = 'unclaimed' THEN 1 ELSE 0 END) AS unclaimed,
 					SUM(CASE WHEN verified = 'nodns' THEN 1 ELSE 0 END) AS nodns,
@@ -1753,7 +1799,7 @@ class MMSAR_Agent_Log {
 			ARRAY_A
 		);
 
-		$by_agent = self::int_columns( $by_agent, array( 'requests', 'surfaces', 'unique_ips', 'verified', 'failed', 'unverifiable', 'unclaimed', 'nodns', 'pending' ) );
+		$by_agent = self::int_columns( $by_agent, array( 'requests', 'surfaces', 'unique_ips', 'verified', 'failed', 'client', 'unverifiable', 'unclaimed', 'nodns', 'pending' ) );
 		foreach ( $by_agent as $i => $row ) {
 			$by_agent[ $i ]['crawler_category'] = self::crawler_category( isset( $row['agent'] ) ? (string) $row['agent'] : '' );
 		}
@@ -2237,6 +2283,14 @@ class MMSAR_Agent_Log {
 		$ip     = self::client_ip();
 		$detail = (string) $detail;
 
+		// A user-run client is a person's own machine, so its address is reduced on every surface,
+		// agent-facing files included. The full address is kept elsewhere because verification
+		// runs against it, and a user-run client can never be verified — so here it would buy
+		// nothing and cost a real person's IP. See "Before recognising a name, ask where the
+		// software runs" in the decisions log; this is the same rule applied to a name that was
+		// recognised before anybody asked.
+		$anonymize = $anonymize || self::is_user_run_client( $agent );
+
 		// The throttle always keys on the real address, even when a reduced one is stored: it lives
 		// in a transient for five minutes and never reaches the table, and keying it on the network
 		// instead would collapse everyone behind one ISP range into a single entry.
@@ -2285,8 +2339,6 @@ class MMSAR_Agent_Log {
 		if ( $inserted && 0 === ( (int) $wpdb->insert_id % self::PRUNE_EVERY ) ) {
 			self::prune();
 		}
-
-		self::mirror_to_activity_log( '' === $detail ? $surface : $surface . ' — ' . $detail, $agent, $ip );
 	}
 
 	/**
@@ -2308,40 +2360,6 @@ class MMSAR_Agent_Log {
 			return $detail;
 		}
 		return mb_substr( $detail, 0, 181 ) . '…' . substr( md5( $detail ), 0, 8 );
-	}
-
-	/**
-	 * Copies an entry into the Activity Log plugin when its API is present.
-	 *
-	 * Database errors are suppressed for the duration of the call, and only for it. That plugin
-	 * owns and upgrades its table on its own schedule; a site whose schema has not caught up
-	 * produces an error on every insert, which with WP_DEBUG_DISPLAY on would print into a response
-	 * being served. The entry is already stored above, so the mirror must never affect the page.
-	 *
-	 * @param string $surface What was served.
-	 * @param string $agent   Requesting agent.
-	 * @param string $ip      Client IP.
-	 * @return void
-	 */
-	private static function mirror_to_activity_log( $surface, $agent, $ip ) {
-		if ( ! function_exists( 'aal_insert_log' ) ) {
-			return;
-		}
-
-		global $wpdb;
-		$suppressed = $wpdb->suppress_errors( true );
-		aal_insert_log(
-			array(
-				'action'         => 'requested',
-				'object_type'    => 'Agent-Ready',
-				'object_subtype' => $surface,
-				'object_name'    => $agent,
-				'object_id'      => 0,
-				'user_id'        => 0,
-				'hist_ip'        => $ip,
-			)
-		);
-		$wpdb->suppress_errors( $suppressed );
 	}
 
 	/**
@@ -2524,10 +2542,39 @@ class MMSAR_Agent_Log {
 		}
 		foreach ( self::AGENTS as $needle ) {
 			if ( self::agent_matches( $ua, $needle ) ) {
+				// A user-run client keeps its token in the label. The bare name alone would discard
+				// the only evidence that tells it apart from a forgery, and the verdict is derived
+				// from this stored value later — nothing else about the request survives.
+				if ( isset( self::USER_RUN_CLIENTS[ $needle ] ) && false !== stripos( $ua, self::USER_RUN_CLIENTS[ $needle ] . '/' ) ) {
+					return $needle . ' (' . self::USER_RUN_CLIENTS[ $needle ] . ')';
+				}
 				return isset( self::AGENT_LABELS[ $needle ] ) ? self::AGENT_LABELS[ $needle ] : $needle;
 			}
 		}
 		return self::trimmed_user_agent( $ua );
+	}
+
+	/**
+	 * Whether a stored agent value is a user-run client of a crawler name, such as Claude Code.
+	 *
+	 * Accepts both stored shapes, as everything reading the `agent` column must: the label
+	 * label_for() writes (`Claude-User (claude-code)`) and a raw user-agent carrying the versioned
+	 * token (`claude-code/2.1.280`). The token only counts beside the name it belongs to.
+	 *
+	 * @param string $agent Stored agent value, or a raw user-agent.
+	 * @return bool
+	 */
+	public static function is_user_run_client( $agent ) {
+		$agent = (string) $agent;
+		foreach ( self::USER_RUN_CLIENTS as $name => $token ) {
+			if ( false === stripos( $agent, $name ) ) {
+				continue;
+			}
+			if ( false !== stripos( $agent, $token . '/' ) || false !== stripos( $agent, '(' . $token . ')' ) ) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**

@@ -49,6 +49,28 @@ final class CrawlerVerdictTest extends TestCase {
 	 */
 	private const CCBOT_IP6 = '2600:1f28:365:8000::2b';
 
+	/**
+	 * Inside Anthropic's published 34.162.191.81/32 — a server-side claude.ai fetch.
+	 *
+	 * Observed, not only published: on 2026-09-23 Claude desktop chat was asked to read a unique
+	 * probe URL on miriamschwab.me, and the request arrived as a bare `Claude-User` from exactly this
+	 * address and verified. That is the evidence chat fetches server-side, so only Claude Code needs
+	 * the user-run client verdict.
+	 */
+	private const ANTHROPIC_IP = '34.162.191.81';
+
+	/** A residential address, standing in for a person running Claude Code on their own machine. */
+	private const HOME_IP = '86.209.233.102';
+
+	/** That address reduced to its network, which is how a user-run client's rows are stored. */
+	private const HOME_NET = '86.209.233.0';
+
+	/** The user-agent Claude Code 2.1.280 sends from WebFetch, read out of the shipped build. */
+	private const CLAUDE_CODE_UA = 'Claude-User (claude-code/2.1.280; +https://support.anthropic.com/)';
+
+	/** The same, run under the Agent SDK, which appends its own tokens inside the version comment. */
+	private const CLAUDE_SDK_UA = 'Claude-User (claude-code/2.1.280 (agent-sdk/0.2.1, client-app/acme); +https://support.anthropic.com/)';
+
 	protected function setUp(): void {
 		parent::setUp();
 		wp_stub_reset();
@@ -133,7 +155,76 @@ final class CrawlerVerdictTest extends TestCase {
 				=> array( 'CCBot raw UA', 'CCBot/2.0 (https://commoncrawl.org/faq/)', self::CCBOT_IP, 'verified' ),
 			'an ordinary browser claims nothing'
 				=> array( 'browser control', 'Mozilla/5.0 (Macintosh) Chrome/140', self::ELSEWHERE, 'unclaimed' ),
+
+			// Claude-User, which arrives three ways (1.47.0). A server-side fetch from claude.ai
+			// comes from Anthropic's published range and verifies.
+			'Claude-User from Anthropic\'s published range'
+				=> array( 'Claude-User server-side', 'Claude-User', self::ANTHROPIC_IP, 'verified' ),
+
+			// A bare Claude-User claim from an address Anthropic does not publish is still a
+			// forgery. This is the Slackbot-attributed shape, and it must keep failing: the client
+			// verdict is reached by the token, never by the address being residential.
+			'bare Claude-User off Anthropic\'s range'
+				=> array( 'Claude-User forged', 'Claude-User', self::HOME_IP, 'failed' ),
+
+			// Claude Code fetches from the person's own machine and still says Claude-User, so no
+			// range check can ever pass it. It announces itself with a claude-code/ token.
+			'Claude Code stored label'
+				=> array( 'Claude Code label', 'Claude-User (claude-code)', self::HOME_NET, 'client' ),
+			'Claude Code stored label at a full address'
+				=> array( 'Claude Code label, full address', 'Claude-User (claude-code)', self::HOME_IP, 'client' ),
+			'Claude Code raw user-agent'
+				=> array( 'Claude Code raw UA', self::CLAUDE_CODE_UA, self::HOME_IP, 'client' ),
+			'Claude Code under the Agent SDK'
+				=> array( 'Claude Code SDK UA', self::CLAUDE_SDK_UA, self::HOME_IP, 'client' ),
+
+			// The token only counts beside the name it belongs to. Anywhere else it is decoration.
+			'claude-code token on a GPTBot claim'
+				=> array( 'token on another name', 'GPTBot claude-code/1.0', self::ELSEWHERE, 'failed' ),
+			'claude-code token with no crawler named'
+				=> array( 'token alone', 'python-requests/2.32 claude-code/1.0', self::ELSEWHERE, 'unclaimed' ),
 		);
+	}
+
+	/**
+	 * Claude Code's user-agent is stored under a label that keeps the token, and a server-side
+	 * Claude-User is not.
+	 *
+	 * The token is the whole signal, and until 1.47.0 label_for() discarded it: every Claude-User
+	 * request was written as the bare name, so a verdict derived on read could never see it. This
+	 * pins the write side, which is the half that cannot be fixed backwards.
+	 */
+	public function test_claude_code_keeps_its_token_in_the_stored_label(): void {
+		$this->assertSame( 'Claude-User (claude-code)', MMSAR_Agent_Log::label_for( self::CLAUDE_CODE_UA ) );
+		$this->assertSame( 'Claude-User (claude-code)', MMSAR_Agent_Log::label_for( self::CLAUDE_SDK_UA ) );
+		$this->assertSame(
+			'Claude-User',
+			MMSAR_Agent_Log::label_for( 'Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; Claude-User/1.0; +Claude-User@anthropic.com)' ),
+			'A server-side Claude-User carries no client token and keeps the bare name'
+		);
+	}
+
+	/**
+	 * A user-run client is still categorised as the assistant it is, and is never offered for
+	 * re-check, because no method will ever settle it.
+	 */
+	public function test_user_run_client_is_categorised_and_not_rechecked(): void {
+		$this->assertSame( MMSAR_Agent_Log::CRAWLER_AI_ASSISTANT, MMSAR_Agent_Log::crawler_category( 'Claude-User (claude-code)' ) );
+		$this->assertSame( 'Claude-User', MMSAR_Agent_Log_Verify::claimed_name( 'Claude-User (claude-code)' ) );
+		$this->assertFalse( MMSAR_Agent_Log_Verify::has_method( 'Claude-User (claude-code)' ) );
+		$this->assertTrue( MMSAR_Agent_Log_Verify::has_method( 'Claude-User' ), 'The server-side name still has its range' );
+	}
+
+	/**
+	 * Only a user-run client's address is reduced; a server-side claim keeps the full one it is
+	 * verified against.
+	 */
+	public function test_user_run_client_detection(): void {
+		$this->assertTrue( MMSAR_Agent_Log::is_user_run_client( 'Claude-User (claude-code)' ) );
+		$this->assertTrue( MMSAR_Agent_Log::is_user_run_client( self::CLAUDE_CODE_UA ) );
+		$this->assertFalse( MMSAR_Agent_Log::is_user_run_client( 'Claude-User' ) );
+		$this->assertFalse( MMSAR_Agent_Log::is_user_run_client( 'GPTBot claude-code/1.0' ) );
+		$this->assertFalse( MMSAR_Agent_Log::is_user_run_client( 'python-requests/2.32 claude-code/1.0' ) );
 	}
 
 	/**

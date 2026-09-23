@@ -247,13 +247,15 @@ A pass means no problem was found from this server, not that none exists — the
 
 Off by default. Once switched on at Settings > Agent-Ready, every request for one of the surfaces
 this plugin publishes — a `.md` URL, `llms.txt`, `llms-full.txt`, `security.txt`, the api-catalog,
-the Agent Skills index, a `SKILL.md` — is recorded with the time, the requesting agent, and the IP.
+the Agent Skills index, a `SKILL.md` — is recorded with the time, the requesting agent, and the IP
+(reduced to its network for a user-run client such as Claude Code, which is a person's own machine).
 There is no user-agent test on those: anything fetching `llms.txt` is agent traffic whatever it
 calls itself, and filtering on user-agent would hide exactly the clients worth knowing about.
 
 An optional sub-setting also records ordinary HTML page views — from recognized crawlers only, or
 from everything including human visitors (human rows stored against the network, not the full
-address; anything read as a crawler keeps its address, recognised or not). That
+address; anything read as a crawler keeps its address, recognised or not, except a user-run client
+such as Claude Code). That
 one supplies the denominator. Without it the log shows only the agents that asked for an agent-facing
 file, and "which agents ask for markdown" cannot be answered without also knowing which ones came
 and did not. In practice this is where the interesting answer lives — on the author's own site, the
@@ -288,6 +290,7 @@ Since 1.24.0 each entry carries a verdict, shown as a badge in an *Identity* col
 |---|---|
 | **Verified** | Claimed a known crawler and proved it. |
 | **Spoofed** | Claimed a known crawler and is not it. The user-agent was forged. |
+| **User-run client** | A crawler name sent by software running on a person's own machine, such as Claude Code fetching as Claude-User. Real agent traffic that no published method can confirm. |
 | **Unverifiable** | Claimed a crawler whose operator publishes no way to check. Not an accusation — an admission that this plugin cannot tell. |
 | **Unclaimed** | Named no known crawler, so there was nothing to check. Most unbranded traffic, including ordinary browsers. |
 | **No DNS** | The resolver gave no usable answer. Retried on a later pass rather than left decided. |
@@ -338,6 +341,26 @@ address answers "no", which would read as `Spoofed` and accuse a real operator. 
 anything the log reads as a crawler keeps its full address, so this applies to rows written before a
 crawler was recognised rather than to new traffic.
 
+**User-run clients get their own verdict (1.47.0).** Claude Code and the Claude desktop app's Code
+tab fetch pages from the user's own machine and still send a `Claude-User` user-agent, with a
+`claude-code/<version>` token in it. Such a request can never come from Anthropic's published ranges,
+so until 1.47.0 every Claude Code session was reported as **Spoofed** — often the most engaged agent
+traffic in the log, counted as forgery. The token now earns **User-run client** instead: not verified,
+because it cannot be, and not an accusation. A `Claude-User` claim *without* the token, from outside
+Anthropic's ranges, is still Spoofed. The token is self-declared and can be forged like any
+user-agent, which is why the verdict stops at "user-run client" and never reaches "verified". Claude's
+chat — claude.ai and the desktop app outside its Code tab — is the other half of `Claude-User`, and it
+fetches from Anthropic's servers: a probe on 2026-09-23 asked desktop chat to read a unique address,
+which arrived as a bare `Claude-User` from `34.162.191.81`, inside Anthropic's published list, and read
+Verified. So a verified `Claude-User` means a fetch from Anthropic's infrastructure, not necessarily a
+person in the Claude app. These
+entries are stored against the network rather than the full address, because the address belongs to a
+person and there is nothing to verify against it. Entries logged before 1.47.0 stored every
+`Claude-User` request under the bare name, so the token was never kept and those Claude Code sessions
+still read Spoofed; the screen and the ability say so beside the count. ChatGPT-User and
+Perplexity-User are deliberately not treated this way — nothing shows their clients fetching from user
+machines.
+
 ### What kind of bot it was
 
 Recognised crawlers are not all AI crawlers. Search indexes feed AI answers and SEO companies run AI
@@ -378,9 +401,10 @@ them in the site's timezone. Cells whose value begins `=`, `+`, `-`, `@`, tab or
 a leading apostrophe, because the agent column holds a user-agent string chosen by the caller and
 spreadsheets execute such cells as formulas on open.
 
-Entries are also mirrored into the [Activity Log](https://wordpress.org/plugins/aryo-activity-log/)
-plugin under the object type `Agent-Ready` wherever its API is reachable. The plugin's own table is
-the record; the mirror is a convenience and can never affect a response being served.
+Until 1.47.1 entries were also copied into the [Activity Log](https://wordpress.org/plugins/aryo-activity-log/)
+plugin. That copy has been removed: it duplicated this screen with less information, and it carried
+full IP addresses, including for entries this log stores only at network level. Copies already
+written there belong to that plugin and are left alone.
 
 ## Changelog
 

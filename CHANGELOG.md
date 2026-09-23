@@ -2,6 +2,20 @@
 
 All notable changes to Make My Site Agent-Ready.
 
+## 1.47.1 — 2026-09-23
+
+- **Removed: agent log entries are no longer copied into the Activity Log plugin.** The copy predated the log's own table and screen, carried less than the Agent Log screen shows, and passed full IP addresses — including for entries this log stores only at network level, and on sites where Activity Log was set not to collect IPs at all. On some hosts it never ran, because Activity Log's API isn't loaded on front-end requests.
+- **Existing copies in Activity Log are left alone.** They belong to that plugin and can be cleared from its own screen.
+
+## 1.47.0 — 2026-09-23
+
+- **Fixed: Claude Code sessions are no longer reported as forged.** Claude Code, including the Claude desktop app's Code tab, fetches from the user's own machine and still identifies as `Claude-User`, with a `claude-code/<version>` token in the user-agent. A request from someone's machine can never come from Anthropic's published IP ranges, so every one of those sessions read Spoofed — often the most engaged agent traffic in the log.
+- **New verdict: User-run client.** A crawler name sent by software on a person's machine. Neither Verified, because nothing can confirm it, nor an accusation. A `Claude-User` claim without the token, from outside Anthropic's ranges, is still Spoofed; a server-side fetch from Anthropic's ranges is still Verified.
+- **Changed: Claude Code's requests are logged as "Claude-User (claude-code)" and stored against the network,** on every surface, because the address is a person's and there is nothing to verify against it.
+- **Not retroactive.** Earlier versions stored every `Claude-User` request under the bare name and kept no token, so older Claude-User entries reading Spoofed may include Claude Code sessions and can't be told apart. The Agent Log screen and the `get-agent-log` ability say so beside the count.
+- **`get-agent-log`** gains a `client` verdict, count and filter value.
+- **ChatGPT-User and Perplexity-User are unchanged.** Nothing shows their clients fetching from user machines.
+
 ## 1.46.1 — 2026-09-22
 
 - **Changed: markdown weighted equally with HTML now gets markdown.** `text/markdown, text/html, */*` names markdown, which no browser does, and gives it the same weight as HTML. That tie used to go to HTML, and on a host whose edge converts pages to markdown the agent then received the edge's noisier conversion instead of the plugin's clean one. What protects visitors is unchanged: markdown must be named explicitly, and a wildcard never counts towards it.
