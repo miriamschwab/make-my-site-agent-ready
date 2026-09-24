@@ -161,7 +161,7 @@ class MMSAR_Admin {
 			),
 			'agent_log'            => array(
 				__( 'Agent request log', 'make-my-site-agent-ready' ),
-				__( 'Records which agents fetch the files above, and what they asked for. Entries appear on the Agent Log screen under Settings, which has its own retention setting. On its own it records only requests for these agent-facing files; the Agent request log section below can extend it to ordinary page views as well. Switching this off stops new entries being recorded and nothing else — everything already logged is kept, and stays readable and exportable until you clear it yourself on that screen. Off by default.', 'make-my-site-agent-ready' ),
+				__( 'Records which agents fetch the files above, and what they asked for. Entries appear on the Agent Log screen under Settings, which has its own retention setting. On its own it records only requests for these agent-facing files, plus robots.txt and your RSS and Atom feeds; the Agent request log section below can extend it to ordinary page views as well. Switching this off stops new entries being recorded and nothing else — everything already logged is kept, and stays readable and exportable until you clear it yourself on that screen. Off by default.', 'make-my-site-agent-ready' ),
 			),
 			'agent_skills'         => array(
 				__( 'Agent Skills discovery', 'make-my-site-agent-ready' ),
@@ -574,7 +574,7 @@ class MMSAR_Admin {
 		echo '</p>';
 
 		echo '<p class="description">';
-		esc_html_e( 'The same agent, file and IP is recorded at most once every five minutes, so a crawler looping on one URL cannot flood the log. Nothing is recorded on an ordinary page view unless the option below is ticked. Two kinds of request carry a detail alongside the file: a 404 records the path the agent asked for, and an MCP call records the method it invoked — including which tool, so the log shows whether the MCP server is being used or only discovered. A person who follows a link on this site to one of these files, such as the footer llms.txt link, is stored against their network rather than their full address, and only whether a request came from a link here is kept — never the address it came from.', 'make-my-site-agent-ready' );
+		esc_html_e( 'The same agent, file and IP is recorded at most once every five minutes, so a crawler looping on one URL cannot flood the log. Nothing is recorded on an ordinary page view unless the option below is ticked. robots.txt and your feeds are recorded either way, each under its own surface rather than as page views; a feed read in a browser or a desktop reader, or by a self-hosted reader outside the big cloud providers, is stored against its network rather than its full address. Two kinds of request carry a detail alongside the file: a 404 records the path the agent asked for, and an MCP call records the method it invoked — including which tool, so the log shows whether the MCP server is being used or only discovered. A person who follows a link on this site to one of these files, such as the footer llms.txt link, is stored against their network rather than their full address, and only whether a request came from a link here is kept — never the address it came from.', 'make-my-site-agent-ready' );
 		echo '</p>';
 	}
 

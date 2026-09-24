@@ -226,6 +226,24 @@ final class CrawlerCategoryTest extends TestCase {
 			'um-LN, current 80-char label'     => array( '(compatible; um-LN/1.0; https://www.ubermetrics-technologies.com/; Windows NT 6.', 'monitoring' ),
 			'um-LN, pre-1.45.1 80-char label'  => array( 'Mozilla/5.0 (compatible; um-LN/1.0; https://www.ubermetrics-technologies.com/; W', 'monitoring' ),
 			'um-LN without its domain'         => array( 'Mozilla/5.0 (compatible; um-LN/1.0)', '' ),
+
+			// Added 1.50.0. Raw shapes are the values stored on the live site before recognition.
+			'Qwantbot, raw'                    => array( '(compatible; Qwantbot/1.0; +https://help.qwant.com/bot/)', 'search-engine' ),
+			'Qwantbot-news variant'            => array( 'Qwantbot-news/2.0', 'search-engine' ),
+			'DataForSeoBot, raw'               => array( '(compatible; DataForSeoBot/1.0; +https://dataforseo.com/dataforseo-bot)', 'seo-tool' ),
+			'LohiSoftBot, URL form'            => array( 'LohiSoftBot/1.0 (+https://lohisoft.com/bot)', 'search-engine' ),
+			'LohiSoftBot, email form'          => array( 'LohiSoftBot/1.0 (+message@lohisoft.com)', 'search-engine' ),
+			'PoweredByBot, bare label'         => array( 'PoweredByBot', 'seo-tool' ),
+			'PoweredByBot, raw with domain'    => array( 'PoweredByBot/1.0 (+https://poweredby.keywordseverywhere.com/bot)', 'seo-tool' ),
+			'PoweredByBot without its domain'  => array( 'PoweredByBot/1.0 (+https://example.com/bot)', '' ),
+			'DomainStatsBot, raw'              => array( 'DomainStatsBot/1.0 (https://domainstats.com/pages/our-bot)', 'seo-tool' ),
+			'QlyzeBot, raw'                    => array( '(compatible; QlyzeBot/1.0; +https://app.qlyze.io/bot)', 'seo-tool' ),
+			'MapTheNetBot, raw'                => array( 'MapTheNetBot/1.0 (+https://www.mapthenet.org/bot)', 'other' ),
+			'Amazon Quick, stored label'       => array( 'Amazon Quick (amazon-Quick-on-behalf-of)', 'ai-assistant' ),
+			'Amazon Quick, raw with id'        => array( 'amazon-Quick-on-behalf-of-542f8789', 'ai-assistant' ),
+			'Micro.blog, raw'                  => array( 'Micro.blog/2.1', 'other' ),
+			// The dot is literal. Were it ever treated as a pattern it would match any character.
+			'Micro-blog is not Micro.blog'     => array( 'Micro-blog/2.1', '' ),
 		);
 	}
 
@@ -343,6 +361,31 @@ final class CrawlerCategoryTest extends TestCase {
 			'YaK is recognise-only'                    => array( 'YaK', '54.39.177.48', '', array(), 'unverifiable' ),
 			'um-LN, truncated label, recognise-only'   => array( '(compatible; um-LN/1.0; https://www.ubermetrics-technologies.com/; Windows NT 6.', '88.99.144.12', '', array(), 'unverifiable' ),
 			'Kayak claims nothing'                     => array( 'KayakBot/1.0 (+https://www.kayak.com/bot)', self::ELSEWHERE, '', array(), 'unclaimed' ),
+
+			// Added 1.50.0. Addresses and hostnames are the real ones from the live log, resolved
+			// and forward-confirmed on 2026-09-24. The raw shapes matter most: those are the rows
+			// the re-check reopens.
+			'Qwantbot, forward-confirmed'              => array( 'Qwantbot', '194.187.171.138', 'qwantbot-138-171-187-194.qwant.com', array( '194.187.171.138' ), 'verified' ),
+			'Qwantbot, raw user-agent'                 => array( '(compatible; Qwantbot/1.0; +https://help.qwant.com/bot/)', '194.187.171.164', 'qwantbot-164-171-187-194.qwant.com', array( '194.187.171.164' ), 'verified' ),
+			'Qwantbot, lookalike host'                 => array( 'Qwantbot', self::ELSEWHERE, 'qwant.com.attacker.example', array( self::ELSEWHERE ), 'failed' ),
+			'DataForSeoBot, raw user-agent'            => array( '(compatible; DataForSeoBot/1.0; +https://dataforseo.com/dataforseo-bot)', '136.243.228.198', 'crawling-gateway-136-243-228-198.dataforseo.com', array( '136.243.228.198' ), 'verified' ),
+			'DataForSeoBot, reverse without forward'   => array( 'DataForSeoBot', '136.243.228.198', 'crawling-gateway-136-243-228-198.dataforseo.com', array( '203.0.113.9' ), 'failed' ),
+			'LohiSoftBot, raw user-agent'              => array( 'LohiSoftBot/1.0 (+https://lohisoft.com/bot)', '79.139.58.98', 'crawler1.bot.lohisoft.com', array( '79.139.58.98' ), 'verified' ),
+			// The suffix is bot.lohisoft.com, not the bare domain.
+			'LohiSoftBot, outside the bot subdomain'   => array( 'LohiSoftBot', '79.139.58.98', 'www.lohisoft.com', array( '79.139.58.98' ), 'failed' ),
+			'PoweredByBot, raw user-agent'             => array( 'PoweredByBot/1.0 (+https://poweredby.keywordseverywhere.com/bot)', '172.235.150.244', 'crawl5.poweredby.keywordseverywhere.com', array( '172.235.150.244' ), 'verified' ),
+			'PoweredByBot, stored label'               => array( 'PoweredByBot', '172.235.150.244', 'crawl5.poweredby.keywordseverywhere.com', array( '172.235.150.244' ), 'verified' ),
+			'PoweredByBot, another KE product host'    => array( 'PoweredByBot', '172.235.150.244', 'www.keywordseverywhere.com', array( '172.235.150.244' ), 'failed' ),
+			// Without the disclosure nothing is claimed, so nothing can be accused.
+			'PoweredByBot without its domain'          => array( 'PoweredByBot/1.0 (+https://example.com/bot)', self::ELSEWHERE, 'host.attacker.example', array( self::ELSEWHERE ), 'unclaimed' ),
+			// DomainStats is declined, and this is the reason as a test: 136.243.59.237 reverses to
+			// the documented bot.domainstats.com, which forward-resolves only to 148.251.121.91.
+			// With the suffix adopted, this genuine crawler would read `failed`.
+			'DomainStatsBot stays recognise-only'      => array( 'DomainStatsBot', '136.243.59.237', 'bot.domainstats.com', array( '148.251.121.91' ), 'unverifiable' ),
+			'QlyzeBot is recognise-only'               => array( 'QlyzeBot', '5.9.16.25', '', array(), 'unverifiable' ),
+			'MapTheNetBot is recognise-only'           => array( 'MapTheNetBot', self::ELSEWHERE, '', array(), 'unverifiable' ),
+			'Amazon Quick is recognise-only'           => array( 'Amazon Quick (amazon-Quick-on-behalf-of)', '52.23.63.231', 'ec2-52-23-63-231.compute-1.amazonaws.com', array( '52.23.63.231' ), 'unverifiable' ),
+			'Micro.blog is recognise-only'             => array( 'Micro.blog', self::ELSEWHERE, '', array(), 'unverifiable' ),
 		);
 	}
 
@@ -378,6 +421,19 @@ final class CrawlerCategoryTest extends TestCase {
 			'um-LN'              => array( 'Mozilla/5.0 (compatible; um-LN/1.0; https://www.ubermetrics-technologies.com/; Windows NT 6.1; Win64; x64)', 'um-LN' ),
 			// Unguarded, this would be labelled YaK and kept at full address.
 			'Kayak falls through' => array( 'KayakBot/1.0 (+https://www.kayak.com/bot)', 'KayakBot/1.0 (+https://www.kayak.com/bot)' ),
+			// Added 1.50.0.
+			'Qwantbot'           => array( 'Mozilla/5.0 (compatible; Qwantbot/1.0; +https://help.qwant.com/bot/)', 'Qwantbot' ),
+			'Qwantbot-news'      => array( 'Qwantbot-news/2.0', 'Qwantbot' ),
+			'DataForSeoBot'      => array( 'Mozilla/5.0 (compatible; DataForSeoBot/1.0; +https://dataforseo.com/dataforseo-bot)', 'DataForSeoBot' ),
+			'LohiSoftBot, email' => array( 'LohiSoftBot/1.0 (+message@lohisoft.com)', 'LohiSoftBot' ),
+			'PoweredByBot'       => array( 'PoweredByBot/1.0 (+https://poweredby.keywordseverywhere.com/bot)', 'PoweredByBot' ),
+			'PoweredByBot, unguarded falls through' => array( 'PoweredByBot/1.0 (+https://example.com/bot)', 'PoweredByBot/1.0 (+https://example.com/bot)' ),
+			'DomainStatsBot'     => array( 'DomainStatsBot/1.0 (https://domainstats.com/pages/our-bot)', 'DomainStatsBot' ),
+			'QlyzeBot'           => array( 'Mozilla/5.0 (compatible; QlyzeBot/1.0; +https://app.qlyze.io/bot)', 'QlyzeBot' ),
+			'MapTheNetBot'       => array( 'MapTheNetBot/1.0 (+https://www.mapthenet.org/bot)', 'MapTheNetBot' ),
+			// The per-customer identifier is dropped: the label names the product, not the customer.
+			'Amazon Quick'       => array( 'amazon-Quick-on-behalf-of-3f2b9c1e-8d4a-4f6b-9a2e-7c5d1e0b4a93', 'Amazon Quick (amazon-Quick-on-behalf-of)' ),
+			'Micro.blog'         => array( 'Micro.blog/2.1', 'Micro.blog' ),
 			'empty is unknown'    => array( '', 'unknown' ),
 		);
 	}

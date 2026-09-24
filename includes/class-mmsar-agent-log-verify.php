@@ -215,6 +215,26 @@ class MMSAR_Agent_Log_Verify {
 		// *.spider.yandex.com and forward-confirming. yandex.net and yandex.ru are unexercised
 		// here and rest on the documentation, like bingbot above.
 		'YandexBot'         => array( 'yandex.com', 'yandex.net', 'yandex.ru' ),
+		// Added 1.50.0. Each confirmed the two ways this map requires, re-checked 2026-09-24.
+		//
+		// Qwant — https://help.qwant.com/bot/. Confirmed on 194.187.171.138 and 194.187.171.164:
+		// qwantbot-138-171-187-194.qwant.com and qwantbot-164-171-187-194.qwant.com, both
+		// forward-confirmed.
+		'Qwantbot'          => array( 'qwant.com' ),
+		// DataForSEO — https://dataforseo.com/dataforseo-bot, which documents the mask
+		// crawling-gateway-*.dataforseo.com. Confirmed on 136.243.228.198:
+		// crawling-gateway-136-243-228-198.dataforseo.com, forward-confirmed. The same page
+		// publishes IPv4 /29s and IPv6 /64s; they are deliberately not bundled, for the Ahrefs
+		// reason above, since rDNS is proven here.
+		'DataForSeoBot'     => array( 'dataforseo.com' ),
+		// LohiSoft — https://lohisoft.com/bot. Confirmed on 79.139.58.98: crawler1.bot.lohisoft.com,
+		// forward-confirmed. The documented suffix is bot.lohisoft.com, and the bare domain is not
+		// used: it would accept any host the operator names under lohisoft.com.
+		'LohiSoftBot'       => array( 'bot.lohisoft.com' ),
+		// Keywords Everywhere — https://poweredby.keywordseverywhere.com/bot, which lists crawl2,
+		// crawl4 and crawl5. Confirmed on 172.235.150.244: crawl5.poweredby.keywordseverywhere.com,
+		// forward-confirmed.
+		'PoweredByBot'      => array( 'poweredby.keywordseverywhere.com' ),
 	);
 
 	/**

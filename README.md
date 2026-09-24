@@ -49,7 +49,7 @@ Every feature below can be switched off individually under **Settings > Agent-Re
 ### Configuration and operations
 - **Settings page** (Settings > Agent-Ready) — per-feature on/off toggles, post type selector, CSS root selector, robots.txt preview and extra-rules textarea, security contact, Content Signals toggles, a TDMRep policy URL, a structured data (JSON-LD) toggle, and a "View" link to every endpoint currently being served
 - **Bulk regeneration** — "Regenerate All" button on the settings page
-- **Agent request log** (off by default) — records which agents fetch the surfaces above, on its own screen at Settings > Agent Log, with filters, a Journeys view, a retention setting, a dashboard widget, a CSV export, and a read-only ability so an agent can read it too. Verifies each claimed crawler identity and tags every recognised bot with a category, so AI traffic can be separated from search and SEO traffic. Browser-shaped rows carry three signals — a Web Bot Auth signature (recorded, not verified), a published cloud-provider network, and whether the request followed a link on the site — because an agent driving a real browser otherwise looks exactly like a reader. See [The agent log](#the-agent-log)
+- **Agent request log** (off by default) — records which agents fetch the surfaces above, and robots.txt and the site's feeds, on its own screen at Settings > Agent Log, with filters, a Journeys view, a retention setting, a dashboard widget, a CSV export, and a read-only ability so an agent can read it too. Verifies each claimed crawler identity and tags every recognised bot with a category, so AI traffic can be separated from search and SEO traffic. Browser-shaped rows carry three signals — a Web Bot Auth signature (recorded, not verified), a published cloud-provider network, and whether the request followed a link on the site — because an agent driving a real browser otherwise looks exactly like a reader. See [The agent log](#the-agent-log)
 - **Proper HTTP headers** — `Content-Type: text/markdown`, `X-Robots-Tag: noindex`, `X-Content-Type-Options: nosniff`, canonical link
 - **Password protection** — password-protected posts return 403 on `.md` URLs, and are excluded from every aggregate document (`llms-full.txt`, the OKF bundle) and the agent log
 - **Clean uninstall** — removes all plugin data (post meta, options, transients)
@@ -278,6 +278,31 @@ the ability alongside the data:
   batches; a `pending` count above zero means the verdict totals cover only the checked part of the
   log. See below.
 
+### robots.txt and feeds
+
+Every entry falls into one of six surface categories, filterable on the screen and in the ability:
+**Agent documents** (llms.txt, the catalogs, MCP, Agent Skills and everything else this plugin
+publishes for agents), **Markdown**, **HTML pages**, **Not found**, **robots.txt** and **Feeds**. The
+headline the log exists to produce is agent documents and Markdown against HTML pages, and the last
+two are kept out of both sides of it on purpose (1.49.0).
+
+- **robots.txt** is a crawler reading the rules before deciding what to fetch — neither a document nor
+  a page. WordPress serves its robots.txt through the ordinary request cycle, so before 1.49.0 every
+  fetch was logged as an HTML page view: on the author's site, about 15% of all "HTML" rows over a
+  month. Those older rows are *categorised* as robots.txt without being rewritten — they keep the
+  surface they were recorded under, and the category is worked out when the log is read, as every
+  category always has been. Only WordPress's virtual robots.txt can be seen; a `robots.txt` file on
+  disk is served by the web server without PHP running.
+- **Feeds** were not logged at all before 1.49.0. Every feed WordPress serves is counted — main,
+  comment, category, tag, author and post-type feeds, RSS and Atom — including polls answered
+  `304 Not Modified`, which is most of what a feed reader sends and which WordPress answers before
+  the hooks a page view is recorded on. A feed request that another plugin redirects (Yoast's crawl
+  cleanup sends the comment and Atom feeds to the homepage) is not logged, because no feed was served.
+  The detail is the feed's canonical path, never a search feed's term.
+
+Both are recorded whenever the log is on, whatever the page-view setting, and neither carries an
+`Accept` summary: WordPress picks both formats from the URL, never from the header.
+
 ### Whether the caller was who it said it was
 
 The `agent` column is a user-agent string, which the caller chooses, and forging one is common
@@ -307,8 +332,9 @@ Two methods, chosen per operator, because the operators are split on which they 
   they age: the capture date is reported alongside the verdicts, and `mmsar_agent_log_verify_ranges`
   lets you add a prefix without waiting for a release.
 - **Forward-confirmed reverse DNS** for Google, Apple, Amazon, Microsoft, Ahrefs, Babbar
-  (Barkrowler), Common Crawl, Huawei (PetalBot), You.com (YouBot), Yandex, Censys, LeakIX (l9scan)
-  and the Internet Archive (archive.org_bot). The address is reversed to a hostname, that hostname is resolved
+  (Barkrowler), Common Crawl, Huawei (PetalBot), You.com (YouBot), Yandex, Censys, LeakIX (l9scan),
+  the Internet Archive (archive.org_bot), Qwant, DataForSEO, LohiSoft and Keywords Everywhere
+  (PoweredByBot). The address is reversed to a hostname, that hostname is resolved
   forward and must come back to the same address, and it must sit under a domain the claimed
   operator owns. Anyone
   can put any string in a `User-Agent`; nobody can put a record in someone else's DNS zone.
@@ -333,7 +359,8 @@ plainly that it cannot restrict MJ12bot to fixed addresses; Semrush says it uses
 blocks. Both stay unverifiable on purpose. AgentTrustBot is the reverse case: its operator does
 document reverse DNS, but the address it actually crawled from is on the operator's own published
 list and does not resolve under that domain, so following the documentation would have accused the
-genuine crawler.
+genuine crawler. DomainStatsBot is the same case (1.50.0): all three of its addresses reverse to the
+documented `bot.domainstats.com`, but that name resolves forward to only one of them.
 
 **Unverifiable** also covers a second case that says nothing about the operator: a row whose address
 was reduced to its network at storage time cannot be tested against a published range, so the
@@ -372,9 +399,9 @@ category:
 |---|---|
 | **AI training** | Collects content to train models (GPTBot, ClaudeBot, CCBot…) |
 | **AI search** | Builds or queries an index used to answer questions (OAI-SearchBot, PerplexityBot, LinkupBot…) |
-| **AI assistant** | Fetches a page because a person asked an assistant right then (ChatGPT-User, Claude-User…) |
-| **Search engine** | Conventional web search (SeznamBot, DuckDuckBot, YandexBot, MojeekBot…) |
-| **SEO tool** | SEO and backlink platforms (AhrefsBot, SemrushBot, Barkrowler…) |
+| **AI assistant** | Fetches a page because a person asked an assistant right then (ChatGPT-User, Claude-User, Amazon Quick…) |
+| **Search engine** | Conventional web search (SeznamBot, DuckDuckBot, YandexBot, MojeekBot, Qwantbot…) |
+| **SEO tool** | SEO and backlink platforms (AhrefsBot, SemrushBot, Barkrowler, DataForSeoBot…) |
 | **Monitoring** | Brand and media monitoring (AwarioBot, trendictionbot, YaK, um-LN) |
 | **Scanner** | Readiness, security and attack-surface scanners (OraBot, CensysInspect, Cortex Xpanse, l9scan, AgentTrustBot) |
 | **Other** | Link previews, archiving and everything else named (Twitterbot, facebookexternalhit, archive.org_bot…) |
@@ -432,6 +459,9 @@ The log is off by default. When it is on, this is what it keeps about people:
   almost always automated and the exact address is what identified the scanner pool.
 - **User-run clients such as Claude Code** are a person's own machine, and are stored at network
   level on every surface.
+- **Feeds and robots.txt** follow the page-view rule. A feed read in a browser or a desktop reader
+  is stored at network level. A self-hosted reader such as Miniflux is software a person installs,
+  often at home, so it keeps its full address only from inside a cloud-provider network (1.49.0).
 - **The page address is kept as requested**, query string included, so an internal search is
   recorded as typed (1.27.0). The throttle keys on the resolved page instead.
 - **The Referer is never stored.** Only whether it was this site.
@@ -489,6 +519,6 @@ This plugin exposes abilities for the [WordPress Abilities API](https://develope
 | `make-my-site-agent-ready/list-endpoints` | Always on | Lists every endpoint being published, flagging which are managed on the settings page and which a plugin or theme registered in code, plus where each is actually appearing right now. |
 | `make-my-site-agent-ready/set-endpoint` | Always on | Adds an endpoint, or updates one already managed on the settings page. Send only the fields you want changed when updating. |
 | `make-my-site-agent-ready/delete-endpoint` | Always on (destructive) | Removes an endpoint managed on the settings page. |
-| `make-my-site-agent-ready/get-agent-log` | Always on (read-only) | Reads the agent request log: counts by agent, by surface, by requested detail and by day across the whole log, a verification breakdown, plus a page of individual entries. Pass `summary_only` for the aggregates alone, which carry counts of distinct IPs but no addresses, or `verified` to list only entries with a given verdict — `failed` lists the requests that forged a crawler identity. Every entry and `by_agent` row carries a `crawler_category`, `by_crawler_category` breaks traffic down by kind of bot, and the `crawler_category` input filter (`ai` for all three AI categories) separates AI traffic from search and SEO traffic. A `signals` block, a per-entry `signals` object and a `signal` filter carry the browser signals (signed, cloud network, came from a link on the site), each with its limits stated in the schema. |
+| `make-my-site-agent-ready/get-agent-log` | Always on (read-only) | Reads the agent request log: counts by agent, by surface, by requested detail and by day across the whole log, a verification breakdown, plus a page of individual entries. Pass `summary_only` for the aggregates alone, which carry counts of distinct IPs but no addresses, or `verified` to list only entries with a given verdict — `failed` lists the requests that forged a crawler identity. Every entry and `by_agent` row carries a `crawler_category`, `by_crawler_category` breaks traffic down by kind of bot, and the `crawler_category` input filter (`ai` for all three AI categories) separates AI traffic from search and SEO traffic. A `signals` block, a per-entry `signals` object and a `signal` filter carry the browser signals (signed, cloud network, came from a link on the site), each with its limits stated in the schema. `surface_categories` counts every entry by surface category — `docs`, `markdown`, `html`, `notfound`, `robots` and `feed` — and the `surface` filter takes the same values. |
 
 Endpoints a plugin or theme registered in code are read-only to `set-endpoint` and `delete-endpoint`: both return a `409` explaining that the owning plugin or theme has to be edited instead. Reporting success for a write that changed nothing would be worse than refusing it.

@@ -230,6 +230,50 @@ class MMSAR_Agent_Log {
 		// only as a "Script or fetch tool" from 88.99.144.0/24, so every row before this release is
 		// stored at network precision.
 		'um-LN',
+		// Added 1.50.0 from the agent-log-bot-watch report of 2026-09-24. Appended, for the ordering
+		// reason given above Googlebot. The first four are verified by reverse DNS; each suffix was
+		// documented by the operator and forward-confirmed on a real address from this site's log
+		// on 2026-09-24. See MMSAR_Agent_Log_Verify::VERIFY_HOSTS.
+		//
+		// Qwant's search crawler. The token also covers the documented Qwantbot-news variant.
+		'Qwantbot',
+		// DataForSEO's backlink crawler.
+		'DataForSeoBot',
+		// LohiSoft's independent search engine. Two user-agent forms are in transition
+		// (`+message@lohisoft.com` and `+https://lohisoft.com/bot`); the token covers both.
+		'LohiSoftBot',
+		// Keywords Everywhere's PoweredBy technology profiler. Guarded in AGENT_DISCLOSURES, because
+		// "PoweredBy" is a generic word and the operator's domain is always in the user-agent.
+		'PoweredByBot',
+		// The rest are recognise-only.
+		//
+		// DomainStats documents reverse DNS to bot.domainstats.com, and all three addresses seen
+		// here do reverse to that name — but it forward-resolves to only one of them
+		// (148.251.121.91; 136.243.59.237 and 136.243.222.140 do not come back, checked
+		// 2026-09-24). Those two sent 29 of its 30 rows. Adding the suffix would call the
+		// operator's own crawler a forgery, the same call as AgentTrustBot in 1.46.0; revisit if
+		// the forward records come to cover every crawl address.
+		'DomainStatsBot',
+		// Qlyze's backlink index. Publishes no verification method; its addresses carry generic
+		// Hetzner hostnames.
+		'QlyzeBot',
+		// MapTheNet, an open-source map of who links to whom. Categorised `other` rather than
+		// `seo-tool`: it overlaps with the backlink indexes, but the operator presents it as a
+		// public link-graph map, not an SEO product. Publishes no verification method.
+		'MapTheNetBot',
+		// Amazon Quick's Web Crawler integration, which crawls URLs a Quick customer configures to
+		// build a knowledge base for Quick's AI chat. The user-agent is this prefix followed by a
+		// per-customer identifier, so only the prefix is matched, and the stored label (see
+		// AGENT_LABELS) drops the identifier. It runs on AWS, not on the customer's device, so
+		// keeping its address is not keeping a person's. It fetches pages through a headless
+		// browser, so before recognition its page views were filed as Browser.
+		'amazon-Quick-on-behalf-of',
+		// Micro.blog, the hosted blogging service. It publishes no crawler page, so both its
+		// category and whether it honours robots.txt are unconfirmed — `other` rests on what the
+		// service does (feed, bookmark and link-preview fetching), not on bot documentation. Seen
+		// from a Linode network, so it fetches from Micro.blog's servers rather than a reader's
+		// device. The dot is literal: matching is a substring test, never a pattern.
+		'Micro.blog',
 	);
 
 	/**
@@ -244,7 +288,10 @@ class MMSAR_Agent_Log {
 	 * dropped the matched name would read as unclaimed. A test asserts it.
 	 */
 	const AGENT_LABELS = array(
-		'Palo Alto Networks' => 'Cortex Xpanse (Palo Alto Networks)',
+		'Palo Alto Networks'        => 'Cortex Xpanse (Palo Alto Networks)',
+		// The matched prefix names the integration rather than the product, and the full user-agent
+		// carries a per-customer identifier that has no place in a label.
+		'amazon-Quick-on-behalf-of' => 'Amazon Quick (amazon-Quick-on-behalf-of)',
 	);
 
 	/**
@@ -362,6 +409,21 @@ class MMSAR_Agent_Log {
 		// documents the bot itself.
 		'YaK'                       => self::CRAWLER_MONITORING,
 		'um-LN'                     => self::CRAWLER_MONITORING,
+		// Added 1.50.0.
+		'Qwantbot'                  => self::CRAWLER_SEARCH,
+		'DataForSeoBot'             => self::CRAWLER_SEO,
+		'LohiSoftBot'               => self::CRAWLER_SEARCH,
+		// A technology profiler (which software a site runs), sold as marketing intelligence by an
+		// SEO-tool company.
+		'PoweredByBot'              => self::CRAWLER_SEO,
+		'DomainStatsBot'            => self::CRAWLER_SEO,
+		'QlyzeBot'                  => self::CRAWLER_SEO,
+		// Overlaps with the backlink indexes; see the note in AGENTS.
+		'MapTheNetBot'              => self::CRAWLER_OTHER,
+		// Fetches because a customer configured it, but ingests several levels deep and resyncs.
+		'amazon-Quick-on-behalf-of' => self::CRAWLER_AI_ASSISTANT,
+		// Unconfirmed: the operator documents no crawler.
+		'Micro.blog'                => self::CRAWLER_OTHER,
 	);
 
 	/**
@@ -390,15 +452,18 @@ class MMSAR_Agent_Log {
 	 * the trimmed user-agent, reads as an unrecognised self-declared crawler, and is never accused.
 	 */
 	const AGENT_DISCLOSURES = array(
-		'LinkupBot' => 'linkup.so',
-		'SSI-Nutch' => 'ssi.inc',
+		'LinkupBot'    => 'linkup.so',
+		'SSI-Nutch'    => 'ssi.inc',
 		// Short tokens, guarded against accidental substrings rather than a known collision. Both
 		// domains sit inside the first 80 characters of the user-agent in either stored shape — the
 		// pre-1.45.1 cut that kept `Mozilla/5.0 ` and the current one that drops it — so rows logged
 		// before recognition still satisfy the guard. CrawlerCategoryTest asserts it for um-LN,
 		// whose user-agent is the long one.
-		'YaK'       => 'linkfluence.com',
-		'um-LN'     => 'ubermetrics-technologies.com',
+		'YaK'          => 'linkfluence.com',
+		'um-LN'        => 'ubermetrics-technologies.com',
+		// A generic word rather than a short token, guarded for the same reason. The domain sits
+		// well inside the first 80 characters of the only form seen.
+		'PoweredByBot' => 'keywordseverywhere.com',
 	);
 
 	/**
@@ -438,6 +503,14 @@ class MMSAR_Agent_Log {
 		// already owns, so a normal HTML request costs nothing at all.
 		if ( 'off' !== self::page_view_mode() ) {
 			add_action( 'template_redirect', array( __CLASS__, 'maybe_record_page_view' ), 20 );
+		}
+
+		// robots.txt and feeds are machine-readable files like every agent-facing surface, so they
+		// are recorded whenever the log is on, whatever the page-view setting (1.49.0). Each callback
+		// is one conditional tag on an ordinary request.
+		if ( self::is_active() ) {
+			add_action( 'template_redirect', array( __CLASS__, 'maybe_record_robots' ), 20 );
+			add_filter( 'wp_headers', array( __CLASS__, 'maybe_record_feed' ) );
 		}
 	}
 
@@ -745,10 +818,8 @@ class MMSAR_Agent_Log {
 	 */
 	public static function get_entries( $per_page = 50, $offset = 0, $filters = array() ) {
 		global $wpdb;
-		$f         = self::normalize_filters( $filters );
-		$like_html = $wpdb->esc_like( 'HTML page view' ) . '%';
-		$like_md   = $wpdb->esc_like( 'Markdown' ) . '%';
-		$like_404  = $wpdb->esc_like( '404' ) . '%';
+		$f   = self::normalize_filters( $filters );
+		$cat = self::category_patterns();
 
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- This plugin's own table; a cached read would show a stale log.
 		$rows = $wpdb->get_results(
@@ -758,7 +829,9 @@ class MMSAR_Agent_Log {
 				WHERE ( %s = '' OR FIND_IN_SET( IF( verified = '', 'pending', verified ), %s ) > 0 )
 				  AND ( %s = '' OR FIND_IN_SET( IF( client_type = '', 'unrecorded', client_type ), %s ) > 0 )
 				  AND ( %s = '' OR FIND_IN_SET(
-				        CASE WHEN surface LIKE %s THEN 'html'
+				        CASE WHEN surface = %s OR ( surface LIKE %s AND ( detail = %s OR detail LIKE %s ) ) THEN 'robots'
+				             WHEN surface = %s THEN 'feed'
+				             WHEN surface LIKE %s THEN 'html'
 				             WHEN surface LIKE %s THEN 'markdown'
 				             WHEN surface LIKE %s THEN 'notfound'
 				             ELSE 'docs' END, %s ) > 0 )
@@ -774,9 +847,14 @@ class MMSAR_Agent_Log {
 				$f['clients'],
 				$f['clients'],
 				$f['categories'],
-				$like_html,
-				$like_md,
-				$like_404,
+				$cat['robots'],
+				$cat['html'],
+				$cat['robots_legacy'],
+				$cat['robots_query'],
+				$cat['feed'],
+				$cat['html'],
+				$cat['markdown'],
+				$cat['notfound'],
 				$f['categories'],
 				$f['crawlers'],
 				$f['crawlers'],
@@ -800,10 +878,8 @@ class MMSAR_Agent_Log {
 	 */
 	public static function count_filtered( $filters = array() ) {
 		global $wpdb;
-		$f         = self::normalize_filters( $filters );
-		$like_html = $wpdb->esc_like( 'HTML page view' ) . '%';
-		$like_md   = $wpdb->esc_like( 'Markdown' ) . '%';
-		$like_404  = $wpdb->esc_like( '404' ) . '%';
+		$f   = self::normalize_filters( $filters );
+		$cat = self::category_patterns();
 
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- As above.
 		return (int) $wpdb->get_var(
@@ -812,7 +888,9 @@ class MMSAR_Agent_Log {
 				WHERE ( %s = '' OR FIND_IN_SET( IF( verified = '', 'pending', verified ), %s ) > 0 )
 				  AND ( %s = '' OR FIND_IN_SET( IF( client_type = '', 'unrecorded', client_type ), %s ) > 0 )
 				  AND ( %s = '' OR FIND_IN_SET(
-				        CASE WHEN surface LIKE %s THEN 'html'
+				        CASE WHEN surface = %s OR ( surface LIKE %s AND ( detail = %s OR detail LIKE %s ) ) THEN 'robots'
+				             WHEN surface = %s THEN 'feed'
+				             WHEN surface LIKE %s THEN 'html'
 				             WHEN surface LIKE %s THEN 'markdown'
 				             WHEN surface LIKE %s THEN 'notfound'
 				             ELSE 'docs' END, %s ) > 0 )
@@ -827,9 +905,14 @@ class MMSAR_Agent_Log {
 				$f['clients'],
 				$f['clients'],
 				$f['categories'],
-				$like_html,
-				$like_md,
-				$like_404,
+				$cat['robots'],
+				$cat['html'],
+				$cat['robots_legacy'],
+				$cat['robots_query'],
+				$cat['feed'],
+				$cat['html'],
+				$cat['markdown'],
+				$cat['notfound'],
 				$f['categories'],
 				$f['crawlers'],
 				$f['crawlers'],
@@ -1063,11 +1146,9 @@ class MMSAR_Agent_Log {
 	 */
 	private static function journey_rows( $filters, $ip ) {
 		global $wpdb;
-		$f         = self::normalize_filters( $filters );
-		$like_html = $wpdb->esc_like( 'HTML page view' ) . '%';
-		$like_md   = $wpdb->esc_like( 'Markdown' ) . '%';
-		$like_404  = $wpdb->esc_like( '404' ) . '%';
-		$ip        = (string) $ip;
+		$f   = self::normalize_filters( $filters );
+		$cat = self::category_patterns();
+		$ip  = (string) $ip;
 
 		// The network as a LIKE prefix, which is the reduced address with its last character
 		// removed. anonymize_ip() always ends a network in a separator plus one filler — '.0' for
@@ -1100,7 +1181,9 @@ class MMSAR_Agent_Log {
 				  AND ( %s = '' OR FIND_IN_SET( IF( verified = '', 'pending', verified ), %s ) > 0 )
 				  AND ( %s = '' OR FIND_IN_SET( IF( client_type = '', 'unrecorded', client_type ), %s ) > 0 )
 				  AND ( %s = '' OR FIND_IN_SET(
-				        CASE WHEN surface LIKE %s THEN 'html'
+				        CASE WHEN surface = %s OR ( surface LIKE %s AND ( detail = %s OR detail LIKE %s ) ) THEN 'robots'
+				             WHEN surface = %s THEN 'feed'
+				             WHEN surface LIKE %s THEN 'html'
 				             WHEN surface LIKE %s THEN 'markdown'
 				             WHEN surface LIKE %s THEN 'notfound'
 				             ELSE 'docs' END, %s ) > 0 )
@@ -1119,9 +1202,14 @@ class MMSAR_Agent_Log {
 				$f['clients'],
 				$f['clients'],
 				$f['categories'],
-				$like_html,
-				$like_md,
-				$like_404,
+				$cat['robots'],
+				$cat['html'],
+				$cat['robots_legacy'],
+				$cat['robots_query'],
+				$cat['feed'],
+				$cat['html'],
+				$cat['markdown'],
+				$cat['notfound'],
 				$f['categories'],
 				$f['crawlers'],
 				$f['crawlers'],
@@ -1269,7 +1357,7 @@ class MMSAR_Agent_Log {
 	 * The distinct surfaces inside one category, most-requested first.
 	 *
 	 * Exists because `docs` is the residual category — everything that is not an HTML page view, a
-	 * markdown response or a 404 — so its label cannot say what is in it, and a reader ticking
+	 * markdown response, a 404, robots.txt or a feed — so its label cannot say what is in it, and a reader ticking
 	 * "Agent documents" has no way to find out short of reading the source. Answering that from the
 	 * log itself rather than from a hand-written list is the point: a surface added in a later
 	 * version becomes a document by default, and a fixed list would quietly stop being true the
@@ -1287,16 +1375,16 @@ class MMSAR_Agent_Log {
 		if ( ! self::table_exists() ) {
 			return array();
 		}
-		$like_html = $wpdb->esc_like( 'HTML page view' ) . '%';
-		$like_md   = $wpdb->esc_like( 'Markdown' ) . '%';
-		$like_404  = $wpdb->esc_like( '404' ) . '%';
+		$cat = self::category_patterns();
 
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- This plugin's own table; a cached read would describe a stale log.
 		$rows = $wpdb->get_results(
 			$wpdb->prepare(
 				"SELECT surface, COUNT(*) AS total
 				FROM %i
-				WHERE CASE WHEN surface LIKE %s THEN 'html'
+				WHERE CASE WHEN surface = %s OR ( surface LIKE %s AND ( detail = %s OR detail LIKE %s ) ) THEN 'robots'
+				           WHEN surface = %s THEN 'feed'
+				           WHEN surface LIKE %s THEN 'html'
 				           WHEN surface LIKE %s THEN 'markdown'
 				           WHEN surface LIKE %s THEN 'notfound'
 				           ELSE 'docs' END = %s
@@ -1304,9 +1392,14 @@ class MMSAR_Agent_Log {
 				ORDER BY total DESC, surface ASC
 				LIMIT %d",
 				self::table(),
-				$like_html,
-				$like_md,
-				$like_404,
+				$cat['robots'],
+				$cat['html'],
+				$cat['robots_legacy'],
+				$cat['robots_query'],
+				$cat['feed'],
+				$cat['html'],
+				$cat['markdown'],
+				$cat['notfound'],
 				(string) $category,
 				absint( $limit )
 			),
@@ -1842,9 +1935,7 @@ class MMSAR_Agent_Log {
 		$before_id = absint( $before_id );
 		$limit     = absint( $limit );
 		$f         = self::normalize_filters( $filters );
-		$like_html = $wpdb->esc_like( 'HTML page view' ) . '%';
-		$like_md   = $wpdb->esc_like( 'Markdown' ) . '%';
-		$like_404  = $wpdb->esc_like( '404' ) . '%';
+		$cat       = self::category_patterns();
 
 		// A cursor of 0 means "start from the newest", expressed as an id above anything real so the
 		// same fixed statement serves the first batch and every later one.
@@ -1859,7 +1950,9 @@ class MMSAR_Agent_Log {
 				  AND ( %s = '' OR FIND_IN_SET( IF( verified = '', 'pending', verified ), %s ) > 0 )
 				  AND ( %s = '' OR FIND_IN_SET( IF( client_type = '', 'unrecorded', client_type ), %s ) > 0 )
 				  AND ( %s = '' OR FIND_IN_SET(
-				        CASE WHEN surface LIKE %s THEN 'html'
+				        CASE WHEN surface = %s OR ( surface LIKE %s AND ( detail = %s OR detail LIKE %s ) ) THEN 'robots'
+				             WHEN surface = %s THEN 'feed'
+				             WHEN surface LIKE %s THEN 'html'
 				             WHEN surface LIKE %s THEN 'markdown'
 				             WHEN surface LIKE %s THEN 'notfound'
 				             ELSE 'docs' END, %s ) > 0 )
@@ -1876,9 +1969,14 @@ class MMSAR_Agent_Log {
 				$f['clients'],
 				$f['clients'],
 				$f['categories'],
-				$like_html,
-				$like_md,
-				$like_404,
+				$cat['robots'],
+				$cat['html'],
+				$cat['robots_legacy'],
+				$cat['robots_query'],
+				$cat['feed'],
+				$cat['html'],
+				$cat['markdown'],
+				$cat['notfound'],
 				$f['categories'],
 				$f['crawlers'],
 				$f['crawlers'],
@@ -2067,11 +2165,36 @@ class MMSAR_Agent_Log {
 	 * string and the three non-document families each share a fixed prefix. That keeps the SQL fully
 	 * static: three `LIKE` prefixes, and documents are what is left over. A surface added later is
 	 * therefore a document by default, which is the right way round.
+	 *
+	 * **robots.txt and feeds are neither (1.49.0).** Both are machine-readable, so left to the
+	 * residual rule they would have been counted as agent documents and inflated the number this
+	 * log exists to measure; and until then robots.txt was being counted as an HTML page view,
+	 * which skewed the other side of the same comparison. Each is its own category, matched by an
+	 * exact surface name, ahead of the HTML test. Rows recorded before 1.49.0 as an HTML page view
+	 * of `/robots.txt` are *categorised* as robots.txt without being rewritten: the stored surface
+	 * keeps what was recorded, and the category is derived, as it always was. See the decisions log.
 	 */
 	const CAT_DOCS     = 'docs';
 	const CAT_MARKDOWN = 'markdown';
 	const CAT_HTML     = 'html';
 	const CAT_NOTFOUND = 'notfound';
+	const CAT_ROBOTS   = 'robots';
+	const CAT_FEED     = 'feed';
+
+	/**
+	 * The stored surface names for the two machine-readable files that are not agent documents.
+	 */
+	const SURFACE_ROBOTS = 'robots.txt';
+	const SURFACE_FEED   = 'Feed';
+
+	/**
+	 * Feed readers that are software a person installs, not a service one operator runs.
+	 *
+	 * Recognition keeps a crawler's full address, which is right for a service and wrong for a
+	 * reader somebody hosts at home. On the Feed surface a name here keeps its full address only
+	 * from inside a published cloud range. See feed_reduces_address().
+	 */
+	const SELF_HOSTED_READERS = array( 'Miniflux' );
 
 	/**
 	 * Every surface category, for schemas and filters.
@@ -2079,7 +2202,33 @@ class MMSAR_Agent_Log {
 	 * @return string[]
 	 */
 	public static function categories() {
-		return array( self::CAT_DOCS, self::CAT_MARKDOWN, self::CAT_HTML, self::CAT_NOTFOUND );
+		return array( self::CAT_DOCS, self::CAT_MARKDOWN, self::CAT_HTML, self::CAT_NOTFOUND, self::CAT_ROBOTS, self::CAT_FEED );
+	}
+
+	/**
+	 * The values the category CASE compares against, in the order it asks for them.
+	 *
+	 * The CASE itself has to be a literal in every query that uses it — the statement must be a
+	 * fixed string — so it is written out five times and a test asserts the five are identical.
+	 * What it compares against is defined once, here. The order the values are passed in is:
+	 * robots, html, robots_legacy, robots_query, feed, html, markdown, notfound.
+	 *
+	 * `robots_legacy` and `robots_query` are how a pre-1.49.0 row is recognised: it was stored as an
+	 * HTML page view whose detail is the requested URL, so `/robots.txt`, with or without a query.
+	 *
+	 * @return array<string, string>
+	 */
+	private static function category_patterns() {
+		global $wpdb;
+		return array(
+			'robots'        => self::SURFACE_ROBOTS,
+			'html'          => $wpdb->esc_like( 'HTML page view' ) . '%',
+			'robots_legacy' => '/robots.txt',
+			'robots_query'  => $wpdb->esc_like( '/robots.txt?' ) . '%',
+			'feed'          => self::SURFACE_FEED,
+			'markdown'      => $wpdb->esc_like( 'Markdown' ) . '%',
+			'notfound'      => $wpdb->esc_like( '404' ) . '%',
+		);
 	}
 
 	/**
@@ -2098,6 +2247,10 @@ class MMSAR_Agent_Log {
 				return __( 'HTML pages', 'make-my-site-agent-ready' );
 			case self::CAT_NOTFOUND:
 				return __( 'Not found', 'make-my-site-agent-ready' );
+			case self::CAT_ROBOTS:
+				return __( 'robots.txt', 'make-my-site-agent-ready' );
+			case self::CAT_FEED:
+				return __( 'Feeds', 'make-my-site-agent-ready' );
 			default:
 				return __( 'All surfaces', 'make-my-site-agent-ready' );
 		}
@@ -2592,7 +2745,10 @@ class MMSAR_Agent_Log {
 	 * @return void
 	 */
 	public static function maybe_record_page_view() {
-		if ( is_admin() || is_feed() || ! self::is_active() ) {
+		// Feeds and robots.txt are recorded under surfaces of their own (1.49.0), and are not pages.
+		// The favicon is not a page either: WordPress answers /favicon.ico through this same request
+		// cycle when the site has no file of that name, and it would otherwise land here as one.
+		if ( is_admin() || is_feed() || is_robots() || is_favicon() || ! self::is_active() ) {
 			return;
 		}
 
@@ -2645,6 +2801,199 @@ class MMSAR_Agent_Log {
 			self::CLIENT_CRAWLER !== self::detect_client_type(),
 			self::page_view_path()
 		);
+	}
+
+	/**
+	 * Records a request for WordPress's robots.txt.
+	 *
+	 * A crawler reading the rules before deciding what to fetch — neither a page view nor an agent
+	 * document, and worth seeing on its own: on the site this plugin was built on, ClaudeBot fetched
+	 * robots.txt 170 times against 77 page views. Until 1.49.0 it was recorded as an HTML page
+	 * view, because WordPress serves its virtual robots.txt through the ordinary request cycle.
+	 *
+	 * **Hooked on `template_redirect`, not `do_robots`.** Core runs `template_redirect`, then exits
+	 * on a HEAD request, then fires `do_robots`, so the action would never see a HEAD. This is also
+	 * the point the pre-1.49.0 rows were recorded at, so the two stay comparable.
+	 *
+	 * **Only WordPress's virtual robots.txt is seen.** A physical robots.txt in the web root is
+	 * served by the web server without PHP running, and nothing in a plugin can record it.
+	 *
+	 * No Accept summary: WordPress serves robots.txt as text/plain whatever the request asks for,
+	 * so it would describe nothing. The address follows the page-view rule — kept in full for
+	 * anything detect_client_type() reads as a crawler, reduced to its network otherwise.
+	 *
+	 * @return void
+	 */
+	public static function maybe_record_robots() {
+		if ( ! is_robots() || ! self::is_active() ) {
+			return;
+		}
+		self::record( self::SURFACE_ROBOTS, '', false, self::CLIENT_CRAWLER !== self::detect_client_type() );
+	}
+
+	/**
+	 * A feed request seen at `wp_headers`, waiting to learn how it was answered.
+	 *
+	 * Holds the detail and the address decision, or null when nothing is pending.
+	 *
+	 * @var array{detail: string, anonymize: bool}|null
+	 */
+	private static $pending_feed = null;
+
+	/**
+	 * Notes a feed request, to be recorded once its response is known. A filter used as an action.
+	 *
+	 * Feeds were skipped from 1.15.0 to 1.48.0 and the reason was never written down. The likely
+	 * one was sound — a feed is not HTML, so counting it as a page view would have skewed the
+	 * denominator — but it left feeds the only machine-readable content the log could not see,
+	 * and made every feed reader look like an occasional HTML visitor. See the decisions log.
+	 *
+	 * **Why `wp_headers` and not `template_redirect`.** A feed reader polls with `If-None-Match` /
+	 * `If-Modified-Since`, and when nothing has changed `WP::send_headers()` answers 304 and exits
+	 * — before the `send_headers` action and long before `template_redirect`. Hooked there, this
+	 * would only have seen the polls where the feed had changed, which is the blind spot again.
+	 * `wp_headers` runs inside send_headers() before that exit, after the query has resolved, so
+	 * is_feed() and the queried object are both available.
+	 *
+	 * **Why it is not recorded here.** At this point nobody knows whether a feed will be served.
+	 * Yoast's crawl cleanup redirects the comment, Atom and search feeds to the homepage on the
+	 * `wp` action, which runs after this filter, and core does not tell a filter whether it is about
+	 * to send a 304. So the request is noted here and recorded on `shutdown` — which runs after
+	 * core's 304 exit and after a redirect's exit too — only if the response went out as 200 or
+	 * 304. Found on the clone and on live, where /feed/atom/ and /comments/feed/ both 301.
+	 *
+	 * The detail is the feed's canonical path, derived from the resolved query and never from
+	 * REQUEST_URI, and it is also the throttle key — every value is something the site publishes,
+	 * so a reader appending cache-busters cannot mint new rows. See feed_path().
+	 *
+	 * @param array $headers Response headers, returned unchanged.
+	 * @return array
+	 */
+	public static function maybe_record_feed( $headers ) {
+		if ( null === self::$pending_feed && is_feed() && ! is_404() && self::is_active() ) {
+			self::$pending_feed = array(
+				'detail'    => self::feed_path(),
+				'anonymize' => self::feed_reduces_address( self::detect_client_type(), self::agent_label(), self::client_ip() ),
+			);
+			add_action( 'shutdown', array( __CLASS__, 'record_pending_feed' ) );
+		}
+		return $headers;
+	}
+
+	/**
+	 * Records the noted feed request, on `shutdown`, if it was answered.
+	 *
+	 * @return void
+	 */
+	public static function record_pending_feed() {
+		self::record_feed_response( (int) http_response_code() );
+	}
+
+	/**
+	 * Records the noted feed request if the response it got was the feed: 200, or 304 Not Modified.
+	 *
+	 * A redirect, an error or anything else means no feed was served, so nothing is recorded. The
+	 * note is cleared either way. Public so the rule can be asserted without a real response.
+	 *
+	 * @param int $status HTTP status the response went out with.
+	 * @return void
+	 */
+	public static function record_feed_response( $status ) {
+		$pending            = self::$pending_feed;
+		self::$pending_feed = null;
+		if ( null === $pending || ! in_array( (int) $status, array( 200, 304 ), true ) ) {
+			return;
+		}
+		self::record( self::SURFACE_FEED, $pending['detail'], true, $pending['anonymize'] );
+	}
+
+	/**
+	 * Whether a feed request's address is reduced to its network before storage.
+	 *
+	 * The page-view rule, plus one exception for self-hosted readers. Browsers and desktop readers
+	 * (NetNewsWire, FreshRSS and the like announce no bot) are not crawlers, so they reduce. Hosted
+	 * services — Feedly and Inoreader send a `+http://` URL, FeedBurner and Feedbin are recognised —
+	 * keep the full address, which is where verification would run.
+	 *
+	 * **The exception.** Miniflux is software a person installs, often on a home server, and is
+	 * recognised by name — so the page-view rule would keep that person's address. On this surface
+	 * a self-hosted reader keeps its full address only from inside a published cloud range, where
+	 * it is a server rather than somebody's broadband. It can only ever reduce what is stored,
+	 * which is the rule for request-time signal checks (decisions log, 1.48.0).
+	 *
+	 * Public because it is a pure function of its inputs and the privacy rule worth pinning.
+	 *
+	 * @param string $client_type Detected client type.
+	 * @param string $agent       Agent label as stored.
+	 * @param string $ip          Full client address.
+	 * @return bool
+	 */
+	public static function feed_reduces_address( $client_type, $agent, $ip ) {
+		if ( self::CLIENT_CRAWLER !== $client_type ) {
+			return true;
+		}
+		foreach ( self::SELF_HOSTED_READERS as $name ) {
+			if ( false !== stripos( (string) $agent, $name ) ) {
+				return '' === MMSAR_Agent_Log_Signals::cloud_network( $ip );
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * The canonical path of the feed a request resolved to, bounded to what the site publishes.
+	 *
+	 * Every feed WordPress serves is counted — the main feed, comment feeds, per-post comment feeds,
+	 * category, tag, taxonomy, author and post-type feeds, in every format — because a reader
+	 * subscribed to /category/ai/feed/ is the same kind of fact as one subscribed to /feed/. Core's
+	 * own link builders produce the path, so the format is in it (`/feed/`, `/feed/atom/`) and two
+	 * spellings of one feed share a row.
+	 *
+	 * The value enters the throttle key, so nothing here comes from the request line. A search feed
+	 * records `(search feed)` and never the term; a feed type the site has not registered records
+	 * `(other feed)`, as does anything that does not resolve to a published object.
+	 *
+	 * @return string
+	 */
+	private static function feed_path() {
+		global $wp_rewrite;
+
+		$type = str_replace( 'comments-', '', (string) get_query_var( 'feed' ) );
+		if ( '' === $type || 'feed' === $type ) {
+			$type = get_default_feed();
+		}
+		$known = isset( $wp_rewrite->feeds ) ? (array) $wp_rewrite->feeds : array( 'rdf', 'rss', 'rss2', 'atom' );
+		if ( ! in_array( $type, $known, true ) ) {
+			return '(other feed)';
+		}
+
+		$link = '';
+		if ( is_comment_feed() ) {
+			if ( is_singular() ) {
+				$id   = get_queried_object_id();
+				$link = $id ? get_post_comments_feed_link( $id, $type ) : '';
+			} else {
+				$link = get_feed_link( 'comments_' . $type );
+			}
+		} elseif ( is_search() ) {
+			// Deliberately not the search term, which is caller-supplied and unbounded.
+			return '(search feed)';
+		} else {
+			$queried = get_queried_object();
+			if ( $queried instanceof WP_Term ) {
+				$link = get_term_feed_link( $queried->term_id, $queried->taxonomy, $type );
+			} elseif ( $queried instanceof WP_User ) {
+				$link = get_author_feed_link( $queried->ID, $type );
+			} elseif ( $queried instanceof WP_Post_Type ) {
+				$link = get_post_type_archive_feed_link( $queried->name, $type );
+			} elseif ( is_date() ) {
+				return '(date feed)';
+			} elseif ( ! is_archive() && ! is_singular() ) {
+				$link = get_feed_link( $type );
+			}
+		}
+
+		return is_string( $link ) && '' !== $link ? self::request_path( $link ) : '(other feed)';
 	}
 
 	/**

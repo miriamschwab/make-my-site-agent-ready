@@ -495,9 +495,9 @@ function mmsar_register_abilities() {
 					),
 					'surface'          => array(
 						'type'        => 'string',
-						'enum'        => array( '', 'docs', 'markdown', 'html', 'notfound' ),
+						'enum'        => array( '', 'docs', 'markdown', 'html', 'notfound', 'robots', 'feed' ),
 						'default'     => '',
-						'description' => 'Restrict entries by what kind of surface was requested. "docs" is the agent-facing documents: llms.txt and its scoped variants, api-catalog, the MCP descriptors, Agent Skills and SKILL.md, openapi.json, auth.md, ai-catalog, schema-map, nlweb and ?mode=agent. "markdown" is the .md mirrors and content-negotiated Markdown. "html" is ordinary page views. "notfound" is the agent 404s. Empty string is all of them. Combine with client="crawler" or a verified filter to ask the question this log exists for: did anything real read the agent-facing documents.',
+						'description' => 'Restrict entries by what kind of surface was requested. "docs" is the agent-facing documents: llms.txt and its scoped variants, api-catalog, the MCP descriptors, Agent Skills and SKILL.md, openapi.json, auth.md, ai-catalog, schema-map, nlweb and ?mode=agent. "markdown" is the .md mirrors and content-negotiated Markdown. "html" is ordinary page views. "notfound" is the agent 404s. "robots" is robots.txt — a crawler reading the rules before it fetches, which is neither a document nor a page view; rows stored before 1.49.0 as an HTML page view of /robots.txt are counted here too. "feed" is RSS and Atom feeds of every kind, including 304 Not Modified polls, recorded since 1.49.0. Empty string is all of them. Combine with client="crawler" or a verified filter to ask the question this log exists for: did anything real read the agent-facing documents.',
 					),
 					'client'           => array(
 						'type'        => 'string',
@@ -558,12 +558,14 @@ function mmsar_register_abilities() {
 					),
 					'surface_categories'  => array(
 						'type'        => 'object',
-						'description' => 'Request counts by what kind of surface was asked for, over the whole log and across every client. "docs" is the agent-facing documents, "markdown" the .md mirrors and negotiated Markdown, "html" ordinary page views, "notfound" the agent 404s. Reading docs and markdown against html is the headline this log exists to produce, but do it per client class rather than in aggregate: pass surface with client="crawler", or with a verified filter, since unbranded and forged traffic behave nothing like real crawlers.',
+						'description' => 'Request counts by what kind of surface was asked for, over the whole log and across every client. "docs" is the agent-facing documents, "markdown" the .md mirrors and negotiated Markdown, "html" ordinary page views, "notfound" the agent 404s, "robots" robots.txt and "feed" RSS and Atom feeds. Neither of the last two is an agent document or a page view, so both are kept out of that comparison: robots.txt rows stored before 1.49.0 as HTML page views are counted under "robots", not "html", so the html count is comparable across the whole log. Feeds are recorded only from 1.49.0. Reading docs and markdown against html is the headline this log exists to produce, but do it per client class rather than in aggregate: pass surface with client="crawler", or with a verified filter, since unbranded and forged traffic behave nothing like real crawlers.',
 						'properties'  => array(
 							'docs'     => array( 'type' => 'integer' ),
 							'markdown' => array( 'type' => 'integer' ),
 							'html'     => array( 'type' => 'integer' ),
 							'notfound' => array( 'type' => 'integer' ),
+							'robots'   => array( 'type' => 'integer' ),
+							'feed'     => array( 'type' => 'integer' ),
 						),
 					),
 					'client_types'        => array(
@@ -705,7 +707,7 @@ function mmsar_register_abilities() {
 					),
 					'by_surface'          => array(
 						'type'        => 'array',
-						'description' => 'Most-requested surfaces first, e.g. "llms.txt", "Markdown (.md URL)", "api-catalog".',
+						'description' => 'Most-requested surfaces first, e.g. "llms.txt", "Markdown (.md URL)", "api-catalog", "robots.txt", "Feed". This is the surface as stored, which is never rewritten: robots.txt requests recorded before 1.49.0 appear here under "HTML page view (…)", although surface_categories counts them as "robots".',
 						'items'       => array(
 							'type'       => 'object',
 							'properties' => array(
@@ -719,7 +721,7 @@ function mmsar_register_abilities() {
 					),
 					'by_detail'           => array(
 						'type'        => 'array',
-						'description' => 'What was asked for within a surface, busiest first, for the surfaces that record it. The 404 surfaces carry the path an agent asked for and did not find; "MCP JSON-RPC" carries the method called — "initialize", "tools/list", "tools/call: <tool name>"; and as of 1.24.0 the Markdown surfaces carry the permalink path of the post that was served, so a crawler that swept the whole corpus and one that wanted a single article are no longer the same row. Both Markdown surfaces record the same value for the same post, so a `.md` fetch and a content-negotiated fetch of one article aggregate together rather than splitting. This is the breakdown that answers whether the MCP server is being used rather than merely discovered, which articles agents actually want in Markdown, and whether agents are guessing at URLs the site could support. Surfaces whose name is already the whole request are absent.',
+						'description' => 'What was asked for within a surface, busiest first, for the surfaces that record it. The 404 surfaces carry the path an agent asked for and did not find; "MCP JSON-RPC" carries the method called — "initialize", "tools/list", "tools/call: <tool name>"; as of 1.49.0 "Feed" carries the canonical path of the feed that was served ("/feed/", "/feed/atom/", "/category/ai/feed/", or "(search feed)" without the term); and as of 1.24.0 the Markdown surfaces carry the permalink path of the post that was served, so a crawler that swept the whole corpus and one that wanted a single article are no longer the same row. Both Markdown surfaces record the same value for the same post, so a `.md` fetch and a content-negotiated fetch of one article aggregate together rather than splitting. This is the breakdown that answers whether the MCP server is being used rather than merely discovered, which articles agents actually want in Markdown, and whether agents are guessing at URLs the site could support. Surfaces whose name is already the whole request are absent.',
 						'items'       => array(
 							'type'       => 'object',
 							'properties' => array(
@@ -759,7 +761,7 @@ function mmsar_register_abilities() {
 								'surface'          => array( 'type' => 'string' ),
 								'detail'           => array(
 									'type'        => 'string',
-									'description' => 'What was asked for within the surface — a 404 path, an MCP method, or the permalink path of the post served on a Markdown surface. Empty string on surfaces where the surface name is the whole request.',
+									'description' => 'What was asked for within the surface — a 404 path, an MCP method, the canonical path of a feed, or the permalink path of the post served on a Markdown surface. Empty string on surfaces where the surface name is the whole request.',
 								),
 								'ip'               => array( 'type' => 'string' ),
 								'client_type'      => array(

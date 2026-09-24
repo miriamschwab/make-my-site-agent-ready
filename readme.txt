@@ -4,7 +4,7 @@ Tags: markdown, llm, ai, llms-txt, agents
 Requires at least: 6.2
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.48.0
+Stable tag: 1.50.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -43,7 +43,7 @@ Every feature below can be switched off individually under Settings > Agent-Read
 * **llms.txt discovery in robots.txt** — Adds an `Llms-txt:` directive pointing at your `/llms.txt`, so agents that fetch `robots.txt` first are told where the index is. Skipped if llms.txt is switched off, or if `robots.txt` already mentions it
 * **Endpoints stay reachable** — If `robots.txt` disallows a path one of your published endpoints lives on (several SEO plugins disallow `/wp-json/` by default), an `Allow:` line for that individual endpoint is added above the rule blocking it. The endpoint stays reachable to agents that found it in your api-catalog, llms.txt or Agent Skills index; the rest of the REST API stays disallowed
 * **Deprecation/Sunset headers** — For surfaces you schedule for retirement (via a filter), responses carry `Deprecation` and `Sunset` headers so an agent is told a URL is going away before it does. Empty, and inactive, until you fill in a schedule
-* **Agent request log** — Optional (off by default). Records which agents fetch the surfaces above, and optionally page views, on its own screen at Settings > Agent Log, with filters, a Journeys view, CSV export, a dashboard widget and a read-only ability. Each entry's claimed crawler identity is checked against the operator's published IP ranges or forward-confirmed reverse DNS, a user-run client such as Claude Code is labelled as one instead of being called a forgery, and every recognised bot carries a category — AI training, AI search, AI assistant, search engine, SEO tool, monitoring, scanner or other — so AI traffic can be read apart from search and SEO traffic. Browser-shaped traffic, which looks like a person whether or not an agent is driving the browser, carries three signals: a Web Bot Auth signature and the operator it claims (recorded, not verified), a published cloud-provider network, and whether the request followed a link on the site
+* **Agent request log** — Optional (off by default). Records which agents fetch the surfaces above, robots.txt and your RSS and Atom feeds, and optionally page views, on its own screen at Settings > Agent Log, with filters, a Journeys view, CSV export, a dashboard widget and a read-only ability. Each entry's claimed crawler identity is checked against the operator's published IP ranges or forward-confirmed reverse DNS, a user-run client such as Claude Code is labelled as one instead of being called a forgery, and every recognised bot carries a category — AI training, AI search, AI assistant, search engine, SEO tool, monitoring, scanner or other — so AI traffic can be read apart from search and SEO traffic. robots.txt and feeds are counted under surfaces of their own, never as page views or agent documents, so the comparison between the two stays honest. Browser-shaped traffic, which looks like a person whether or not an agent is driving the browser, carries three signals: a Web Bot Auth signature and the operator it claims (recorded, not verified), a published cloud-provider network, and whether the request followed a link on the site
 * **YAML frontmatter** — Title, date, author, URL, excerpt, categories, and tags
 * **Pre-generated** — Markdown is generated when posts are saved, so `.md` requests are instant
 * **Discoverable** — Adds `<link rel="alternate" type="text/markdown">` to page headers
@@ -126,13 +126,14 @@ Use the `mmsar_registered_endpoints` filter for the same thing without a direct 
 
 = What does the agent log store about my visitors? (Privacy) =
 
-Nothing, unless you switch it on. The log is off by default. When it is on, it records requests for the files this plugin publishes for agents, and, if you choose, ordinary page views.
+Nothing, unless you switch it on. The log is off by default. When it is on, it records requests for the files this plugin publishes for agents, requests for robots.txt and your feeds, and, if you choose, ordinary page views.
 
 For people, this is what it keeps:
 
 * **Page views from browsers and anything else not recognised as a crawler** store the network rather than the full address. 203.0.113.4 becomes 203.0.113.0, and IPv6 keeps its first four groups. The five-minute throttle uses the real address in memory, and that address never reaches the database.
 * **A person who follows a link on your site to one of the agent files**, such as the footer's llms.txt link, is stored at network level too: a real browser, following a link from your own pages, unsigned, and from outside every cloud-provider network. Other requests for agent files keep the full address, because those are almost always automated and the exact address is what identifies a scanner.
 * **Claude Code and other user-run clients** run on a person's own machine, and are stored at network level on every surface.
+* **Feeds and robots.txt** follow the page-view rule: a feed read in a browser or a desktop feed reader is stored at network level. A self-hosted feed reader such as Miniflux is stored at network level too, unless it runs on a cloud-provider network, where it is a server rather than someone's home connection.
 * **The page address is kept as requested**, including any query string, so a search on your site is recorded as the visitor typed it.
 * **Whether a request came from a link on your site** is kept as yes or no only. The Referer itself is never stored.
 * **The cloud-network signal stores nothing.** It is worked out, when the log is read, from the network address the log already holds.
@@ -141,6 +142,24 @@ For people, this is what it keeps:
 Recognised crawlers keep their full address, because verifying who they are needs it. The whole table is removed when you delete the plugin, and the Agent Log screen can clear it at any time.
 
 == Changelog ==
+
+= 1.50.0 - 2026-09-24 =
+
+* New: nine more bots are recognised by the agent log, each with a category. Verified by reverse DNS: Qwantbot (Qwant, search engine), DataForSeoBot (DataForSEO, SEO tool), LohiSoftBot (LohiSoft, search engine) and PoweredByBot (Keywords Everywhere's PoweredBy profiler, SEO tool). Recognised but not verifiable: DomainStatsBot and QlyzeBot (SEO tools), MapTheNetBot and Micro.blog (other), and Amazon Quick's web crawler (AI assistant).
+* DomainStats documents reverse DNS, but on the addresses seen so far its hostname resolves back to only one of the three, so verifying it would call its own crawler a forgery. It is recognised only, until the operator's DNS covers every crawl address.
+* PoweredByBot is only recognised when its user-agent also names keywordseverywhere.com, because "PoweredBy" on its own is a generic word.
+* Amazon Quick is shown as "Amazon Quick (amazon-Quick-on-behalf-of)". Its user-agent carries a per-customer identifier, which is not kept in the label.
+* Not retroactive: from this release, page views from these bots keep their full address instead of being reduced to the network, which is what makes verification possible. Earlier entries keep the address they were stored with. Earlier entries from the four verifiable bots that were stored with a full address can be settled with the Re-check button on the Agent Log screen. Earlier entries from the other five keep "Unclaimed" but now show their category.
+* Amazon Quick fetches pages through a headless browser, so its page views were filed as Browser before this release. They are now filed as a declared crawler.
+
+= 1.49.0 - 2026-09-23 =
+
+* Changed: robots.txt is no longer counted as an HTML page view. WordPress serves its robots.txt through the same path as a page, so every fetch was being logged as one, which inflated the page-view side of the comparison the log exists to make. It now has a surface and a category of its own. Entries logged before this release as a page view of /robots.txt are counted under robots.txt too, without being rewritten, so the numbers are consistent across the whole log. A robots.txt file that exists on disk is served without WordPress and cannot be logged.
+* New: feeds are logged. Until now the agent log skipped them entirely, so feed readers only ever appeared on the rare occasion they fetched a page. Every feed WordPress serves is counted — the main feed, comment feeds, and category, tag and author feeds, in RSS and Atom — including polls that found nothing new (304 Not Modified). A feed request that another plugin redirects, such as Yoast's feed cleanup, is not logged, because no feed was served. Each entry records which feed it was, by its path, never the search term of a search feed.
+* New on the Agent Log screen and in the `get-agent-log` ability: robots.txt and Feeds surface categories, neither of them an agent document or a page view. The ability's `surface` filter and `surface_categories` counts gain `robots` and `feed`.
+* Both are logged whenever the log is on, whatever the page-view setting, like every other machine-readable file the log sees.
+* Privacy: a feed read in a browser or a desktop reader is stored at network level, like a page view. A self-hosted reader such as Miniflux keeps its full address only when it runs on a cloud-provider network.
+* Also: /favicon.ico is no longer logged as a page view on sites without a favicon file.
 
 = 1.48.0 - 2026-09-23 =
 

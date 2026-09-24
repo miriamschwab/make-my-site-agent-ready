@@ -2,6 +2,23 @@
 
 All notable changes to Make My Site Agent-Ready.
 
+## 1.50.0 — 2026-09-24
+
+- New: nine more bots recognised by the agent log, each with a category. Verified by reverse DNS: Qwantbot and LohiSoftBot (search engines), DataForSeoBot and PoweredByBot (SEO tools). Recognised only: DomainStatsBot and QlyzeBot (SEO tools), MapTheNetBot and Micro.blog (other), Amazon Quick's web crawler (AI assistant).
+- DomainStats documents reverse DNS, but its hostname resolves back to only one of the three addresses seen, so it is recognised and not verified.
+- PoweredByBot is recognised only when its user-agent also names `keywordseverywhere.com`.
+- Amazon Quick is stored as `Amazon Quick (amazon-Quick-on-behalf-of)`, without the per-customer identifier its user-agent carries. Its page views, previously filed as Browser, are now filed as a declared crawler.
+- Not retroactive: page views from these bots keep their full address from this release on. Older full-address entries from the four verifiable bots can be settled with Re-check; older entries from the other five keep Unclaimed and show their category.
+
+## 1.49.0 — 2026-09-23
+
+- Changed: robots.txt is no longer counted as an HTML page view. It has a surface and a category of its own, and entries logged before this release as a page view of `/robots.txt` are counted under it too, without being rewritten. A `robots.txt` file on disk is served without WordPress and cannot be logged.
+- New: feeds are logged, under a Feeds category — every feed WordPress serves, including `304 Not Modified` polls. A feed request another plugin redirects is not logged. Each entry records the feed's canonical path.
+- New: `robots` and `feed` in the Agent Log screen's Surface filter and in the `get-agent-log` ability's `surface` filter and `surface_categories` counts. Neither is an agent document or a page view.
+- Both are logged whenever the log is on, whatever the page-view setting.
+- Privacy: a feed read in a browser or a desktop reader is stored at network level. A self-hosted reader such as Miniflux keeps its full address only from a cloud-provider network.
+- Also: `/favicon.ico` is no longer logged as a page view on sites without a favicon file.
+
 ## 1.48.0 — 2026-09-23
 
 - **New: three signals for browser-shaped traffic in the agent log.** An agent driving a real browser sends exactly what a person's browser sends, so it was filed as a browser, the population every share is measured against. None of the signals is a verdict, and none moves a row out of the browser count.
