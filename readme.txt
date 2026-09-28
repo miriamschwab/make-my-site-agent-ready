@@ -4,7 +4,7 @@ Tags: markdown, llm, ai, llms-txt, agents
 Requires at least: 6.2
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.50.0
+Stable tag: 1.53.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -44,7 +44,7 @@ Every feature below can be switched off individually under Settings > Agent-Read
 * **Endpoints stay reachable** — If `robots.txt` disallows a path one of your published endpoints lives on (several SEO plugins disallow `/wp-json/` by default), an `Allow:` line for that individual endpoint is added above the rule blocking it. The endpoint stays reachable to agents that found it in your api-catalog, llms.txt or Agent Skills index; the rest of the REST API stays disallowed
 * **Deprecation/Sunset headers** — For surfaces you schedule for retirement (via a filter), responses carry `Deprecation` and `Sunset` headers so an agent is told a URL is going away before it does. Empty, and inactive, until you fill in a schedule
 * **Agent request log** — Optional (off by default). Records which agents fetch the surfaces above, robots.txt and your RSS and Atom feeds, and optionally page views, on its own screen at Settings > Agent Log, with filters, a Journeys view, CSV export, a dashboard widget and a read-only ability. Each entry's claimed crawler identity is checked against the operator's published IP ranges or forward-confirmed reverse DNS, a user-run client such as Claude Code is labelled as one instead of being called a forgery, and every recognised bot carries a category — AI training, AI search, AI assistant, search engine, SEO tool, monitoring, scanner or other — so AI traffic can be read apart from search and SEO traffic. robots.txt and feeds are counted under surfaces of their own, never as page views or agent documents, so the comparison between the two stays honest. Browser-shaped traffic, which looks like a person whether or not an agent is driving the browser, carries three signals: a Web Bot Auth signature and the operator it claims (recorded, not verified), a published cloud-provider network, and whether the request followed a link on the site
-* **YAML frontmatter** — Title, date, author, URL, excerpt, categories, and tags
+* **YAML frontmatter** — Title, date, modified date, author, URL, markdown URL, content type, excerpt, meta description (from Yoast SEO, when it has one), categories, and tags. The excerpt and the description can each be switched off. A theme or plugin can add fields of its own with the `mmsar_frontmatter` filter
 * **Pre-generated** — Markdown is generated when posts are saved, so `.md` requests are instant
 * **Discoverable** — Adds `<link rel="alternate" type="text/markdown">` to page headers
 * **Lightweight** — No cron jobs, no frontend JavaScript. The agent request log's table is the plugin's only database table
@@ -124,6 +124,42 @@ Yes. Plugin and theme authors can register one so it works on any site without t
 
 Use the `mmsar_registered_endpoints` filter for the same thing without a direct call. Add `'surfaces' => array( 'llms_txt' )` to limit where it appears, and `'rel'` to set its api-catalog link relation. Endpoints that publish a SKILL.md of their own can pass `'skill_url'` to get their own entry in the Agent Skills index. Code-registered endpoints appear read-only under "Added by Plugins" on the settings page. Full documentation is in the plugin's README on GitHub.
 
+= Where does the frontmatter's description come from? =
+
+From Yoast SEO. When Yoast has a meta description for a post, whether written for that post or produced by a template for its content type, it is written as `description:`, after `excerpt:`. With no description, the key is left out.
+
+Rank Math, All in One SEO and SEOPress are not read yet. To use one of them, or any other source, return the description from the `mmsar_frontmatter_description` filter:
+
+`add_filter( 'mmsar_frontmatter_description', function( $description, $post ) {`
+`    return (string) get_post_meta( $post->ID, 'rank_math_description', true );`
+`}, 10, 2 );`
+
+Return an empty string to leave the key out. After changing the filter, press **Regenerate All** under Settings > Agent-Ready. A description edited in Yoast updates the markdown when the post is saved.
+
+= Can I leave the excerpt or the description out of the frontmatter? =
+
+Yes. Under Settings > Agent-Ready, in the Markdown Endpoints section, "Summary in Frontmatter" has a checkbox for each. Both are on by default, and a site updating from an earlier version keeps both.
+
+The excerpt is the post's hand-written excerpt, or else its opening words, so it often repeats the start of the text below it. If you write meta descriptions in an SEO plugin, you may want to turn the excerpt off and keep the description. If you don't write them, keep the excerpt on: with neither, a markdown file has no summary line. The settings page warns you if a change would leave you there.
+
+A change applies to existing markdown after you press **Regenerate All**, or when each post is next saved.
+
+= Can a theme or plugin add its own fields to the frontmatter? =
+
+Yes, with the `mmsar_frontmatter` filter. Return an array of extra fields and the plugin writes the YAML:
+
+`add_filter( 'mmsar_frontmatter', function( $fields, $post ) {`
+`    $fields['reading_time'] = 7;`
+`    $fields['series']       = 'Agent-ready WordPress';`
+`    $fields['featured']     = true;`
+`    $fields['topics']       = array( 'MCP', 'llms.txt' );`
+`    return $fields;`
+`}, 10, 2 );`
+
+Values can be a string, a number, true/false, or a flat list of strings. Keys must be lowercase letters, digits and underscores, starting with a letter. The plugin's own keys (title, date, modified, author, url, markdown_url, type, excerpt, description, categories, tags) cannot be changed or removed this way: a colliding key is ignored. Anything else that cannot be written safely, such as a nested array, is skipped. Line breaks in values become spaces. Your fields appear after the plugin's own, in the order you return them.
+
+Markdown is generated when a post is saved, so after adding or changing the filter, press **Regenerate All** under Settings > Agent-Ready to update existing posts.
+
 = What does the agent log store about my visitors? (Privacy) =
 
 Nothing, unless you switch it on. The log is off by default. When it is on, it records requests for the files this plugin publishes for agents, requests for robots.txt and your feeds, and, if you choose, ordinary page views.
@@ -142,6 +178,32 @@ For people, this is what it keeps:
 Recognised crawlers keep their full address, because verifying who they are needs it. The whole table is removed when you delete the plugin, and the Agent Log screen can clear it at any time.
 
 == Changelog ==
+
+= 1.53.1 - 2026-09-28 =
+
+* New: Settings > Agent-Ready has "Summary in Frontmatter", with a checkbox each for the excerpt and the meta description. Both are on by default, and sites updating keep both. If you write meta descriptions in an SEO plugin, you may want to turn the excerpt off, since it repeats the opening of the text. The settings page warns if a change would leave markdown with no summary line. Press Regenerate All after a change.
+* Fixed: excerpts in the frontmatter could be about 100 words or the site's own length, depending on where the markdown was rebuilt. WordPress 7.0 sets the excerpt length to 101 words on every admin screen, so Regenerate All and classic-editor saves wrote long excerpts, while block-editor saves wrote the site's length. The site's own length is now used everywhere. Press Regenerate All to even out existing markdown.
+
+= 1.52.1 - 2026-09-28 =
+
+* Readme updated for 1.52.0. No code change.
+
+= 1.52.0 - 2026-09-28 =
+
+* New: the markdown frontmatter includes the post's meta description as `description:`, after `excerpt:`, when Yoast SEO has one. It is read through Yoast's own API, so descriptions produced by a content-type template are included, with their variables filled in. With no description, the key is left out; the excerpt is unchanged.
+* A description edited in Yoast reaches the markdown in the same save. Yoast stores its SEO data after WordPress's usual save point, so the plugin also listens for Yoast finishing and updates the markdown if the description changed.
+* New for developers: `mmsar_frontmatter_description` filters the description, for Rank Math, All in One SEO, SEOPress or any other source. `description` is now one of the protected keys the `mmsar_frontmatter` filter cannot set.
+* Press Regenerate All after updating to add descriptions to existing markdown.
+
+= 1.51.1 - 2026-09-28 =
+
+* Fixed: backslashes were stripped from the stored markdown. WordPress removes them when saving post meta, so the escaped quotes in frontmatter values and the backslashes in inline code were lost between conversion and storage, which could leave the frontmatter invalid. They are now kept. Press Regenerate All under Settings > Agent-Ready to repair existing markdown; posts are also repaired the next time they are saved.
+
+= 1.51.0 - 2026-09-28 =
+
+* New for developers: the `mmsar_frontmatter` filter adds fields to the YAML frontmatter of every markdown version. It receives an array of extra fields and the post, and returns the array; the plugin writes and escapes the YAML. Values can be a string, a number, true/false, or a flat list of strings.
+* The plugin's own frontmatter keys cannot be overridden or removed through the filter. Invalid keys, nested arrays and empty values are skipped, and line breaks inside values become spaces, so a bad field never breaks the document.
+* Existing markdown is not rewritten until a post is saved or Regenerate All is pressed.
 
 = 1.50.0 - 2026-09-24 =
 

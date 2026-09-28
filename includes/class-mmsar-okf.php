@@ -182,7 +182,7 @@ class MMSAR_OKF {
 		if ( empty( $markdown ) ) {
 			$markdown = MMSAR_Converter::convert_post( $post->ID );
 			if ( ! empty( $markdown ) ) {
-				update_post_meta( $post->ID, '_llmmd_content', $markdown );
+				mmsar_store_markdown( $post->ID, $markdown );
 			}
 		}
 		if ( empty( $markdown ) ) {

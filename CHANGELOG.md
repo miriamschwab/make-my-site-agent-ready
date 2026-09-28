@@ -2,6 +2,35 @@
 
 All notable changes to Make My Site Agent-Ready.
 
+## 1.53.1 — 2026-09-28
+
+- New: Settings > Agent-Ready > Summary in Frontmatter, one checkbox each for `excerpt:` and `description:`. Both default to on; an install updating from an earlier version keeps both (a missing setting reads as on). Stored as `frontmatter_excerpt` / `frontmatter_description` in `llmmd_settings`. Both remain protected core keys, so the `mmsar_frontmatter` filter cannot write them back in.
+- Saving a change shows a notice that existing markdown needs Regenerate All, and a warning when the markdown would be left with no summary line (excerpt off, and the description off or with no source).
+- With the description off, the `wpseo_saved_indexable` handler returns before asking Yoast anything.
+- The two boxes are only read as "off" when the settings form itself was submitted (a hidden marker field). A save from code that leaves the keys out keeps what was stored, rather than switching both summaries off.
+- 1.53.0 was a clone-only test build and ships inside this version.
+- Fixed: WordPress 7.0's post-excerpt block sets `excerpt_length` to 101 at `PHP_INT_MAX` on every admin request, so markdown rebuilt from wp-admin got ~100-word excerpts and markdown rebuilt from the block editor or WP-CLI got the site's length. The converter now lifts that core filter around its own `get_the_excerpt()` call. Regenerate All evens out existing markdown.
+
+## 1.52.1 — 2026-09-28
+
+- Readme updated for 1.52.0. No code change.
+
+## 1.52.0 — 2026-09-28
+
+- New: `description:` in the markdown frontmatter, after `excerpt:`, from Yoast SEO's resolved meta description (`YoastSEO()->meta->for_post()`), so template-based descriptions are included. Omitted when there is none; `excerpt:` is unchanged.
+- Yoast saves its data on `wp_insert_post`, after the plugin's `save_post` pass, so the plugin also hooks `wpseo_saved_indexable` and regenerates when the description line changed.
+- New filter `mmsar_frontmatter_description` (string, `WP_Post`) to override or supply the description, e.g. from Rank Math, All in One SEO or SEOPress, which are not read directly yet. `description` joins the protected core keys.
+- Regenerate All adds descriptions to existing markdown.
+- 1.51.0 and 1.51.1 were never released on their own and ship inside this version.
+
+- Fixed: backslashes were stripped from stored markdown. `update_post_meta()` unslashes its value, so escaped quotes in frontmatter strings and backslashes in inline code were lost between conversion and storage, which could leave the YAML invalid. Every write now goes through one helper that slashes first. Regenerate All repairs existing markdown.
+
+## 1.51.0 — 2026-09-28
+
+- New for developers: the `mmsar_frontmatter` filter adds fields to every markdown version's YAML frontmatter. It receives an array of extra fields and the `WP_Post`, and returns the array; the plugin writes and escapes the YAML. Values: string, number, boolean, or a flat list of strings. See the README.
+- Core keys cannot be overridden or removed. Invalid keys (anything outside `^[a-z][a-z0-9_]*$`), nested arrays and empty values are skipped; line breaks in values become spaces.
+- Existing markdown picks up new fields when a post is saved or Regenerate All is pressed.
+
 ## 1.50.0 — 2026-09-24
 
 - New: nine more bots recognised by the agent log, each with a category. Verified by reverse DNS: Qwantbot and LohiSoftBot (search engines), DataForSeoBot and PoweredByBot (SEO tools). Recognised only: DomainStatsBot and QlyzeBot (SEO tools), MapTheNetBot and Micro.blog (other), Amazon Quick's web crawler (AI assistant).

@@ -744,6 +744,14 @@ class MMSAR_Admin {
 			'mmsar_main'
 		);
 
+		add_settings_field(
+			'mmsar_frontmatter_summary',
+			__( 'Summary in Frontmatter', 'make-my-site-agent-ready' ),
+			array( __CLASS__, 'render_frontmatter_summary_field' ),
+			'make-my-site-agent-ready',
+			'mmsar_main'
+		);
+
 		// Content negotiation. No settings of its own — the section exists to hold the self-check,
 		// which is the part that makes the feature safe to offer at all.
 		add_settings_section(
@@ -986,9 +994,73 @@ class MMSAR_Admin {
 			$sanitized['root_selector'] = '';
 		}
 
+		// Written as '1'/'0' rather than left absent, because absent means "on" (see
+		// mmsar_frontmatter_includes()) and an unticked box has to be able to say off. An unticked
+		// box sends nothing, so absence only means "off" when the form marker says these boxes were
+		// on the page. Any other write (code, a future ability) that leaves the keys out keeps what
+		// was stored, instead of silently switching both summaries off for the whole site.
+		$from_form = ! empty( $input['frontmatter_form'] );
+		$current   = get_option( 'llmmd_settings', array() );
+		foreach ( array( 'excerpt', 'description' ) as $field ) {
+			$key = 'frontmatter_' . $field;
+			if ( $from_form || isset( $input[ $key ] ) ) {
+				$sanitized[ $key ] = empty( $input[ $key ] ) ? '0' : '1';
+			} elseif ( is_array( $current ) && isset( $current[ $key ] ) ) {
+				$sanitized[ $key ] = '0' === (string) $current[ $key ] ? '0' : '1';
+			}
+		}
+		self::frontmatter_summary_notices( $sanitized );
+
 		mmsar_flush_generated_documents();
 
 		return $sanitized;
+	}
+
+	/**
+	 * Save notices for the frontmatter summary settings.
+	 *
+	 * Stored markdown is only rebuilt on a post save or Regenerate All, so a change here does
+	 * nothing visible until then; the notice says so rather than regenerating every post inside the
+	 * settings request, which is not the pattern here (the Content Root Selector works the same way)
+	 * and could time out on a large site. A second notice warns when the change leaves the markdown
+	 * with no summary line at all.
+	 *
+	 * @param array $sanitized The settings about to be saved.
+	 * @return void
+	 */
+	private static function frontmatter_summary_notices( $sanitized ) {
+		// WordPress runs the sanitize callback twice when an option is first created, so skip a
+		// notice that is already queued rather than print it twice.
+		$queued = wp_list_pluck( get_settings_errors( 'llmmd_settings' ), 'code' );
+
+		$new = array();
+		foreach ( array( 'excerpt', 'description' ) as $field ) {
+			$key           = 'frontmatter_' . $field;
+			$new[ $field ] = isset( $sanitized[ $key ] ) ? '1' === $sanitized[ $key ] : mmsar_frontmatter_includes( $field );
+		}
+
+		$changed = false;
+		foreach ( $new as $field => $on ) {
+			if ( mmsar_frontmatter_includes( $field ) !== $on ) {
+				$changed = true;
+			}
+		}
+		if ( $changed && ! in_array( 'mmsar_frontmatter_regenerate', $queued, true ) ) {
+			add_settings_error(
+				'llmmd_settings',
+				'mmsar_frontmatter_regenerate',
+				__( 'The summary settings changed. Markdown that already exists keeps its old frontmatter until you press Regenerate All at the bottom of this page, or until each post is next saved.', 'make-my-site-agent-ready' ),
+				'info'
+			);
+		}
+
+		$has_summary = $new['excerpt'] || ( $new['description'] && mmsar_has_description_source() );
+		if ( ! $has_summary && ! in_array( 'mmsar_frontmatter_no_summary', $queued, true ) ) {
+			$message = $new['description']
+				? __( 'With these settings your markdown files will have no summary line. The excerpt is off, and no meta description is available: this site has no Yoast SEO, and nothing supplies one through the mmsar_frontmatter_description filter. Agents still get the full text. To keep a summary, turn the excerpt back on.', 'make-my-site-agent-ready' )
+				: __( 'With the excerpt and the meta description both off, your markdown files will have no summary line. Agents still get the full text. To keep a summary, turn one of them back on.', 'make-my-site-agent-ready' );
+			add_settings_error( 'llmmd_settings', 'mmsar_frontmatter_no_summary', $message, 'warning' );
+		}
 	}
 
 	/**
@@ -1023,6 +1095,35 @@ class MMSAR_Admin {
 		$value    = isset( $settings['root_selector'] ) ? $settings['root_selector'] : '';
 		echo '<input type="text" name="llmmd_settings[root_selector]" value="' . esc_attr( $value ) . '" class="regular-text" placeholder="main, article, .entry-content">';
 		echo '<p class="description">' . esc_html__( 'CSS selector(s) to extract content from. Leave empty to use the full post content. Comma-separated for multiple selectors.', 'make-my-site-agent-ready' ) . '</p>';
+	}
+
+	/**
+	 * Render the frontmatter summary checkboxes.
+	 *
+	 * @return void
+	 */
+	public static function render_frontmatter_summary_field() {
+		$fields = array(
+			'excerpt'     => __( 'Include the excerpt', 'make-my-site-agent-ready' ),
+			'description' => __( 'Include the meta description', 'make-my-site-agent-ready' ),
+		);
+		echo '<fieldset><legend class="screen-reader-text">' . esc_html__( 'Summary in Frontmatter', 'make-my-site-agent-ready' ) . '</legend>';
+		foreach ( $fields as $field => $label ) {
+			echo '<label style="display:block;margin-bottom:6px;">';
+			echo '<input type="checkbox" name="llmmd_settings[frontmatter_' . esc_attr( $field ) . ']" value="1" ' . checked( mmsar_frontmatter_includes( $field ), true, false ) . '> ';
+			echo esc_html( $label ) . ' <code>' . esc_html( $field ) . ':</code>';
+			echo '</label>';
+		}
+		// Tells the sanitizer these boxes were on the page, so an unticked (absent) box means off.
+		echo '<input type="hidden" name="llmmd_settings[frontmatter_form]" value="1">';
+		echo '</fieldset>';
+
+		echo '<p class="description">' . esc_html__( 'Each markdown file opens with a short block of details about the post. The excerpt is the post\'s hand-written excerpt, or else its opening words, so it repeats text the file already contains. The meta description is the summary written for search results, read from Yoast SEO or supplied through the mmsar_frontmatter_description filter.', 'make-my-site-agent-ready' ) . '</p>';
+		echo '<p class="description">' . esc_html__( 'If you write meta descriptions in an SEO plugin, you may want to turn off the excerpt. If you don\'t, keep the excerpt on: with neither one, a markdown file has no summary.', 'make-my-site-agent-ready' ) . '</p>';
+		if ( ! mmsar_has_description_source() ) {
+			echo '<p class="description"><strong>' . esc_html__( 'No meta description source was found on this site, so the description line is currently never written.', 'make-my-site-agent-ready' ) . '</strong></p>';
+		}
+		echo '<p class="description">' . esc_html__( 'Changes apply to existing markdown after Regenerate All, at the bottom of this page.', 'make-my-site-agent-ready' ) . '</p>';
 	}
 
 	/**

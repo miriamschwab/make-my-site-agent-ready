@@ -123,7 +123,7 @@ class MMSAR_Server {
 		if ( empty( $markdown ) ) {
 			$markdown = MMSAR_Converter::convert_post( $post_id );
 			if ( ! empty( $markdown ) ) {
-				update_post_meta( $post_id, '_llmmd_content', $markdown );
+				mmsar_store_markdown( $post_id, $markdown );
 			}
 		}
 
@@ -417,7 +417,7 @@ class MMSAR_Server {
 		if ( empty( $markdown ) ) {
 			$markdown = MMSAR_Converter::convert_post( $post->ID );
 			if ( ! empty( $markdown ) ) {
-				update_post_meta( $post->ID, '_llmmd_content', $markdown );
+				mmsar_store_markdown( $post->ID, $markdown );
 			}
 		}
 		// Nothing to serve is not an error here: fall through and let WordPress render the page

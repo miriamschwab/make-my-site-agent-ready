@@ -15,7 +15,7 @@ Every feature below can be switched off individually under **Settings > Agent-Re
 ### Content access
 - **`.md` URL suffix** — any post or page is available at its URL with `.md` appended (e.g., `your-site.com/my-post.md`)
 - **Front page** at `/index.md`
-- **YAML frontmatter** — title, date, author, URL, excerpt, categories, and tags
+- **YAML frontmatter** — title, date, modified date, author, URL, markdown URL, content type, excerpt, meta description (from Yoast SEO), categories, and tags. The excerpt and the description can each be switched off at Settings > Agent-Ready. Themes and plugins can add fields of their own with the [`mmsar_frontmatter` filter](#adding-frontmatter-fields)
 - **Pre-generated on save** — markdown is stored in post meta, so `.md` requests serve instantly with zero processing
 - **`/llms.txt` site index** (v2 of the [llms.txt](https://llmstxt.org/) proposal) — lists all available markdown URLs organized by category, cached with 24-hour transient. Large sites can also publish a scoped index per section (e.g. `/writing/llms.txt`) — each page advertises whichever index actually covers it via `rel="describedby"`, header or `<link>`, rather than always pointing at the site-wide one.
 - **`/llms-full.txt`** — full site content concatenated as markdown in a single file, for LLMs that want everything at once
@@ -83,13 +83,16 @@ The plugin includes its only dependency (`league/html-to-markdown`) in the `vend
 ```markdown
 ---
 title: "Hello World"
-date: "2026-01-15"
+date: 2026-01-15
+modified: 2026-01-20
 author: "Jane Doe"
 url: "https://your-site.com/hello-world/"
+markdown_url: "https://your-site.com/hello-world.md"
+type: post
 excerpt: "Welcome to my site."
+description: "A first post, written with Yoast SEO's meta description."
 categories:
   - "Uncategorized"
-tags: []
 ---
 
 Welcome to WordPress. This is your first post. Edit or delete it, then start writing!
@@ -159,6 +162,72 @@ Welcome to WordPress. This is your first post. Edit or delete it, then start wri
   }
 }
 ```
+
+## Adding frontmatter fields
+
+Every markdown version opens with YAML frontmatter the plugin writes: `title`, `date`, `modified`, `author`, `url`, `markdown_url`, `type`, `excerpt`, `description`, `categories` and `tags` (the last four only when the post has them). A theme or plugin can add its own fields with the `mmsar_frontmatter` filter. It receives an associative array of extra fields, empty by default, and the `WP_Post` being converted, and returns the array. You supply values; the plugin writes and escapes the YAML.
+
+```php
+add_filter( 'mmsar_frontmatter', function ( $fields, $post ) {
+    $fields['reading_time'] = (int) get_post_meta( $post->ID, 'reading_time', true );
+    $fields['series']       = 'Agent-ready WordPress';
+    $fields['featured']     = is_sticky( $post->ID );
+    $fields['topics']       = wp_get_post_terms( $post->ID, 'topic', array( 'fields' => 'names' ) );
+    return $fields;
+}, 10, 2 );
+```
+
+Produces, after the core keys and before the closing `---`:
+
+```yaml
+reading_time: 7
+series: "Agent-ready WordPress"
+featured: false
+topics:
+  - "MCP"
+  - "llms.txt"
+```
+
+| Value | Written as |
+| --- | --- |
+| string | double-quoted, escaped the same way as `title`; line breaks become spaces |
+| integer, float | unquoted number (`INF` and `NAN` are skipped) |
+| boolean | `true` / `false` |
+| flat list of strings or numbers | a list, like `categories` and `tags`, every item quoted |
+
+**What gets skipped.** Each field is checked on its own and dropped if it can't be written safely, so one bad field never costs the document:
+
+- Keys that don't match `^[a-z][a-z0-9_]*$`.
+- The core keys above. They can't be overridden or removed through the filter; a colliding key is ignored, not merged.
+- Empty strings, empty lists, `null`, objects, associative arrays, and lists containing anything other than strings and numbers (a nested array, a boolean, `null`).
+
+Fields appear in the order you return them. Line breaks are flattened because a value containing `\n---\n` would otherwise close the frontmatter early for any reader that splits on delimiter lines.
+
+**Markdown is generated on save.** A post's markdown, frontmatter included, is stored when the post is saved, so a new or changed filter shows on existing posts only after they're saved again or **Regenerate All** is pressed under Settings > Agent-Ready. The fields appear everywhere that markdown is served: `.md` URLs, content negotiation, `?mode=agent`, `llms-full.txt`, the MCP `get_content` tool, and the body of OKF concept files, which carry their own front matter above it.
+
+### Leaving out the excerpt or the description
+
+Settings > Agent-Ready > **Summary in Frontmatter** has a checkbox for each. Both default to on, and an install updating from before 1.53.0 keeps both: a missing setting reads as on, never off. They are stored as `frontmatter_excerpt` and `frontmatter_description` in the `llmmd_settings` option. Both stay protected keys whichever way they are set, so the `mmsar_frontmatter` filter cannot write them back in.
+
+The excerpt often repeats the opening of the body below it. A site that writes meta descriptions in an SEO plugin may want only `description:`; a site that doesn't should keep `excerpt:`, or its markdown has no summary line. The settings page warns when a save would leave no summary: the excerpt off, and either the description off or nothing to supply one (no Yoast SEO and nothing on `mmsar_frontmatter_description`).
+
+The excerpt is taken at the site's own `excerpt_length` wherever the markdown is built. WordPress 7.0's post-excerpt block sets that length to 101 on every admin request, at `PHP_INT_MAX`, so without correction markdown rebuilt from wp-admin had longer excerpts than markdown rebuilt from the block editor or WP-CLI. The plugin lifts that one core filter for its own `get_the_excerpt()` call and puts it back afterwards.
+
+### The description
+
+`description:` is the post's meta description as Yoast SEO resolves it, read through `YoastSEO()->meta->for_post()` rather than the `_yoast_wpseo_metadesc` meta. That way a description produced by a content-type template is included, with its variables filled in. It goes after `excerpt:` and is left out when empty.
+
+Rank Math, All in One SEO and SEOPress are not read yet, because none of them could be verified against a real install. Supply any source through `mmsar_frontmatter_description`, which receives Yoast's value (or `''`) and the `WP_Post`:
+
+```php
+add_filter( 'mmsar_frontmatter_description', function ( $description, $post ) {
+    return (string) get_post_meta( $post->ID, 'rank_math_description', true );
+}, 10, 2 );
+```
+
+Return `''` to omit the key. HTML is stripped and line breaks become spaces.
+
+**Why Yoast edits still land on save.** Yoast saves its meta and rebuilds its indexable on `wp_insert_post`, which runs after `save_post`, where this plugin generates markdown. The plugin also hooks `wpseo_saved_indexable` and regenerates a post's markdown when its description line has changed. It compares that line first, so Yoast's bulk indexing costs a lookup per post rather than a conversion. Yoast only saves indexables on production sites (`wp_get_environment_type()`). On a local or staging site, both Yoast's page `<meta>` and this key show the description Yoast last saved there.
 
 ## Registering your own endpoints
 

@@ -17,6 +17,13 @@ use League\HTMLToMarkdown\HtmlConverter;
 class MMSAR_Converter {
 
 	/**
+	 * Frontmatter keys the plugin writes itself. The `mmsar_frontmatter` filter cannot set these.
+	 *
+	 * @var string[]
+	 */
+	const CORE_FRONTMATTER_KEYS = array( 'title', 'date', 'modified', 'author', 'url', 'markdown_url', 'type', 'excerpt', 'description', 'categories', 'tags' );
+
+	/**
 	 * Convert post.
 	 *
 	 * @param mixed $post_id Post id.
@@ -62,9 +69,20 @@ class MMSAR_Converter {
 		}
 		$lines[] = 'type: ' . $post->post_type;
 
-		$excerpt = get_the_excerpt( $post );
-		if ( $excerpt ) {
-			$lines[] = 'excerpt: "' . self::escape_yaml( $excerpt ) . '"';
+		// Both summary lines can be switched off at Settings > Agent-Ready. They stay core keys either
+		// way, so the mmsar_frontmatter filter cannot write them in when the owner has turned them off.
+		if ( mmsar_frontmatter_includes( 'excerpt' ) ) {
+			$excerpt = self::excerpt( $post );
+			if ( $excerpt ) {
+				$lines[] = 'excerpt: "' . self::escape_yaml( $excerpt ) . '"';
+			}
+		}
+
+		if ( mmsar_frontmatter_includes( 'description' ) ) {
+			$description = self::description_line( self::seo_description( $post ) );
+			if ( '' !== $description ) {
+				$lines[] = $description;
+			}
 		}
 
 		$categories = get_the_category( $post->ID );
@@ -83,10 +101,214 @@ class MMSAR_Converter {
 			}
 		}
 
+		/**
+		 * Filters extra fields for a post's markdown frontmatter.
+		 *
+		 * Return an associative array of key => value. Values may be a string, an integer or
+		 * float, a boolean, or a flat list of strings; the plugin writes the YAML. Keys must match
+		 * `^[a-z][a-z0-9_]*$`. The core keys (see CORE_FRONTMATTER_KEYS) cannot be overridden or
+		 * removed: a colliding key is ignored. Anything invalid or empty is skipped rather than
+		 * written. Extra fields appear after the core ones, in the order given.
+		 *
+		 * The result is stored with the post's markdown, so a change to what this filter returns
+		 * shows on a post the next time it is saved or when Settings > Agent-Ready > Regenerate All
+		 * is pressed.
+		 *
+		 * @since 1.51.0
+		 *
+		 * @param array   $fields Extra fields. Empty by default.
+		 * @param WP_Post $post   The post being converted.
+		 */
+		$extra = apply_filters( 'mmsar_frontmatter', array(), $post );
+		$lines = array_merge( $lines, self::extra_frontmatter_lines( $extra ) );
+
 		$lines[] = '---';
 		$lines[] = '';
 
 		return implode( "\n", $lines );
+	}
+
+	/**
+	 * The post's meta description as the site's SEO plugin resolves it, or '' when there is none.
+	 *
+	 * Yoast only, read through its surface API rather than `_yoast_wpseo_metadesc`, so a
+	 * description that comes from a post-type template (with its replacement variables resolved) is
+	 * included. Rank Math, All in One SEO and SEOPress are not read: none could be verified against a
+	 * real install, and `mmsar_frontmatter_description` is the way to supply one from any source.
+	 *
+	 * @param WP_Post $post Post.
+	 * @return string Raw description, unescaped.
+	 */
+	public static function seo_description( $post ) {
+		$description = '';
+		if ( function_exists( 'YoastSEO' ) ) {
+			try {
+				$meta = YoastSEO()->meta->for_post( $post->ID );
+				if ( $meta && is_string( $meta->description ) ) {
+					$description = $meta->description;
+				}
+			} catch ( Throwable $e ) {
+				$description = '';
+			}
+		}
+
+		/**
+		 * Filters the meta description written to a post's markdown frontmatter as `description:`.
+		 *
+		 * Receives what the SEO plugin resolved (Yoast only, '' otherwise). Return a string to use
+		 * instead, or '' to leave the key out. HTML is stripped and line breaks become spaces.
+		 *
+		 * @since 1.52.0
+		 *
+		 * @param string  $description The description, or ''.
+		 * @param WP_Post $post        The post being converted.
+		 */
+		$description = apply_filters( 'mmsar_frontmatter_description', $description, $post );
+
+		return is_string( $description ) ? $description : '';
+	}
+
+	/**
+	 * The post's excerpt at the site's own excerpt length, wherever the conversion runs.
+	 *
+	 * WordPress 7.0's post-excerpt block adds an `excerpt_length` filter returning 101 at
+	 * PHP_INT_MAX whenever is_admin() is true, so its editor setting can trim auto-excerpts itself.
+	 * Left alone, markdown rebuilt from wp-admin (Regenerate All, a classic-editor save) got
+	 * ~100-word excerpts while the same post rebuilt from the block editor, WP-CLI or the front end
+	 * got the site's length. The core filter is lifted for this one call and put back at the
+	 * priority it had. Hand-written excerpts are not trimmed by excerpt_length, so they are
+	 * unaffected either way.
+	 *
+	 * @param WP_Post $post Post.
+	 * @return string
+	 */
+	private static function excerpt( $post ) {
+		global $wp_filter;
+
+		// Read the registration out of the hook table rather than re-adding by name, so exactly what
+		// was there goes back: priority and accepted_args included. On versions before 7.0 nothing
+		// matches and nothing is touched.
+		$core   = 'block_core_post_excerpt_excerpt_length';
+		$lifted = array();
+		if ( isset( $wp_filter['excerpt_length'] ) && $wp_filter['excerpt_length'] instanceof WP_Hook ) {
+			foreach ( $wp_filter['excerpt_length']->callbacks as $priority => $entries ) {
+				foreach ( $entries as $entry ) {
+					if ( $core === $entry['function'] ) {
+						$lifted[] = array( $priority, $entry );
+					}
+				}
+			}
+		}
+		foreach ( $lifted as $item ) {
+			remove_filter( 'excerpt_length', $item[1]['function'], $item[0] );
+		}
+
+		$excerpt = get_the_excerpt( $post );
+
+		foreach ( $lifted as $item ) {
+			add_filter( 'excerpt_length', $item[1]['function'], $item[0], $item[1]['accepted_args'] );
+		}
+
+		return $excerpt;
+	}
+
+	/**
+	 * Renders a description as its frontmatter line, or '' when there is nothing to write.
+	 *
+	 * @param string $description Raw description.
+	 * @return string The `description:` line, or ''.
+	 */
+	public static function description_line( $description ) {
+		$escaped = self::yaml_line( wp_strip_all_tags( $description ) );
+		return '' === $escaped ? '' : 'description: "' . $escaped . '"';
+	}
+
+	/**
+	 * Renders the fields returned by the `mmsar_frontmatter` filter as YAML lines.
+	 *
+	 * Each field is validated on its own and dropped if it cannot be written safely, so one bad
+	 * value never costs the document. Strings are flattened to a single line before quoting: a
+	 * newline inside a quoted value is legal YAML, but a value carrying `\n---\n` would end the
+	 * frontmatter early for any reader that splits on delimiter lines, which most do.
+	 *
+	 * @param mixed $fields The filter's return value.
+	 * @return string[] YAML lines, without delimiters.
+	 */
+	public static function extra_frontmatter_lines( $fields ) {
+		if ( ! is_array( $fields ) ) {
+			return array();
+		}
+
+		$lines = array();
+		foreach ( $fields as $key => $value ) {
+			// \z, not $: `$` also matches before a trailing newline, which would let "series\n" through.
+			if ( ! is_string( $key ) || ! preg_match( '/^[a-z][a-z0-9_]*\z/', $key ) || in_array( $key, self::CORE_FRONTMATTER_KEYS, true ) ) {
+				continue;
+			}
+
+			if ( is_bool( $value ) ) {
+				$lines[] = $key . ': ' . ( $value ? 'true' : 'false' );
+			} elseif ( is_int( $value ) ) {
+				$lines[] = $key . ': ' . $value;
+			} elseif ( is_float( $value ) ) {
+				if ( is_finite( $value ) ) {
+					$lines[] = $key . ': ' . wp_json_encode( $value, JSON_PRESERVE_ZERO_FRACTION );
+				}
+			} elseif ( is_string( $value ) ) {
+				$scalar = self::yaml_line( $value );
+				if ( '' !== $scalar ) {
+					$lines[] = $key . ': "' . $scalar . '"';
+				}
+			} elseif ( is_array( $value ) ) {
+				$items = self::yaml_list_items( $value );
+				if ( $items ) {
+					$lines[] = $key . ':';
+					foreach ( $items as $item ) {
+						$lines[] = '  - "' . $item . '"';
+					}
+				}
+			}
+		}
+
+		return $lines;
+	}
+
+	/**
+	 * Escapes a list for the frontmatter, or rejects it. Only a flat, sequential list qualifies:
+	 * an associative array or a nested one would be a mapping, which this filter does not write.
+	 * Numbers are accepted and written as strings; empty items are dropped.
+	 *
+	 * @param array $values Candidate list.
+	 * @return string[] Escaped items, empty if the list was rejected or had nothing in it.
+	 */
+	private static function yaml_list_items( $values ) {
+		if ( array_values( $values ) !== $values ) {
+			return array();
+		}
+		$items = array();
+		foreach ( $values as $item ) {
+			if ( ! is_string( $item ) && ! is_int( $item ) && ! is_float( $item ) ) {
+				return array();
+			}
+			$escaped = self::yaml_line( (string) $item );
+			if ( '' !== $escaped ) {
+				$items[] = $escaped;
+			}
+		}
+		return $items;
+	}
+
+	/**
+	 * Escapes a string for a double-quoted YAML scalar and flattens it to one line. Control
+	 * characters and the Unicode line breaks YAML recognises become spaces. Invalid UTF-8 yields an
+	 * empty string, which the caller treats as nothing to write.
+	 *
+	 * @param string $str Raw value.
+	 * @return string Escaped value, trimmed.
+	 */
+	private static function yaml_line( $str ) {
+		$flat = preg_replace( '/[\x00-\x1F\x7F\x{85}\x{2028}\x{2029}]+/u', ' ', self::escape_yaml( $str ) );
+		return null === $flat ? '' : trim( $flat );
 	}
 
 	/**

@@ -3,7 +3,7 @@
  * Plugin Name:       Make My Site Agent-Ready
  * Plugin URI:        https://miriamschwab.me/plugins/make-my-site-agent-ready
  * Description:       Makes your WordPress site ready for AI agents: .md URLs, llms.txt, llms-full.txt, an OpenAPI spec, a read-only MCP server, agent-recoverable 404s, security.txt, api-catalog, Agent Skills discovery, an OKF bundle, Link response headers, Content Signals, a TDMRep reservation header, optional JSON-LD structured data (merges into Yoast's own schema when active), and AI crawler rules in robots.txt.
- * Version:           1.50.0
+ * Version:           1.53.1
  * Author:            Miriam Schwab
  * Author URI:        https://miriamschwab.me
  * License:           GPL-2.0-or-later
@@ -19,7 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'MMSAR_VERSION', '1.50.0' );
+define( 'MMSAR_VERSION', '1.53.1' );
 define( 'MMSAR_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'MMSAR_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'MMSAR_PLUGIN_FILE', __FILE__ );
@@ -174,6 +174,22 @@ function mmsar_register_endpoint( $endpoint ) {
 }
 
 /**
+ * Stores a post's generated markdown.
+ *
+ * WordPress unslashes what update_post_meta() is given, so without wp_slash() every backslash the
+ * converter wrote was lost on the way in: the `\"` escapes in quoted frontmatter values and the
+ * backslashes in inline code both disappeared from the stored copy, leaving invalid YAML and
+ * altered code. Every write of `_llmmd_content` goes through here so none can forget.
+ *
+ * @param int    $post_id  Post ID.
+ * @param string $markdown Markdown from MMSAR_Converter::convert_post().
+ * @return void
+ */
+function mmsar_store_markdown( $post_id, $markdown ) {
+	update_post_meta( $post_id, '_llmmd_content', wp_slash( $markdown ) );
+}
+
+/**
  * Drops every cached document this plugin generates.
  *
  * They are all derived from the same three things — the feature toggles, the endpoint registry, and
@@ -262,6 +278,38 @@ function mmsar_get_enabled_post_types() {
 function mmsar_get_root_selector() {
 	$settings = get_option( 'llmmd_settings', array() );
 	return isset( $settings['root_selector'] ) ? $settings['root_selector'] : '';
+}
+
+/**
+ * Whether a summary field is written to the markdown frontmatter.
+ *
+ * A missing key means on, never off, for the same reason as the feature toggles: every install
+ * saved before 1.53.0 has no such key, and reading its absence as off would strip the excerpt and
+ * description from every site on update without anyone choosing it.
+ *
+ * @param string $field `excerpt` or `description`.
+ * @return bool
+ */
+function mmsar_frontmatter_includes( $field ) {
+	$settings = get_option( 'llmmd_settings', array() );
+	$key      = 'frontmatter_' . $field;
+	if ( ! is_array( $settings ) || ! isset( $settings[ $key ] ) ) {
+		return true;
+	}
+	return '0' !== (string) $settings[ $key ];
+}
+
+/**
+ * Whether anything can supply a `description:` value: Yoast SEO, or code on the
+ * `mmsar_frontmatter_description` filter.
+ *
+ * Used only to warn an owner who switches the excerpt off that their markdown would be left with
+ * no summary; it does not decide what is written.
+ *
+ * @return bool
+ */
+function mmsar_has_description_source() {
+	return function_exists( 'YoastSEO' ) || has_filter( 'mmsar_frontmatter_description' );
 }
 
 add_action( 'plugins_loaded', 'mmsar_check_version' );
@@ -457,6 +505,58 @@ MMSAR_Agent_Log_Widget::init();
 MMSAR_Admin::init();
 
 add_action( 'save_post', 'mmsar_on_save_post', 20, 2 );
+add_action( 'wpseo_saved_indexable', 'mmsar_on_seo_indexable_saved' );
+
+/**
+ * Refreshes a post's markdown when Yoast has saved its SEO data, if the description changed.
+ *
+ * Yoast saves the meta description and rebuilds its indexable on `wp_insert_post`, which runs
+ * after `save_post` — so the markdown generated on save carries the description as it was before
+ * the edit. This fires once Yoast's value is final. Only the description line is compared first,
+ * so Yoast's bulk indexing, which saves every indexable, costs a lookup per post rather than a
+ * conversion.
+ *
+ * @param object $indexable Yoast indexable.
+ * @return void
+ */
+function mmsar_on_seo_indexable_saved( $indexable ) {
+	static $running = false;
+	if ( $running || ! is_object( $indexable ) || ! isset( $indexable->object_type, $indexable->object_id ) || 'post' !== $indexable->object_type ) {
+		return;
+	}
+	// With the description switched off there is nothing Yoast's save can change in the markdown,
+	// so skip the lookup entirely rather than asking Yoast on every indexable it saves.
+	if ( ! mmsar_frontmatter_includes( 'description' ) ) {
+		return;
+	}
+	$post = get_post( (int) $indexable->object_id );
+	if ( ! $post || 'publish' !== $post->post_status || ! empty( $post->post_password ) || ! in_array( $post->post_type, mmsar_get_enabled_post_types(), true ) ) {
+		return;
+	}
+
+	$running = true;
+	// Yoast memoizes a post's resolved meta for the rest of the request, so a description read
+	// earlier in this request (by the save_post pass) would be read back unchanged.
+	if ( function_exists( 'YoastSEO' ) && class_exists( 'Yoast\\WP\\SEO\\Memoizers\\Meta_Tags_Context_Memoizer' ) ) {
+		try {
+			YoastSEO()->classes->get( 'Yoast\\WP\\SEO\\Memoizers\\Meta_Tags_Context_Memoizer' )->clear( $indexable );
+		} catch ( Throwable $e ) {
+			unset( $e );
+		}
+	}
+
+	$stored  = (string) get_post_meta( $post->ID, '_llmmd_content', true );
+	$current = MMSAR_Converter::description_line( MMSAR_Converter::seo_description( $post ) );
+	$before  = preg_match( '/^description: .*$/m', (string) strstr( $stored, "\n---\n", true ), $match ) ? $match[0] : '';
+	if ( '' !== $stored && $current === $before ) {
+		$running = false;
+		return;
+	}
+
+	mmsar_store_markdown( $post->ID, MMSAR_Converter::convert_post( $post->ID ) );
+	mmsar_flush_generated_documents();
+	$running = false;
+}
 /**
  * Mmsar on save post.
  *
@@ -487,7 +587,7 @@ function mmsar_on_save_post( $post_id, $post ) {
 		return;
 	}
 	$markdown = MMSAR_Converter::convert_post( $post_id );
-	update_post_meta( $post_id, '_llmmd_content', $markdown );
+	mmsar_store_markdown( $post_id, $markdown );
 	// Every cached document, not just the two site-wide ones. The scoped `<section>/llms.txt`
 	// indexes list the same posts under the same `.md` addresses, and they were left out here until
 	// 1.32.0 — so renaming a post refreshed /llms.txt immediately while /writing/llms.txt could go
@@ -924,7 +1024,7 @@ function mmsar_bulk_generate() {
 	);
 	foreach ( $posts as $post_id ) {
 		$markdown = MMSAR_Converter::convert_post( $post_id );
-		update_post_meta( $post_id, '_llmmd_content', $markdown );
+		mmsar_store_markdown( $post_id, $markdown );
 	}
 }
 
