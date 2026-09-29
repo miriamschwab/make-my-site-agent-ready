@@ -4,7 +4,7 @@ Tags: markdown, llm, ai, llms-txt, agents
 Requires at least: 6.2
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.53.1
+Stable tag: 1.54.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -169,7 +169,7 @@ For people, this is what it keeps:
 * **Page views from browsers and anything else not recognised as a crawler** store the network rather than the full address. 203.0.113.4 becomes 203.0.113.0, and IPv6 keeps its first four groups. The five-minute throttle uses the real address in memory, and that address never reaches the database.
 * **A person who follows a link on your site to one of the agent files**, such as the footer's llms.txt link, is stored at network level too: a real browser, following a link from your own pages, unsigned, and from outside every cloud-provider network. Other requests for agent files keep the full address, because those are almost always automated and the exact address is what identifies a scanner.
 * **Claude Code and other user-run clients** run on a person's own machine, and are stored at network level on every surface.
-* **Feeds and robots.txt** follow the page-view rule: a feed read in a browser or a desktop feed reader is stored at network level. A self-hosted feed reader such as Miniflux is stored at network level too, unless it runs on a cloud-provider network, where it is a server rather than someone's home connection.
+* **Feeds and robots.txt** follow the page-view rule: a feed read in a browser or a desktop feed reader is stored at network level. A self-hosted feed reader such as Miniflux is stored at network level too, unless it runs on a cloud-provider network, where it is a server rather than someone's home connection. A hosted reader that names itself, such as Feedly or Inoreader, runs on its operator's servers and keeps its address like any crawler.
 * **The page address is kept as requested**, including any query string, so a search on your site is recorded as the visitor typed it.
 * **Whether a request came from a link on your site** is kept as yes or no only. The Referer itself is never stored.
 * **The cloud-network signal stores nothing.** It is worked out, when the log is read, from the network address the log already holds.
@@ -178,6 +178,14 @@ For people, this is what it keeps:
 Recognised crawlers keep their full address, because verifying who they are needs it. The whole table is removed when you delete the plugin, and the Agent Log screen can clear it at any time.
 
 == Changelog ==
+
+= 1.54.0 - 2026-09-29 =
+
+* New: eight more bots are recognised by the agent log, each with a category. Verified against the IP list each operator publishes: KnownGood-Verifier (Known Good's agent-readiness checker, scanner) and Inoreader (feed reader, other). Recognised but not verifiable: CaelLabSearchSpider (CaelLab, search engine), SEOJuice-SearchBot (SEOJuice, SEO tool), and Dataprovider.com, Feedly, Miniroll and Quest (other).
+* Known Good publishes a single address. It is bundled like any other range list, so if Known Good moves before the plugin is updated, its requests would read "Spoofed" until then. The `mmsar_agent_log_verify_ranges` filter can add a new address without waiting.
+* Quest is only recognised when its user-agent also names qwertious.org. "Quest" on its own is a common word, and it already appears inside Friendica's and python-requests' user-agents.
+* Dataprovider.com documents reverse DNS, but the one full address seen so far had no reverse record, so it is recognised and not verified. Its user-agent has no bot keyword, so its page views were filed as a script or fetch tool before this release. They are now filed as a declared crawler.
+* Not retroactive: from this release, page views from these bots keep their full address instead of being reduced to the network. Earlier entries keep the address they were stored with. Earlier entries from KnownGood-Verifier and Inoreader can be settled with the Re-check button on the Agent Log screen. Earlier entries from the other six keep "Unclaimed" but now show their category.
 
 = 1.53.1 - 2026-09-28 =
 

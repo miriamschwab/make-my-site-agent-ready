@@ -244,6 +244,21 @@ final class CrawlerCategoryTest extends TestCase {
 			'Micro.blog, raw'                  => array( 'Micro.blog/2.1', 'other' ),
 			// The dot is literal. Were it ever treated as a pattern it would match any character.
 			'Micro-blog is not Micro.blog'     => array( 'Micro-blog/2.1', '' ),
+
+			// Added 1.54.0. Raw shapes are the values stored on the live site before recognition.
+			'KnownGood-Verifier, raw'          => array( 'KnownGood-Verifier/0.3 (+https://knowngood.sh/bot)', 'scanner' ),
+			'Inoreader, raw'                   => array( 'Inoreader/1.0 (+http://www.inoreader.com/feed-fetcher; 2 subscribers; )', 'other' ),
+			'CaelLab, s.caellab.com form'      => array( '(compatible; CaelLabSearchSpider/1.0; +https://s.caellab.com/bot)', 'search-engine' ),
+			'CaelLab, caellab.click form'      => array( '(compatible; CaelLabSearchSpider/1.0; +https://caellab.click/bot)', 'search-engine' ),
+			'SEOJuice-SearchBot, raw'          => array( 'compatible; SEOJuice-SearchBot/1.0; +https://seojuice.io/bot', 'seo-tool' ),
+			'Dataprovider.com, raw'            => array( '(compatible; Dataprovider.com)', 'other' ),
+			'Feedly, raw'                      => array( 'Feedly/1.0 (+http://www.feedly.com/fetcher.html; 3 subscribers; )', 'other' ),
+			'Miniroll, raw'                    => array( 'Miniroll/1.0 (https://www.miniroll.app)', 'other' ),
+			'Quest, bare label'                => array( 'Quest', 'other' ),
+			'Quest, raw with domain'           => array( 'Quest/1.0 (+https://plus.qwertious.org/quest; educational scraper)', 'other' ),
+			// Unrelated user-agents that contain "quest", both stored on the live site.
+			'Friendica is not Quest'           => array( 'Friendica/2026.05 DatabaseVersion/1595 Request/ContentTypeChecker/1 +https://fri', '' ),
+			'python-requests is not Quest'     => array( 'python-requests/2.32.3', '' ),
 		);
 	}
 
@@ -386,6 +401,27 @@ final class CrawlerCategoryTest extends TestCase {
 			'MapTheNetBot is recognise-only'           => array( 'MapTheNetBot', self::ELSEWHERE, '', array(), 'unverifiable' ),
 			'Amazon Quick is recognise-only'           => array( 'Amazon Quick (amazon-Quick-on-behalf-of)', '52.23.63.231', 'ec2-52-23-63-231.compute-1.amazonaws.com', array( '52.23.63.231' ), 'unverifiable' ),
 			'Micro.blog is recognise-only'             => array( 'Micro.blog', self::ELSEWHERE, '', array(), 'unverifiable' ),
+
+			// Added 1.54.0. Range-only, with the real addresses from the live log: every row either
+			// name had was from these, and both were inside the operator's list on 2026-09-29.
+			// The raw shapes are the rows the re-check reopens.
+			'KnownGood-Verifier, the published address' => array( 'KnownGood-Verifier', '3.216.221.135', '', array(), 'verified' ),
+			'KnownGood-Verifier, raw user-agent'       => array( 'KnownGood-Verifier/0.3 (+https://knowngood.sh/bot)', '3.216.221.135', '', array(), 'verified' ),
+			'KnownGood-Verifier, one address over'     => array( 'KnownGood-Verifier', '3.216.221.136', '', array(), 'failed' ),
+			'Inoreader, inside the published /26'      => array( 'Inoreader', '92.247.181.12', '', array(), 'verified' ),
+			'Inoreader, raw user-agent'                => array( 'Inoreader/1.0 (+http://www.inoreader.com/feed-fetcher; 2 subscribers; )', '92.247.181.12', '', array(), 'verified' ),
+			'Inoreader, just past the /26'             => array( 'Inoreader', '92.247.181.64', '', array(), 'failed' ),
+			'Inoreader, a published /32'               => array( 'Inoreader', '209.250.246.151', '', array(), 'verified' ),
+			'Inoreader, reduced to its network'        => array( 'Inoreader', '92.247.181.0', '', array(), 'unverifiable' ),
+			'CaelLabSearchSpider is recognise-only'    => array( 'CaelLabSearchSpider', '154.64.254.134', '', array(), 'unverifiable' ),
+			'SEOJuice-SearchBot is recognise-only'     => array( 'SEOJuice-SearchBot', '85.234.171.3', '', array(), 'unverifiable' ),
+			// Documented rDNS, not adopted: the one full address on file had no PTR record.
+			'Dataprovider.com stays recognise-only'    => array( 'Dataprovider.com', self::ELSEWHERE, 'crawler.dataproviderbot.com', array( self::ELSEWHERE ), 'unverifiable' ),
+			'Feedly is recognise-only'                 => array( 'Feedly', '8.29.198.27', '', array(), 'unverifiable' ),
+			'Miniroll is recognise-only'               => array( 'Miniroll', self::ELSEWHERE, '', array(), 'unverifiable' ),
+			'Quest is recognise-only'                  => array( 'Quest', '207.90.194.227', '', array(), 'unverifiable' ),
+			'Friendica claims nothing'                 => array( 'Friendica/2026.05 DatabaseVersion/1595 Request/ContentTypeChecker/1 +https://fri', '95.217.234.75', '', array(), 'unclaimed' ),
+			'python-requests claims nothing'           => array( 'python-requests/2.32.3', self::ELSEWHERE, '', array(), 'unclaimed' ),
 		);
 	}
 
@@ -434,6 +470,19 @@ final class CrawlerCategoryTest extends TestCase {
 			// The per-customer identifier is dropped: the label names the product, not the customer.
 			'Amazon Quick'       => array( 'amazon-Quick-on-behalf-of-3f2b9c1e-8d4a-4f6b-9a2e-7c5d1e0b4a93', 'Amazon Quick (amazon-Quick-on-behalf-of)' ),
 			'Micro.blog'         => array( 'Micro.blog/2.1', 'Micro.blog' ),
+			// Added 1.54.0.
+			'KnownGood-Verifier' => array( 'KnownGood-Verifier/0.3 (+https://knowngood.sh/bot)', 'KnownGood-Verifier' ),
+			'Inoreader'          => array( 'Inoreader/1.0 (+http://www.inoreader.com/feed-fetcher; 2 subscribers; )', 'Inoreader' ),
+			'CaelLabSearchSpider' => array( 'Mozilla/5.0 (compatible; CaelLabSearchSpider/1.0; +https://caellab.click/bot)', 'CaelLabSearchSpider' ),
+			'SEOJuice-SearchBot' => array( 'SEOJuice-SearchBot/1.0 (+https://seojuice.io/bot)', 'SEOJuice-SearchBot' ),
+			'Dataprovider.com'   => array( 'Mozilla/5.0 (compatible; Dataprovider.com)', 'Dataprovider.com' ),
+			'Feedly'             => array( 'Feedly/1.0 (+http://www.feedly.com/fetcher.html; 3 subscribers; )', 'Feedly' ),
+			'Miniroll'           => array( 'Miniroll/1.0 (https://www.miniroll.app)', 'Miniroll' ),
+			'Quest'              => array( 'Quest/1.0 (+https://plus.qwertious.org/quest; educational scraper)', 'Quest' ),
+			// Unguarded, both of these would be labelled Quest and kept at full address. Friendica's is
+			// cut at 80 characters, the ordinary rule for an unrecognised user-agent.
+			'Friendica falls through' => array( 'Friendica/2026.05 DatabaseVersion/1595 Request/ContentTypeChecker/1 +https://friendica.example', 'Friendica/2026.05 DatabaseVersion/1595 Request/ContentTypeChecker/1 +https://fri' ),
+			'python-requests falls through' => array( 'python-requests/2.32.3', 'python-requests/2.32.3' ),
 			'empty is unknown'    => array( '', 'unknown' ),
 		);
 	}

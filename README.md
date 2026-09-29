@@ -394,7 +394,8 @@ Two methods, chosen per operator, because the operators are split on which they 
 
 - **Published IP ranges** for Anthropic, OpenAI, Perplexity, DuckDuckGo (DuckAssistBot and
   DuckDuckBot), Common Crawl (CCBot), Linkup, Seznam, Mojeek, SE Ranking, Parallel (ShapBot),
-  Sofya, You.com (YouBot) and Palo Alto Networks (Cortex Xpanse). Most of them
+  Sofya, You.com (YouBot), Palo Alto Networks (Cortex Xpanse), Known Good (KnownGood-Verifier) and
+  Inoreader. Most of them
   publish no reverse-DNS records for their crawlers, so this is the only method their documentation
   describes. The ranges are bundled with the plugin rather than fetched, so nothing calls a
   third-party service and verification works on a host with no outbound HTTP. The trade-off is that
@@ -430,6 +431,8 @@ document reverse DNS, but the address it actually crawled from is on the operato
 list and does not resolve under that domain, so following the documentation would have accused the
 genuine crawler. DomainStatsBot is the same case (1.50.0): all three of its addresses reverse to the
 documented `bot.domainstats.com`, but that name resolves forward to only one of them.
+Dataprovider.com documents reverse DNS under `dataproviderbot.com`, but the one full address on file
+had no reverse record at all, so it stays unverifiable until a real address confirms it (1.54.0).
 
 **Unverifiable** also covers a second case that says nothing about the operator: a row whose address
 was reduced to its network at storage time cannot be tested against a published range, so the
@@ -472,8 +475,8 @@ category:
 | **Search engine** | Conventional web search (SeznamBot, DuckDuckBot, YandexBot, MojeekBot, Qwantbot…) |
 | **SEO tool** | SEO and backlink platforms (AhrefsBot, SemrushBot, Barkrowler, DataForSeoBot…) |
 | **Monitoring** | Brand and media monitoring (AwarioBot, trendictionbot, YaK, um-LN) |
-| **Scanner** | Readiness, security and attack-surface scanners (OraBot, CensysInspect, Cortex Xpanse, l9scan, AgentTrustBot) |
-| **Other** | Link previews, archiving and everything else named (Twitterbot, facebookexternalhit, archive.org_bot…) |
+| **Scanner** | Readiness, security and attack-surface scanners (OraBot, KnownGood-Verifier, CensysInspect, Cortex Xpanse, l9scan, AgentTrustBot) |
+| **Other** | Link previews, feed readers, archiving and everything else named (Twitterbot, facebookexternalhit, Feedly, Inoreader, archive.org_bot…) |
 
 A category goes by what the operator documents *that specific bot* doing, not by the operator's
 business overall. It is shown under the agent name, filterable as **Crawler type**, and returned by
@@ -531,6 +534,8 @@ The log is off by default. When it is on, this is what it keeps about people:
 - **Feeds and robots.txt** follow the page-view rule. A feed read in a browser or a desktop reader
   is stored at network level. A self-hosted reader such as Miniflux is software a person installs,
   often at home, so it keeps its full address only from inside a cloud-provider network (1.49.0).
+  A hosted reader that names itself, such as Feedly or Inoreader, runs on its operator's servers and
+  keeps its address like any crawler.
 - **The page address is kept as requested**, query string included, so an internal search is
   recorded as typed (1.27.0). The throttle keys on the resolved page instead.
 - **The Referer is never stored.** Only whether it was this site.

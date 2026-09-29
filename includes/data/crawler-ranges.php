@@ -1145,4 +1145,34 @@ return array(
 			'2604:a940:302:118::/64',
 		),
 	),
+	// Known Good — KnownGood-Verifier. One address, which the operator calls a stable AWS Elastic IP
+	// that "will not change without notice on this file" (file dated 2026-08-21). Bundled on the
+	// Linkup precedent: a single published /32 is still the operator's only method.
+	// Source: https://knowngood.sh/bot/ips.json.
+	'knowngood'   => array(
+		'captured' => '2026-09-28',
+		'v4'       => array(
+			'3.216.221.135/32',
+		),
+		'v6'       => array(),
+	),
+	// Inoreader — feed fetcher. Plain text, one CIDR per line.
+	// Source: https://www.inoreader.com/.well-known/ip_list.txt.
+	'inoreader'   => array(
+		'captured' => '2026-09-28',
+		'v4'       => array(
+			'45.76.28.241/32',
+			'84.242.180.248/29',
+			'88.203.186.16/28',
+			'92.247.179.240/28',
+			'92.247.181.0/26',
+			'95.179.169.161/32',
+			'108.61.177.123/32',
+			'144.202.49.4/32',
+			'149.28.114.120/32',
+			'207.148.89.218/32',
+			'209.250.246.151/32',
+		),
+		'v6'       => array(),
+	),
 );

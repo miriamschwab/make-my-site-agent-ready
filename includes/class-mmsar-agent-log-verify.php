@@ -272,6 +272,11 @@ class MMSAR_Agent_Log_Verify {
 		// Cortex Xpanse. Range-only: Palo Alto publishes no reverse DNS, and the two addresses in
 		// this site's log have no PTR record.
 		'Palo Alto Networks'    => 'xpanse',
+		// Added 1.54.0. Both range-only, and every address the live log held for each was inside
+		// its operator's list on 2026-09-29. Known Good's reverse DNS is AWS's; Inoreader documents
+		// none.
+		'KnownGood-Verifier'    => 'knowngood',
+		'Inoreader'             => 'inoreader',
 	);
 
 	/**

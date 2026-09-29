@@ -2,6 +2,14 @@
 
 All notable changes to Make My Site Agent-Ready.
 
+## 1.54.0 — 2026-09-29
+
+- New: eight more bots recognised by the agent log, each with a category. Verified by published IP list: KnownGood-Verifier (scanner) and Inoreader (other). Recognised only: CaelLabSearchSpider (search engine), SEOJuice-SearchBot (SEO tool), Dataprovider.com, Feedly, Miniroll and Quest (other).
+- Known Good publishes one address, bundled as its own range group. If it moves before the next release, add the new address with `mmsar_agent_log_verify_ranges`.
+- Quest is recognised only when its user-agent also names `qwertious.org`. The bare word already appears inside Friendica's `Request/…` and `python-requests`.
+- Dataprovider.com documents reverse DNS, but the one full address seen had no reverse record, so it is recognised and not verified. Its page views, previously filed as a script or fetch tool, are now filed as a declared crawler.
+- Not retroactive: page views from these bots keep their full address from this release on. Older entries from KnownGood-Verifier and Inoreader can be settled with Re-check; older entries from the other six keep Unclaimed and show their category.
+
 ## 1.53.1 — 2026-09-28
 
 - New: Settings > Agent-Ready > Summary in Frontmatter, one checkbox each for `excerpt:` and `description:`. Both default to on; an install updating from an earlier version keeps both (a missing setting reads as on). Stored as `frontmatter_excerpt` / `frontmatter_description` in `llmmd_settings`. Both remain protected core keys, so the `mmsar_frontmatter` filter cannot write them back in.

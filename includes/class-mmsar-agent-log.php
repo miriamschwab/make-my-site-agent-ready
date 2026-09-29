@@ -274,6 +274,44 @@ class MMSAR_Agent_Log {
 		// from a Linode network, so it fetches from Micro.blog's servers rather than a reader's
 		// device. The dot is literal: matching is a substring test, never a pattern.
 		'Micro.blog',
+		// Added 1.54.0 from the agent-log-bot-watch report of 2026-09-28. Appended, for the ordering
+		// reason given above Googlebot. The first two are verified by the IP list each operator
+		// publishes; every address this site's log held for either was inside it on 2026-09-29.
+		// See MMSAR_Agent_Log_Verify::VERIFY_RANGES.
+		//
+		// Known Good's agent-readiness verifier (https://knowngood.sh/bot). One published address,
+		// an AWS Elastic IP; its reverse DNS is AWS's, so there is no suffix to check.
+		'KnownGood-Verifier',
+		// Inoreader's feed fetcher (https://www.inoreader.com/feed-fetcher). The user-agent carries a
+		// subscriber count that changes, so only the name is matched. It fetches only feed URLs its
+		// users subscribed to and does not read robots.txt.
+		'Inoreader',
+		// The rest are recognise-only.
+		//
+		// CaelLab's search engine crawler (https://caellab.click/bot). Its user-agent points at
+		// s.caellab.com/bot or caellab.click/bot; both are the operator's. No verification method.
+		'CaelLabSearchSpider',
+		// SEOJuice's link-graph crawler (https://seojuice.com/bot; the user-agent's seojuice.io
+		// redirects there). No verification method.
+		'SEOJuice-SearchBot',
+		// Dataprovider.com's web-wide business data index (https://www.dataprovider.com/spider/). The
+		// user-agent has no bot keyword, so before recognition its rows were filed as a script or
+		// fetch tool; they are `crawler` from here on. The operator documents reverse DNS under
+		// dataproviderbot.com, but the only full address in the log on 2026-09-28 had no PTR record,
+		// so the suffix is not adopted until a live address confirms it.
+		'Dataprovider.com',
+		// Feedly's feed fetcher (https://feedly.com/fetcher.html). Publishes no ranges and says its
+		// addresses change; acts for its users and does not follow robots.txt.
+		'Feedly',
+		// Miniroll (https://www.miniroll.app), a hosted blogroll service fetching the feeds of the
+		// blogs it lists. No crawler page, so the category rests on the product page. It runs on
+		// the operator's service, not a reader's device.
+		'Miniroll',
+		// QUEST, qwertious.org's "educational scraper" for archiving and search indexing
+		// (https://plus.qwertious.org/quest). Guarded in AGENT_DISCLOSURES: "Quest" is a common
+		// word, and on this site's log it was already inside Friendica's `Request/…` and
+		// `python-requests`.
+		'Quest',
 	);
 
 	/**
@@ -424,6 +462,21 @@ class MMSAR_Agent_Log {
 		'amazon-Quick-on-behalf-of' => self::CRAWLER_AI_ASSISTANT,
 		// Unconfirmed: the operator documents no crawler.
 		'Micro.blog'                => self::CRAWLER_OTHER,
+		// Added 1.54.0; confirmed per name by Miriam on 2026-09-29.
+		// Checks whether an agent can read and use a site: the same job as OraBot.
+		'KnownGood-Verifier'        => self::CRAWLER_SCANNER,
+		// Feed reader, with Feedbin.
+		'Inoreader'                 => self::CRAWLER_OTHER,
+		'CaelLabSearchSpider'       => self::CRAWLER_SEARCH,
+		'SEOJuice-SearchBot'        => self::CRAWLER_SEO,
+		// Overlaps with the SEO tools, but the operator describes a business-data index, not SEO
+		// analysis.
+		'Dataprovider.com'          => self::CRAWLER_OTHER,
+		'Feedly'                    => self::CRAWLER_OTHER,
+		// Feed reader. Unconfirmed: the operator documents no crawler.
+		'Miniroll'                  => self::CRAWLER_OTHER,
+		// Archiving and search indexing, from an unnamed operator.
+		'Quest'                     => self::CRAWLER_OTHER,
 	);
 
 	/**
@@ -464,6 +517,10 @@ class MMSAR_Agent_Log {
 		// A generic word rather than a short token, guarded for the same reason. The domain sits
 		// well inside the first 80 characters of the only form seen.
 		'PoweredByBot' => 'keywordseverywhere.com',
+		// A common word, and already a real collision: Friendica sends `Request/ContentTypeChecker`
+		// and `python-requests` contains it too. The domain sits inside the first 80 characters of
+		// the only form seen.
+		'Quest'        => 'qwertious.org',
 	);
 
 	/**
