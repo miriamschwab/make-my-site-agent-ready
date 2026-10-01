@@ -345,14 +345,16 @@ class MMSAR_NLWeb {
 	 */
 	private static function search( $query ) {
 		$posts = get_posts(
-			array(
-				'post_type'           => mmsar_get_enabled_post_types(),
-				'post_status'         => 'publish',
-				's'                   => $query,
-				'posts_per_page'      => self::MAX_RESULTS,
-				'has_password'        => false,
-				'ignore_sticky_posts' => true,
-				'no_found_rows'       => true,
+			MMSAR_Noindex::exclude(
+				array(
+					'post_type'           => mmsar_get_enabled_post_types(),
+					'post_status'         => 'publish',
+					's'                   => $query,
+					'posts_per_page'      => self::MAX_RESULTS,
+					'has_password'        => false,
+					'ignore_sticky_posts' => true,
+					'no_found_rows'       => true,
+				)
 			)
 		);
 

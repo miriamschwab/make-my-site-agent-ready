@@ -733,14 +733,16 @@ class MMSAR_MCP {
 		}
 
 		$posts = get_posts(
-			array(
-				'post_type'           => self::requested_post_types( $arguments ),
-				'post_status'         => 'publish',
-				's'                   => $query,
-				'posts_per_page'      => self::requested_limit( $arguments, 10 ),
-				'has_password'        => false,
-				'ignore_sticky_posts' => true,
-				'no_found_rows'       => true,
+			MMSAR_Noindex::exclude(
+				array(
+					'post_type'           => self::requested_post_types( $arguments ),
+					'post_status'         => 'publish',
+					's'                   => $query,
+					'posts_per_page'      => self::requested_limit( $arguments, 10 ),
+					'has_password'        => false,
+					'ignore_sticky_posts' => true,
+					'no_found_rows'       => true,
+				)
 			)
 		);
 
@@ -816,15 +818,17 @@ class MMSAR_MCP {
 		$limit  = self::requested_limit( $arguments, 20 );
 
 		$query = new WP_Query(
-			array(
-				'post_type'           => self::requested_post_types( $arguments ),
-				'post_status'         => 'publish',
-				'posts_per_page'      => $limit,
-				'offset'              => $offset,
-				'orderby'             => 'date',
-				'order'               => 'DESC',
-				'has_password'        => false,
-				'ignore_sticky_posts' => true,
+			MMSAR_Noindex::exclude(
+				array(
+					'post_type'           => self::requested_post_types( $arguments ),
+					'post_status'         => 'publish',
+					'posts_per_page'      => $limit,
+					'offset'              => $offset,
+					'orderby'             => 'date',
+					'order'               => 'DESC',
+					'has_password'        => false,
+					'ignore_sticky_posts' => true,
+				)
 			)
 		);
 

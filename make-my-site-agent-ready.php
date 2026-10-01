@@ -3,7 +3,7 @@
  * Plugin Name:       Make My Site Agent-Ready
  * Plugin URI:        https://miriamschwab.me/plugins/make-my-site-agent-ready
  * Description:       Makes your WordPress site ready for AI agents: .md URLs, llms.txt, llms-full.txt, an OpenAPI spec, a read-only MCP server, agent-recoverable 404s, security.txt, api-catalog, Agent Skills discovery, an OKF bundle, Link response headers, Content Signals, a TDMRep reservation header, optional JSON-LD structured data (merges into Yoast's own schema when active), and AI crawler rules in robots.txt.
- * Version:           1.54.0
+ * Version:           1.55.0
  * Author:            Miriam Schwab
  * Author URI:        https://miriamschwab.me
  * License:           GPL-2.0-or-later
@@ -19,7 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'MMSAR_VERSION', '1.54.0' );
+define( 'MMSAR_VERSION', '1.55.0' );
 define( 'MMSAR_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'MMSAR_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'MMSAR_PLUGIN_FILE', __FILE__ );
@@ -37,6 +37,7 @@ require_once MMSAR_PLUGIN_DIR . 'includes/class-mmsar-agent-log-signals.php';
 require_once MMSAR_PLUGIN_DIR . 'includes/class-mmsar-agent-log-page.php';
 require_once MMSAR_PLUGIN_DIR . 'includes/class-mmsar-agent-log-widget.php';
 require_once MMSAR_PLUGIN_DIR . 'includes/class-mmsar-converter.php';
+require_once MMSAR_PLUGIN_DIR . 'includes/class-mmsar-noindex.php';
 require_once MMSAR_PLUGIN_DIR . 'includes/class-mmsar-negotiation-check.php';
 require_once MMSAR_PLUGIN_DIR . 'includes/class-mmsar-server.php';
 require_once MMSAR_PLUGIN_DIR . 'includes/class-mmsar-llms-txt.php';
@@ -53,6 +54,9 @@ require_once MMSAR_PLUGIN_DIR . 'includes/class-mmsar-nlweb.php';
 require_once MMSAR_PLUGIN_DIR . 'includes/class-mmsar-robots-allow.php';
 require_once MMSAR_PLUGIN_DIR . 'includes/class-mmsar-structured-data.php';
 require_once MMSAR_PLUGIN_DIR . 'includes/class-mmsar-okf.php';
+require_once MMSAR_PLUGIN_DIR . 'includes/class-mmsar-indexnow.php';
+require_once MMSAR_PLUGIN_DIR . 'includes/class-mmsar-referrals.php';
+require_once MMSAR_PLUGIN_DIR . 'includes/class-mmsar-agent-insights.php';
 require_once MMSAR_PLUGIN_DIR . 'includes/class-mmsar-admin.php';
 require_once MMSAR_PLUGIN_DIR . 'includes/abilities.php';
 
@@ -117,6 +121,9 @@ function mmsar_get_feature_keys() {
 		// Publishes a new tree of documents and changes no existing response, the same category as
 		// llms_full_txt and security_txt above, so it defaults on for the same reason.
 		'okf_bundle'           => true,
+		// Off by default: the only feature that sends anything to a third party. It submits changed
+		// URLs to api.indexnow.org, which is disclosed under External services in readme.txt.
+		'indexnow'             => false,
 	);
 }
 
@@ -437,6 +444,10 @@ function mmsar_prevent_canonical_redirect( $redirect_url ) {
 		'/.well-known/agent-skills/index.json',
 		'/.well-known/agent-skills/' . MMSAR_Agent_Skills::SKILL_NAME . '/SKILL.md',
 	);
+	$indexnow_key = get_option( MMSAR_IndexNow::KEY_OPTION, '' );
+	if ( MMSAR_IndexNow::is_valid_key( $indexnow_key ) ) {
+		$plugin_paths[] = '/' . $indexnow_key . '.txt';
+	}
 	foreach ( $plugin_paths as $p ) {
 		if ( rtrim( $path, '/' ) === $p ) {
 			return false;
@@ -498,13 +509,32 @@ if ( mmsar_feature_enabled( 'nlweb' ) ) {
 if ( mmsar_feature_enabled( 'okf_bundle' ) ) {
 	MMSAR_OKF::init();
 }
+if ( mmsar_feature_enabled( 'indexnow' ) ) {
+	MMSAR_IndexNow::init();
+}
 MMSAR_Negotiation_Check::init();
 MMSAR_Agent_Log::init();
 MMSAR_Agent_Log_Page::init();
 MMSAR_Agent_Log_Widget::init();
+// The one thing this plugin prints that runs in a visitor's browser, so it is gated twice: the agent
+// log has to be on, and so does this. See MMSAR_Referrals for why it cannot be done server-side.
+if ( MMSAR_Referrals::is_enabled() ) {
+	MMSAR_Referrals::init();
+}
 MMSAR_Admin::init();
 
 add_action( 'save_post', 'mmsar_on_save_post', 20, 2 );
+// A post type's default robots setting lives in the SEO plugin's own option, so changing it saves no
+// post. The cached indexes would go on listing (or omitting) that type's posts until they expired.
+add_action( 'update_option_wpseo_titles', 'mmsar_flush_generated_documents' );
+add_action( 'update_option_rank-math-options-titles', 'mmsar_flush_generated_documents' );
+// The Agent Log's findings are cached for an hour. A setting they read drops the cache, so switching
+// something on is reflected the next time the screen is opened, not up to an hour later.
+foreach ( array( 'mmsar_features', 'mmsar_decline_training', 'mmsar_referrals', 'mmsar_content_signals', 'llmmd_settings' ) as $mmsar_insight_option ) {
+	add_action( 'update_option_' . $mmsar_insight_option, array( 'MMSAR_Agent_Insights', 'flush' ) );
+	add_action( 'add_option_' . $mmsar_insight_option, array( 'MMSAR_Agent_Insights', 'flush' ) );
+}
+unset( $mmsar_insight_option );
 add_action( 'wpseo_saved_indexable', 'mmsar_on_seo_indexable_saved' );
 
 /**
@@ -751,6 +781,48 @@ if ( mmsar_feature_enabled( 'robots_txt' ) ) {
 	add_filter( 'robots_txt', 'mmsar_robots_txt_llms', PHP_INT_MAX, 2 );
 }
 /**
+ * The robots.txt tokens "Decline AI training crawlers" writes `Disallow: /` for.
+ *
+ * Only crawlers whose operator documents them as collecting for model training, or whose output is
+ * a corpus sold or published for it. Each operator's search and assistant crawlers are separate
+ * tokens and stay allowed: OAI-SearchBot and ChatGPT-User, Claude-SearchBot and Claude-User,
+ * Amzn-SearchBot and Amzn-User, PerplexityBot, LinkupBot.
+ *
+ * Deliberately not here: **Google-Extended**, because Google documents it as controlling Gemini's
+ * grounding as well as training, and declining it would also withdraw the live AI answers the
+ * Content Signal says yes to. **SSI-Nutch**, because the operator publishes nothing about what it
+ * collects for, and whether it gets a robots.txt group at all is still an open decision.
+ * **GoogleOther**, which Google describes as general research, not training.
+ *
+ * @return string[]
+ */
+function mmsar_training_crawler_tokens() {
+	return array(
+		'GPTBot',
+		'ClaudeBot',
+		'Anthropic-AI',
+		'CCBot',
+		'Applebot-Extended',
+		'meta-externalagent',
+		'FacebookBot',
+		'Bytespider',
+		'Amazonbot',
+		'cohere-ai',
+		'cohere-training-data-crawler',
+		'Diffbot',
+	);
+}
+
+/**
+ * Whether the owner has declined AI training crawlers.
+ *
+ * @return bool
+ */
+function mmsar_declines_training() {
+	return '1' === (string) get_option( 'mmsar_decline_training', '' );
+}
+
+/**
  * Mmsar robots txt.
  *
  * @param mixed $output Output.
@@ -806,9 +878,27 @@ function mmsar_robots_txt( $output, $is_public ) {
 	$has_manual_signal   = ( false !== stripos( $extra, 'Content-Signal:' ) );
 	$content_signal_line = $has_manual_signal ? '' : mmsar_content_signal_line();
 
+	// Declining training turns each training crawler's group into `Disallow: /`, and adds groups for
+	// the training tokens not named above. Content-Signal is a request a crawler may ignore; this is
+	// the rule it is asked to obey. No Content-Signal line in those groups: a crawler told to fetch
+	// nothing has no content to apply it to.
+	$decline  = mmsar_declines_training();
+	$training = array_map( 'strtolower', mmsar_training_crawler_tokens() );
+	if ( $decline ) {
+		foreach ( mmsar_training_crawler_tokens() as $token ) {
+			if ( ! in_array( strtolower( $token ), array_map( 'strtolower', $ai_crawlers ), true ) ) {
+				$ai_crawlers[] = $token;
+			}
+		}
+	}
+
 	$rules = "\n";
 	foreach ( $ai_crawlers as $bot ) {
 		$rules .= "User-agent: {$bot}\n";
+		if ( $decline && in_array( strtolower( $bot ), $training, true ) ) {
+			$rules .= "Disallow: /\n\n";
+			continue;
+		}
 		$rules .= "Allow: /\n";
 		if ( $content_signal_line ) {
 			$rules .= $content_signal_line . "\n";

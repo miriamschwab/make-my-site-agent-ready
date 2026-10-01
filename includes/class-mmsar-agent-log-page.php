@@ -38,7 +38,7 @@ class MMSAR_Agent_Log_Page {
 	 * Journeys answer a different question — what one caller did in sequence — and that question
 	 * is asked less often, from a link or a tab rather than on arrival.
 	 */
-	const VIEWS = array( 'list', 'journeys' );
+	const VIEWS = array( 'summary', 'list', 'journeys' );
 
 	/**
 	 * Rows read per query while streaming an export.
@@ -421,18 +421,28 @@ class MMSAR_Agent_Log_Page {
 	}
 
 	/**
-	 * Which of the two views is being asked for.
+	 * Which view is being asked for.
 	 *
-	 * Anything unrecognised falls back to the list rather than erroring: a mistyped or truncated
-	 * URL should land on the screen's own default, which is the behaviour before this argument
-	 * existed.
+	 * The Summary is the default since 1.55.0. Before that the list was, and every URL it built
+	 * left `view` out. So a URL without `view` that carries a filter, an address or a page number
+	 * is one of those older list URLs — a bookmark, a link from the widget — and still opens the
+	 * list. Every URL built now names its view.
 	 *
 	 * @return string One of VIEWS.
 	 */
 	private static function current_view() {
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only view selection on an admin screen.
 		$view = isset( $_GET['view'] ) ? sanitize_key( wp_unslash( $_GET['view'] ) ) : '';
-		return in_array( $view, self::VIEWS, true ) ? $view : 'list';
+		if ( in_array( $view, self::VIEWS, true ) ) {
+			return $view;
+		}
+		foreach ( array( 'verdict', 'client', 'surface', 'crawler', 'signal', 'ip', 'paged' ) as $arg ) {
+			// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- As above; only presence is read.
+			if ( isset( $_GET[ $arg ] ) ) {
+				return 'list';
+			}
+		}
+		return 'summary';
 	}
 
 	/**
@@ -519,7 +529,7 @@ class MMSAR_Agent_Log_Page {
 	 */
 	private static function view_args( $view, $ip ) {
 		return array(
-			'view'   => 'list' === $view ? '' : $view,
+			'view'   => $view,
 			'ip'     => $ip,
 			'single' => ( 'journeys' === $view && ! self::current_multi_only() ) ? '1' : '',
 		);
@@ -626,7 +636,7 @@ class MMSAR_Agent_Log_Page {
 			MMSAR_Agent_Log_Signals::SIGNED    => __( 'The request carried a Web Bot Auth signature naming an operator, which cloud browser agents such as ChatGPT agent send. The signature is not checked, so this is a claim, not proof: anything can copy the headers. People\'s browsers never sign.', 'make-my-site-agent-ready' ),
 			MMSAR_Agent_Log_Signals::CLOUD     => sprintf(
 				/* translators: %s: capture date of the bundled cloud ranges */
-				__( 'A browser-shaped request from a published cloud-provider range (AWS, Google Cloud, Azure, Oracle, DigitalOcean, Linode, Vultr; ranges captured %s). Browser agents run in the cloud arrive this way; so do some people on VPNs and corporate security proxies. A fact about the network, not a verdict on the visitor. Worked out from the stored address, so it covers older rows too.', 'make-my-site-agent-ready' ),
+				__( 'A browser or HTTP-client request from a published cloud-provider range (AWS, Google Cloud, Azure, Oracle, DigitalOcean, Linode, Vultr; ranges captured %s). Browser agents run in the cloud arrive this way; so do some people on VPNs and corporate security proxies. For an HTTP client such as axios or curl, it tells a hosted script from one run on someone\'s own connection. Named crawlers are not assessed. A fact about the network, not a verdict on the visitor. Worked out from the stored address, so it covers older rows too.', 'make-my-site-agent-ready' ),
 				$captured ? $captured : __( 'unknown', 'make-my-site-agent-ready' )
 			),
 			MMSAR_Agent_Log_Signals::SAME_SITE => __( 'The request followed a link on this site, judged from the Referer. Only yes or no is kept, never the address it came from. Recorded from 1.48.0 onwards.', 'make-my-site-agent-ready' ),
@@ -858,6 +868,221 @@ class MMSAR_Agent_Log_Page {
 	}
 
 	/**
+	 * Visitors AI assistants sent, over the last 30 days.
+	 *
+	 * Shown whenever the counting is switched on or there are counts to show, open when there are
+	 * any. This is people, not agents, so it sits in a panel of its own and never in the table below.
+	 *
+	 * @return void
+	 */
+	private static function render_referrals_panel() {
+		$enabled = MMSAR_Referrals::is_enabled();
+		$summary = MMSAR_Referrals::get_summary( 30 );
+		if ( ! $enabled && 0 === $summary['total'] ) {
+			return;
+		}
+
+		$open = $summary['total'] > 0 ? ' open' : '';
+		echo '<details' . esc_attr( $open ) . ' style="margin:1em 0;padding:.8rem 1.2rem;background:#fff;border:1px solid #c3c4c7;">';
+		echo '<summary style="cursor:pointer;font-weight:600;">';
+		printf(
+			/* translators: %s: number of visits */
+			esc_html( _n( 'Visitors sent by AI assistants in the last 30 days: %s', 'Visitors sent by AI assistants in the last 30 days: %s', $summary['total'], 'make-my-site-agent-ready' ) ),
+			esc_html( number_format_i18n( $summary['total'] ) )
+		);
+		echo '</summary>';
+
+		echo '<p class="description" style="margin:.6rem 0 .8rem;">'
+			. esc_html__( 'People who clicked a link in an AI assistant and landed here. A floor, not a total: many assistant apps open links without saying where they came from, so those visits cannot be told from direct ones. One visitor landing on one page from one assistant counts once per half hour.', 'make-my-site-agent-ready' )
+			. '</p>';
+
+		if ( ! $enabled ) {
+			echo '<p class="description"><strong>' . esc_html__( 'Counting is switched off. These are the counts kept from when it was on.', 'make-my-site-agent-ready' ) . '</strong></p>';
+		}
+
+		if ( 0 === $summary['total'] ) {
+			echo '<p><em>' . esc_html__( 'None yet. Cached pages pick up the counting script when the cache next refreshes, so the first visits can take a day to appear.', 'make-my-site-agent-ready' ) . '</em></p>';
+			echo '</details>';
+			return;
+		}
+
+		echo '<div style="display:flex;flex-wrap:wrap;gap:1.5rem;align-items:flex-start;">';
+
+		echo '<table class="widefat striped" style="width:auto;min-width:16rem;"><thead><tr>';
+		echo '<th>' . esc_html__( 'Assistant', 'make-my-site-agent-ready' ) . '</th>';
+		echo '<th style="width:6em;">' . esc_html__( 'Visits', 'make-my-site-agent-ready' ) . '</th>';
+		echo '</tr></thead><tbody>';
+		foreach ( $summary['by_assistant'] as $row ) {
+			echo '<tr><td>' . esc_html( $row['label'] ) . '</td><td>' . esc_html( number_format_i18n( $row['hits'] ) ) . '</td></tr>';
+		}
+		echo '</tbody></table>';
+
+		echo '<table class="widefat striped" style="width:auto;flex:1;min-width:20rem;"><thead><tr>';
+		echo '<th>' . esc_html__( 'Landed on', 'make-my-site-agent-ready' ) . '</th>';
+		echo '<th style="width:6em;">' . esc_html__( 'Visits', 'make-my-site-agent-ready' ) . '</th>';
+		echo '<th>' . esc_html__( 'From', 'make-my-site-agent-ready' ) . '</th>';
+		echo '</tr></thead><tbody>';
+		foreach ( $summary['by_page'] as $row ) {
+			$path = '(other)' === $row['path']
+				? '<span style="color:#8c8f94;">' . esc_html__( 'Another page (an archive, search or similar)', 'make-my-site-agent-ready' ) . '</span>'
+				: '<code>' . esc_html( $row['path'] ) . '</code>';
+			echo '<tr><td>' . wp_kses_post( $path ) . '</td><td>' . esc_html( number_format_i18n( $row['hits'] ) ) . '</td><td>' . esc_html( $row['assistants'] ) . '</td></tr>';
+		}
+		echo '</tbody></table>';
+
+		echo '</div>';
+		echo '</details>';
+	}
+
+	/**
+	 * Where a finding's action points, from the short form the findings use.
+	 *
+	 * Findings are computed without knowing about admin URLs, so they name a target
+	 * (`settings#indexnow`) and this turns it into a link to that control on the settings screen.
+	 *
+	 * @param string $target Target from a finding.
+	 * @return string URL, or '' when there is nowhere to link.
+	 */
+	private static function insight_url( $target ) {
+		$anchors = array(
+			'settings#indexnow'         => 'mmsar-feature-indexnow',
+			'settings#decline-training' => 'mmsar-decline-training',
+			'settings#referrals'        => 'mmsar-referrals',
+		);
+		if ( ! isset( $anchors[ $target ] ) ) {
+			return '';
+		}
+		return admin_url( 'options-general.php?page=make-my-site-agent-ready' ) . '#' . $anchors[ $target ];
+	}
+
+	/**
+	 * One finding, as a card.
+	 *
+	 * @param array $finding Finding from MMSAR_Agent_Insights.
+	 * @return void
+	 */
+	private static function render_insight( $finding ) {
+		$todo   = 'todo' === $finding['kind'];
+		$colour = $todo ? '#dba617' : '#2271b1';
+		echo '<div style="background:#fff;border:1px solid #c3c4c7;border-left:4px solid ' . esc_attr( $colour ) . ';padding:.8rem 1.1rem;margin:0 0 .8rem;">';
+		echo '<p style="margin:0 0 .3rem;"><strong>' . esc_html( $finding['title'] ) . '</strong>';
+		echo ' <span style="font-size:11px;color:#646970;text-transform:uppercase;letter-spacing:.03em;margin-left:.4em;">'
+			. esc_html( $todo ? __( 'Worth doing', 'make-my-site-agent-ready' ) : __( 'What it means', 'make-my-site-agent-ready' ) )
+			. '</span></p>';
+		echo '<p style="margin:.2rem 0 .5rem;">' . esc_html( $finding['text'] ) . '</p>';
+
+		if ( ! empty( $finding['items'] ) ) {
+			echo '<ul style="margin:.3rem 0 .5rem 1.2rem;list-style:disc;">';
+			foreach ( $finding['items'] as $item ) {
+				$label = esc_html( $item['label'] );
+				if ( ! empty( $item['path'] ) ) {
+					$label = '<a href="' . esc_url( home_url( $item['path'] ) ) . '" target="_blank" rel="noopener">' . $label . '</a>';
+				}
+				echo '<li>' . wp_kses_post( $label ) . ' <span style="color:#646970;">— ' . esc_html( $item['value'] ) . '</span>';
+				if ( ! empty( $item['advice'] ) ) {
+					echo '<br><span style="font-size:12px;color:#50575e;">' . esc_html( $item['advice'] );
+					if ( ! empty( $item['feature'] ) ) {
+						echo ' <a href="' . esc_url( admin_url( 'options-general.php?page=make-my-site-agent-ready' ) . '#mmsar-feature-' . $item['feature'] ) . '">' . esc_html__( 'Go to the setting', 'make-my-site-agent-ready' ) . ' &rarr;</a>';
+					}
+					echo '</span>';
+				}
+				echo '</li>';
+			}
+			echo '</ul>';
+		}
+
+		$links = array();
+		if ( ! empty( $finding['action'] ) ) {
+			$url = self::insight_url( (string) $finding['action']['url'] );
+			if ( '' !== $url ) {
+				$links[] = '<a class="button button-small" href="' . esc_url( $url ) . '">' . esc_html( $finding['action']['label'] ) . '</a>';
+			} else {
+				echo '<p style="margin:.3rem 0;color:#50575e;"><em>' . esc_html( $finding['action']['label'] ) . '</em></p>';
+			}
+		}
+		if ( ! empty( $finding['evidence'] ) ) {
+			$filters = array(
+				'verdicts'   => isset( $finding['evidence']['verdict'] ) ? (array) $finding['evidence']['verdict'] : array(),
+				'clients'    => array(),
+				'categories' => isset( $finding['evidence']['surface'] ) ? (array) $finding['evidence']['surface'] : array(),
+				'crawlers'   => isset( $finding['evidence']['crawler'] ) ? (array) $finding['evidence']['crawler'] : array(),
+				'signals'    => array(),
+			);
+			$url     = add_query_arg( self::filter_args( $filters, array( 'view' => 'list' ) ), admin_url( 'options-general.php' ) );
+			$links[] = '<a href="' . esc_url( $url ) . '">' . esc_html__( 'Show these rows in the log', 'make-my-site-agent-ready' ) . ' &rarr;</a>';
+		}
+		if ( $links ) {
+			echo '<p style="margin:.4rem 0 0;">' . wp_kses_post( implode( ' &nbsp; ', $links ) ) . '</p>';
+		}
+		echo '</div>';
+	}
+
+	/**
+	 * The Summary view: what the last 30 days mean, as findings.
+	 *
+	 * @return void
+	 */
+	private static function render_summary() {
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only: only drops a cache of derived counts.
+		$fresh    = isset( $_GET['refresh'] );
+		$insights = MMSAR_Agent_Insights::get( $fresh );
+
+		$age = max( 0, time() - (int) ( $insights['generated'] ?? time() ) );
+		echo '<p style="margin:1em 0;">';
+		printf(
+			/* translators: 1: number of days, 2: how long ago */
+			esc_html__( 'What the last %1$s days of agent traffic mean for your site. Worked out %2$s ago from the log.', 'make-my-site-agent-ready' ),
+			esc_html( number_format_i18n( (int) ( $insights['days'] ?? MMSAR_Agent_Insights::WINDOW_DAYS ) ) ),
+			esc_html( human_time_diff( time() - $age ) )
+		);
+		echo ' <a href="' . esc_url(
+			add_query_arg(
+				array(
+					'page'    => self::SLUG,
+					'view'    => 'summary',
+					'refresh' => '1',
+				),
+				admin_url( 'options-general.php' )
+			)
+		) . '">' . esc_html__( 'Refresh', 'make-my-site-agent-ready' ) . '</a>';
+		echo '</p>';
+
+		$titles = array(
+			'read'   => __( 'Am I being read?', 'make-my-site-agent-ready' ),
+			'cited'  => __( 'Am I being cited?', 'make-my-site-agent-ready' ),
+			'broken' => __( 'What\'s broken or being ignored?', 'make-my-site-agent-ready' ),
+		);
+		$empty  = array(
+			'read'   => __( 'Not enough reads by AI crawlers in this period to say anything yet.', 'make-my-site-agent-ready' ),
+			'cited'  => __( 'No AI assistant fetched a page to answer someone in this period.', 'make-my-site-agent-ready' ),
+			'broken' => __( 'Nothing to report.', 'make-my-site-agent-ready' ),
+		);
+		foreach ( $titles as $question => $title ) {
+			echo '<h2 style="margin:1.4em 0 .6em;">' . esc_html( $title ) . '</h2>';
+			$findings = isset( $insights['questions'][ $question ] ) ? $insights['questions'][ $question ] : array();
+			if ( ! $findings ) {
+				echo '<p style="color:#646970;"><em>' . esc_html( $empty[ $question ] ) . '</em></p>';
+				continue;
+			}
+			foreach ( $findings as $finding ) {
+				self::render_insight( $finding );
+			}
+		}
+
+		if ( ! empty( $insights['info'] ) ) {
+			echo '<div style="margin-top:1.5em;color:#646970;font-size:12px;">';
+			foreach ( $insights['info'] as $line ) {
+				echo '<p style="margin:.2rem 0;">' . esc_html( $line['text'] ) . '</p>';
+			}
+			echo '</div>';
+		}
+
+		echo '<p style="margin-top:1.5em;color:#646970;font-size:12px;">'
+			. esc_html__( 'Counts only requests whose identity checked out, plus tools such as Claude Code run on someone\'s own computer. Requests that used a crawler\'s name falsely are never counted. Every count is a floor: the log records one request per agent, page and address every five minutes.', 'make-my-site-agent-ready' )
+			. '</p>';
+	}
+
+	/**
 	 * Render the page.
 	 *
 	 * @return void
@@ -955,7 +1180,14 @@ class MMSAR_Agent_Log_Page {
 			echo '</p></div>';
 		}
 
+		if ( 'summary' === $view ) {
+			self::render_summary();
+			echo '</div>';
+			return;
+		}
+
 		self::render_verification_panel();
+		self::render_referrals_panel();
 		self::render_retention_form( $total, $filters, $shown );
 		self::render_filter_bar( $filters, $shown, $total, $extra );
 
@@ -1454,13 +1686,31 @@ class MMSAR_Agent_Log_Page {
 	 */
 	private static function render_view_tabs( $view, $filters, $ip ) {
 		$tabs = array(
+			'summary'  => __( 'Summary', 'make-my-site-agent-ready' ),
 			'list'     => __( 'List', 'make-my-site-agent-ready' ),
 			'journeys' => __( 'Journeys', 'make-my-site-agent-ready' ),
 		);
 
 		echo '<h2 class="nav-tab-wrapper" style="margin-bottom:0;">';
 		foreach ( $tabs as $slug => $label ) {
-			$args = array( 'view' => 'list' === $slug ? '' : $slug );
+			// The Summary takes no filters: it always reads the whole window.
+			if ( 'summary' === $slug ) {
+				$url = add_query_arg(
+					array(
+						'page' => self::SLUG,
+						'view' => 'summary',
+					),
+					admin_url( 'options-general.php' )
+				);
+				printf(
+					'<a href="%1$s" class="nav-tab%2$s">%3$s</a>',
+					esc_url( $url ),
+					$slug === $view ? ' nav-tab-active' : '',
+					esc_html( $label )
+				);
+				continue;
+			}
+			$args = array( 'view' => $slug );
 			if ( 'journeys' === $slug ) {
 				$args['ip'] = $ip;
 			}
@@ -1502,9 +1752,12 @@ class MMSAR_Agent_Log_Page {
 				? __( 'Possibly a cloud network', 'make-my-site-agent-ready' )
 				/* translators: %s: cloud provider name */
 				: sprintf( __( 'Cloud network (%s)', 'make-my-site-agent-ready' ), MMSAR_Agent_Log_Signals::cloud_label( $signals['cloud_network'] ) );
+			$is_http  = isset( $entry['client_type'] ) && MMSAR_Agent_Log::CLIENT_HTTP === $entry['client_type'];
 			$hint     = $partial
 				? __( 'The stored network only partly overlaps a published cloud range, so which side this request came from cannot be told.', 'make-my-site-agent-ready' )
-				: __( 'The address is in this provider\'s published range. Cloud browser agents arrive this way; so do some VPN and corporate-proxy users.', 'make-my-site-agent-ready' );
+				: ( $is_http
+					? __( 'The address is in this provider\'s published range: a script or service running on rented servers, not on someone\'s own connection.', 'make-my-site-agent-ready' )
+					: __( 'The address is in this provider\'s published range. Cloud browser agents arrive this way; so do some VPN and corporate-proxy users.', 'make-my-site-agent-ready' ) );
 			$badges[] = '<span style="' . esc_attr( $style . 'background:#f6f7f7;color:#50575e;' ) . '" title="' . esc_attr( $hint ) . '">' . esc_html( $text ) . '</span>';
 		}
 		if ( true === $signals['same_site'] ) {

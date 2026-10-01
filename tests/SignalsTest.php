@@ -15,6 +15,7 @@
  * @package Make_My_Site_Agent_Ready
  */
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 if ( ! function_exists( 'mmsar_feature_enabled' ) ) {
@@ -127,13 +128,12 @@ final class SignalsTest extends TestCase {
 	// -------------------------------------------------------------------------
 
 	/**
-	 * @dataProvider signatures
-	 *
 	 * @param string $signature Signature.
 	 * @param string $input     Signature-Input.
 	 * @param string $agent     Signature-Agent.
 	 * @param string $expected  Stored value.
 	 */
+	#[DataProvider( 'signatures' )]
 	public function test_signature_agent_from_headers( string $signature, string $input, string $agent, string $expected ): void {
 		$this->assertSame( $expected, MMSAR_Agent_Log_Signals::signature_agent_from_headers( $signature, $input, $agent ) );
 	}
@@ -141,7 +141,7 @@ final class SignalsTest extends TestCase {
 	/**
 	 * @return array<string, array{0:string,1:string,2:string,3:string}>
 	 */
-	public function signatures(): array {
+	public static function signatures(): array {
 		$sig   = self::SIGNED['HTTP_SIGNATURE'];
 		$input = self::SIGNED['HTTP_SIGNATURE_INPUT'];
 		return array(
@@ -189,11 +189,10 @@ final class SignalsTest extends TestCase {
 	 * log has actually seen, so a refresh that drops one of them is worth knowing about rather than
 	 * silently absorbing.
 	 *
-	 * @dataProvider bundledAddresses
-	 *
 	 * @param string $ip       Address.
 	 * @param string $expected Provider key or ''.
 	 */
+	#[DataProvider( 'bundledAddresses' )]
 	public function test_cloud_network_against_the_bundled_ranges( string $ip, string $expected ): void {
 		$this->assertSame( $expected, MMSAR_Agent_Log_Signals::cloud_network( $ip ), $ip );
 	}
@@ -201,7 +200,7 @@ final class SignalsTest extends TestCase {
 	/**
 	 * @return array<string, array{0:string,1:string}>
 	 */
-	public function bundledAddresses(): array {
+	public static function bundledAddresses(): array {
 		return array(
 			'AWS EC2 — the Ora scanner pool'               => array( '3.83.8.90', 'aws' ),
 			'AWS EC2 at network precision'                 => array( '3.83.8.0', 'aws' ),
@@ -331,9 +330,10 @@ final class SignalsTest extends TestCase {
 	}
 
 	/**
-	 * The cloud signal is assessed on browser rows only; every other client type reports null.
+	 * The cloud signal is assessed on browser and HTTP-client rows (1.55.0); crawler and unrecorded
+	 * rows report null.
 	 */
-	public function test_for_row_assesses_cloud_on_browser_rows_only(): void {
+	public function test_for_row_assesses_cloud_on_browser_and_http_rows(): void {
 		$browser = MMSAR_Agent_Log_Signals::for_row(
 			array(
 				'client_type' => 'browser',
@@ -353,9 +353,33 @@ final class SignalsTest extends TestCase {
 				'signature_agent' => 'https://chatgpt.com',
 			)
 		);
-		$this->assertNull( $http['cloud_network'] );
+		$this->assertSame( 'aws', $http['cloud_network'], 'An unnamed script on AWS is the case 1.55.0 added: it must say so.' );
 		$this->assertFalse( $http['same_site'] );
 		$this->assertSame( 'https://chatgpt.com', $http['signature_agent'] );
+
+		$home = MMSAR_Agent_Log_Signals::for_row(
+			array(
+				'client_type' => 'http',
+				'ip'          => '86.209.233.0',
+			)
+		);
+		$this->assertSame( '', $home['cloud_network'], 'Assessed and not a cloud is "", never null.' );
+
+		$crawler = MMSAR_Agent_Log_Signals::for_row(
+			array(
+				'client_type' => 'crawler',
+				'ip'          => '3.83.8.90',
+			)
+		);
+		$this->assertNull( $crawler['cloud_network'], 'A named crawler is judged by its own verification, not by its network.' );
+
+		$unrecorded = MMSAR_Agent_Log_Signals::for_row(
+			array(
+				'client_type' => '',
+				'ip'          => '3.83.8.90',
+			)
+		);
+		$this->assertNull( $unrecorded['cloud_network'] );
 
 		$old = MMSAR_Agent_Log_Signals::for_row(
 			array(
@@ -367,16 +391,127 @@ final class SignalsTest extends TestCase {
 		$this->assertNull( $old['same_site'], 'A row from before 1.48.0 has no Referer signal, and must not read as "no".' );
 	}
 
+	/**
+	 * Which client types the cloud signal covers. One helper answers it for for_row(), the counts and
+	 * the filter query, so the three cannot disagree.
+	 *
+	 * @param string $client   Stored client_type.
+	 * @param bool   $expected Whether the cloud signal is assessed.
+	 */
+	#[DataProvider( 'cloud_assessed_cases' )]
+	public function test_cloud_assessed( string $client, bool $expected ): void {
+		$this->assertSame( $expected, MMSAR_Agent_Log_Signals::cloud_assessed( $client ) );
+	}
+
+	/**
+	 * @return array<string, array{0: string, 1: bool}>
+	 */
+	public static function cloud_assessed_cases(): array {
+		return array(
+			'browser'    => array( 'browser', true ),
+			'http'       => array( 'http', true ),
+			'crawler'    => array( 'crawler', false ),
+			'unrecorded' => array( '', false ),
+			'unknown'    => array( 'bogus', false ),
+		);
+	}
+
+	/**
+	 * The cloud filter's SQL names its client types as literals, to keep the query a fixed string.
+	 * Every one of those clauses must name exactly cloud_client_types(): an address can carry crawler
+	 * rows as well, and a clause that drifted would select them, or miss the HTTP rows 1.55.0 added.
+	 */
+	public function test_cloud_filter_sql_matches_cloud_client_types(): void {
+		$source = (string) file_get_contents( dirname( __DIR__ ) . '/includes/class-mmsar-agent-log.php' );
+
+		preg_match_all( '/client_type IN \(([^)]*)\) AND FIND_IN_SET\( ip, %s \)/', $source, $clauses );
+		$this->assertCount( substr_count( $source, 'FIND_IN_SET( ip, %s )' ), $clauses[0], 'Every cloud filter clause must restrict by client_type.' );
+		$this->assertNotEmpty( $clauses[0] );
+
+		foreach ( $clauses[1] as $list ) {
+			preg_match_all( "/'([a-z]+)'/", $list, $types );
+			$this->assertSame( MMSAR_Agent_Log_Signals::cloud_client_types(), $types[1] );
+		}
+	}
+
+	/**
+	 * get_signal_counts() counts the cloud signal on HTTP rows as well as browser rows, and still not
+	 * on crawlers, even when a crawler's address is in the same cloud range.
+	 */
+	public function test_signal_counts_assess_cloud_on_http_rows(): void {
+		$GLOBALS['wpdb'] = new class() {
+			/**
+			 * Table prefix.
+			 *
+			 * @var string
+			 */
+			public $prefix = 'wp_';
+
+			/**
+			 * Calls to get_results() so far.
+			 *
+			 * @var int
+			 */
+			private $calls = 0;
+
+			/**
+			 * Returns the query unchanged.
+			 *
+			 * @param string $query Query.
+			 * @return string
+			 */
+			public function prepare( $query ) {
+				return $query;
+			}
+
+			/**
+			 * The grouped read first, then the signed_by read.
+			 *
+			 * @return array[]
+			 */
+			public function get_results() {
+				++$this->calls;
+				if ( 1 !== $this->calls ) {
+					return array();
+				}
+				$row = static function ( $client, $ip, $requests ) {
+					return array(
+						'client_type'        => $client,
+						'ip'                 => $ip,
+						'requests'           => $requests,
+						'signed'             => 0,
+						'same_site'          => 0,
+						'same_site_recorded' => 0,
+					);
+				};
+				return array(
+					$row( 'http', '3.83.8.0', 5 ),
+					$row( 'http', '86.209.233.0', 7 ),
+					$row( 'browser', '3.83.8.0', 2 ),
+					$row( 'crawler', '3.83.8.90', 11 ),
+				);
+			}
+		};
+
+		$by = MMSAR_Agent_Log::get_signal_counts()['by_client'];
+
+		$this->assertSame( 12, $by['http']['requests'] );
+		$this->assertSame( 5, $by['http']['cloud_network'] );
+		$this->assertSame( array( 'aws' => 5 ), (array) $by['http']['by_cloud_provider'] );
+		$this->assertSame( 2, $by['browser']['cloud_network'] );
+		$this->assertSame( 11, $by['crawler']['requests'] );
+		$this->assertSame( 0, $by['crawler']['cloud_network'] );
+	}
+
 	// -------------------------------------------------------------------------
 	// Signal 3: came from a link on this site
 	// -------------------------------------------------------------------------
 
 	/**
-	 * @dataProvider referers
-	 *
 	 * @param string $referer  Referer.
 	 * @param bool   $expected Same site.
 	 */
+	#[DataProvider( 'referers' )]
 	public function test_is_same_site( string $referer, bool $expected ): void {
 		$this->assertSame( $expected, MMSAR_Agent_Log_Signals::is_same_site( $referer, array( 'example.com' ) ) );
 	}
@@ -384,7 +519,7 @@ final class SignalsTest extends TestCase {
 	/**
 	 * @return array<string, array{0:string,1:bool}>
 	 */
-	public function referers(): array {
+	public static function referers(): array {
 		return array(
 			'a page on this site'                 => array( 'https://example.com/some-post/', true ),
 			'the home page'                       => array( 'https://example.com/', true ),
@@ -415,11 +550,10 @@ final class SignalsTest extends TestCase {
 	 * `2001:db8::1::`: not an address, and still carrying the bits it existed to drop. Found by the
 	 * page-view test below, on an AWS IPv6 address.
 	 *
-	 * @dataProvider ipv6Reductions
-	 *
 	 * @param string $ip       Full address.
 	 * @param string $expected Reduced form.
 	 */
+	#[DataProvider( 'ipv6Reductions' )]
 	public function test_anonymize_ip_reduces_compressed_ipv6( string $ip, string $expected ): void {
 		$reduced = MMSAR_Agent_Log::anonymize_ip( $ip );
 		$this->assertSame( $expected, $reduced );
@@ -430,7 +564,7 @@ final class SignalsTest extends TestCase {
 	/**
 	 * @return array<string, array{0:string,1:string}>
 	 */
-	public function ipv6Reductions(): array {
+	public static function ipv6Reductions(): array {
 		return array(
 			'no zero groups: the form is unchanged' => array( '2a01:cb00:1:2::5', '2a01:cb00:1:2::' ),
 			'compression inside the first half'     => array( '2001:db8::1', '2001:db8:0:0::' ),
@@ -473,12 +607,11 @@ final class SignalsTest extends TestCase {
 	 * network, from a cloud range or not. The cloud check reads the full address; the table never
 	 * sees it.
 	 *
-	 * @dataProvider pageViewAddresses
-	 *
 	 * @param string $ip      Client address.
 	 * @param string $stored  Expected stored address.
 	 * @param string $network Expected cloud_network() of the stored value.
 	 */
+	#[DataProvider( 'pageViewAddresses' )]
 	public function test_browser_page_views_are_still_reduced( string $ip, string $stored, string $network ): void {
 		$row = $this->record( self::BROWSER + array( 'HTTP_REFERER' => 'https://example.com/' ), $ip, true );
 
@@ -493,7 +626,7 @@ final class SignalsTest extends TestCase {
 	/**
 	 * @return array<string, array{0:string,1:string,2:string}>
 	 */
-	public function pageViewAddresses(): array {
+	public static function pageViewAddresses(): array {
 		return array(
 			'residential'   => array( '86.209.233.10', '86.209.233.0', '' ),
 			'AWS'           => array( '3.83.8.90', '3.83.8.0', 'aws' ),
@@ -507,12 +640,11 @@ final class SignalsTest extends TestCase {
 	 * browser, unsigned, that followed a link on this site from outside every cloud range — a person
 	 * clicking the footer's llms.txt link. Each case moves exactly one condition.
 	 *
-	 * @dataProvider agentFileRequests
-	 *
 	 * @param array  $headers  $_SERVER entries.
 	 * @param string $ip       Client address.
 	 * @param string $stored   Expected stored address.
 	 */
+	#[DataProvider( 'agentFileRequests' )]
 	public function test_agent_file_address_rule( array $headers, string $ip, string $stored ): void {
 		$row = $this->record( $headers, $ip, false );
 		$this->assertSame( $stored, $row['ip'] );
@@ -521,7 +653,7 @@ final class SignalsTest extends TestCase {
 	/**
 	 * @return array<string, array{0:array,1:string,2:string}>
 	 */
-	public function agentFileRequests(): array {
+	public static function agentFileRequests(): array {
 		$link   = array( 'HTTP_REFERER' => 'https://example.com/some-post/' );
 		$script = array( 'HTTP_USER_AGENT' => 'node' );
 		return array(

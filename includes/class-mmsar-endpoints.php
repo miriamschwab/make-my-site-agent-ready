@@ -129,12 +129,14 @@ class MMSAR_Endpoints {
 	private static function generate_llms_full_txt() {
 		$post_types = mmsar_get_enabled_post_types();
 		$posts      = get_posts(
-			array(
-				'post_type'      => $post_types,
-				'post_status'    => 'publish',
-				'posts_per_page' => -1,
-				'orderby'        => 'date',
-				'order'          => 'DESC',
+			MMSAR_Noindex::exclude(
+				array(
+					'post_type'      => $post_types,
+					'post_status'    => 'publish',
+					'posts_per_page' => -1,
+					'orderby'        => 'date',
+					'order'          => 'DESC',
+				)
 			)
 		);
 

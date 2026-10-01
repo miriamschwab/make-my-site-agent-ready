@@ -12,8 +12,9 @@
  *    origin. **A claim, not a verification**: nothing here fetches the operator's key directory or
  *    checks the signature, and the draft says outright that an unresolved Signature-Agent "is a
  *    claim rather than an identity". Human browsers never sign, so this stores nothing about readers.
- * 2. **Cloud network** — a browser-shaped request from a published cloud-provider range. **Derived
- *    on read, never stored**, from the address the log already keeps. That works because almost all
+ * 2. **Cloud network** — a browser-shaped request, or since 1.55.0 an HTTP-client request, from a
+ *    published cloud-provider range. **Derived on read, never stored**, from the address the log
+ *    already keeps. That works because almost all
  *    cloud address space is published in blocks of /24 or wider (IPv4) and /64 or wider (IPv6) —
  *    exactly the precision the log reduces a reader's address to — so the stored network answers the
  *    question. Where it cannot, because a stored /24 only partly overlaps a narrower cloud block,
@@ -469,9 +470,7 @@ class MMSAR_Agent_Log_Signals {
 	/**
 	 * The three signals for one stored row, as reported by the ability and drawn on the screen.
 	 *
-	 * The cloud signal is only assessed on browser rows. A script or a crawler arriving from a cloud
-	 * is the ordinary case and says nothing new; the signal exists to pick agents out of the one
-	 * population that otherwise looks human.
+	 * The cloud signal is assessed only where cloud_assessed() says so: browser and HTTP-client rows.
 	 *
 	 * @param array $row Stored row.
 	 * @return array{signature_agent: string, cloud_network: ?string, same_site: ?bool}
@@ -481,9 +480,40 @@ class MMSAR_Agent_Log_Signals {
 		$same   = isset( $row['same_site'] ) && '' !== (string) $row['same_site'] ? ( 1 === (int) $row['same_site'] ) : null;
 		return array(
 			'signature_agent' => isset( $row['signature_agent'] ) ? (string) $row['signature_agent'] : '',
-			'cloud_network'   => MMSAR_Agent_Log::CLIENT_BROWSER === $client ? self::cloud_network( isset( $row['ip'] ) ? (string) $row['ip'] : '' ) : null,
+			'cloud_network'   => self::cloud_assessed( $client ) ? self::cloud_network( isset( $row['ip'] ) ? (string) $row['ip'] : '' ) : null,
 			'same_site'       => $same,
 		);
+	}
+
+	/**
+	 * The client types the cloud signal is assessed on: browsers and HTTP clients.
+	 *
+	 * Browsers since 1.48.0, to pick agents driving a real browser out of the one population that
+	 * otherwise looks human. HTTP clients since 1.55.0: they are already known to be software, but
+	 * most of them name nothing (axios, curl, python-requests), and whether one runs on a cloud
+	 * provider or on someone's own connection is the only attribution the log can offer. It also
+	 * separates them, which the 1.48.0 reasoning assumed it would not: on miriamschwab.me in
+	 * September 2026, 20% of HTTP-client requests came from a published cloud range, against 11% of
+	 * browser requests. Named crawlers stay out, because they are judged by their operator's own
+	 * verification method, which says more than their network does.
+	 *
+	 * for_row(), the signal counts and the filter query all ask this one method, so they cannot
+	 * disagree about which rows carry the signal.
+	 *
+	 * @param string $client Stored client_type.
+	 * @return bool
+	 */
+	public static function cloud_assessed( $client ) {
+		return in_array( (string) $client, self::cloud_client_types(), true );
+	}
+
+	/**
+	 * The client_type values cloud_assessed() accepts, for queries that filter on them.
+	 *
+	 * @return string[]
+	 */
+	public static function cloud_client_types() {
+		return array( MMSAR_Agent_Log::CLIENT_BROWSER, MMSAR_Agent_Log::CLIENT_HTTP );
 	}
 
 	/**

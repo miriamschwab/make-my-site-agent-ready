@@ -713,8 +713,8 @@ class MMSAR_Agent_Log {
 	 *
 	 * Signals combine with OR among themselves, like every other axis. The cloud signal is derived
 	 * rather than stored, so it is resolved here the way crawler categories are: the distinct
-	 * browser addresses are checked in PHP and the matching ones handed to SQL. Addresses never
-	 * contain a comma, so they go to FIND_IN_SET as themselves.
+	 * browser and HTTP-client addresses are checked in PHP and the matching ones handed to SQL.
+	 * Addresses never contain a comma, so they go to FIND_IN_SET as themselves.
 	 *
 	 * @param array $filters Keys 'verdicts', 'clients', 'categories', 'crawlers', 'signals', each an array of values.
 	 * @return array{verdicts: string, clients: string, categories: string, crawlers: string, signals: string, cloud_ips: string}
@@ -784,17 +784,21 @@ class MMSAR_Agent_Log {
 	}
 
 	/**
-	 * The stored browser addresses that sit in a cloud range, as a list the queries can take.
+	 * The stored browser and HTTP-client addresses that sit in a cloud range, as a list the queries
+	 * can take.
 	 *
 	 * An address that only partly overlaps a range is left out: the filter selects what the signal
-	 * says, and for those the signal says "cannot tell".
+	 * says, and for those the signal says "cannot tell". The queries pair this list with
+	 * `client_type IN ( 'browser', 'http' )`, written out as literals to keep the SQL a fixed string;
+	 * that pair must match MMSAR_Agent_Log_Signals::cloud_client_types(), and a test holds it there,
+	 * because an address can carry crawler rows too and those must not be selected.
 	 *
 	 * @return string Comma-joined addresses, or 'none' when there are none — a value no address
 	 *                equals, so the selection narrows to nothing rather than to everything.
 	 */
 	private static function cloud_filter_ips() {
 		$ips = array();
-		foreach ( self::distinct_browser_ips() as $ip ) {
+		foreach ( self::distinct_cloud_assessed_ips() as $ip ) {
 			$network = MMSAR_Agent_Log_Signals::cloud_network( $ip );
 			if ( '' !== $network && MMSAR_Agent_Log_Signals::CLOUD_PARTIAL !== $network ) {
 				$ips[] = $ip;
@@ -804,16 +808,18 @@ class MMSAR_Agent_Log {
 	}
 
 	/**
-	 * Every distinct address stored against a browser row, memoized for the request.
+	 * Every distinct address stored against a row the cloud signal is assessed on, memoized for the
+	 * request.
 	 *
 	 * @return string[]
 	 */
-	private static function distinct_browser_ips() {
+	private static function distinct_cloud_assessed_ips() {
 		static $ips = null;
 		if ( null === $ips ) {
 			global $wpdb;
+			list( $first, $second ) = MMSAR_Agent_Log_Signals::cloud_client_types();
 			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- This plugin's own table.
-			$ips = $wpdb->get_col( $wpdb->prepare( 'SELECT DISTINCT ip FROM %i WHERE client_type = %s', self::table(), self::CLIENT_BROWSER ) );
+			$ips = $wpdb->get_col( $wpdb->prepare( 'SELECT DISTINCT ip FROM %i WHERE client_type IN ( %s, %s )', self::table(), $first, $second ) );
 			$ips = is_array( $ips ) ? array_map( 'strval', $ips ) : array();
 		}
 		return $ips;
@@ -896,7 +902,7 @@ class MMSAR_Agent_Log {
 				  AND ( %s = ''
 				        OR ( FIND_IN_SET( 'signed', %s ) > 0 AND signature_agent <> '' )
 				        OR ( FIND_IN_SET( 'same_site', %s ) > 0 AND same_site = 1 )
-				        OR ( client_type = 'browser' AND FIND_IN_SET( ip, %s ) > 0 ) )
+				        OR ( client_type IN ( 'browser', 'http' ) AND FIND_IN_SET( ip, %s ) > 0 ) )
 				ORDER BY id DESC LIMIT %d OFFSET %d",
 				self::table(),
 				$f['verdicts'],
@@ -955,7 +961,7 @@ class MMSAR_Agent_Log {
 				  AND ( %s = ''
 				        OR ( FIND_IN_SET( 'signed', %s ) > 0 AND signature_agent <> '' )
 				        OR ( FIND_IN_SET( 'same_site', %s ) > 0 AND same_site = 1 )
-				        OR ( client_type = 'browser' AND FIND_IN_SET( ip, %s ) > 0 ) )",
+				        OR ( client_type IN ( 'browser', 'http' ) AND FIND_IN_SET( ip, %s ) > 0 ) )",
 				self::table(),
 				$f['verdicts'],
 				$f['verdicts'],
@@ -1248,7 +1254,7 @@ class MMSAR_Agent_Log {
 				  AND ( %s = ''
 				        OR ( FIND_IN_SET( 'signed', %s ) > 0 AND signature_agent <> '' )
 				        OR ( FIND_IN_SET( 'same_site', %s ) > 0 AND same_site = 1 )
-				        OR ( client_type = 'browser' AND FIND_IN_SET( ip, %s ) > 0 ) )
+				        OR ( client_type IN ( 'browser', 'http' ) AND FIND_IN_SET( ip, %s ) > 0 ) )
 				ORDER BY id DESC LIMIT %d",
 				self::table(),
 				$ip,
@@ -1309,8 +1315,9 @@ class MMSAR_Agent_Log {
 	 * The three browser signals, counted per client type over the whole log.
 	 *
 	 * One grouped read by client type and address, then the cloud signal worked out per distinct
-	 * address in PHP, because it is derived rather than stored. The cloud counts are for browser
-	 * rows only — see MMSAR_Agent_Log_Signals::for_row() — so they are zero on every other type.
+	 * address in PHP, because it is derived rather than stored. The cloud counts are for browser and
+	 * HTTP-client rows only — see MMSAR_Agent_Log_Signals::cloud_assessed() — so they are zero on
+	 * crawler and unrecorded rows.
 	 *
 	 * `same_site_recorded` is how many rows carry the Referer signal at all: rows from before 1.48.0
 	 * hold NULL, and a share of same-site rows is only meaningful over the recorded ones.
@@ -1357,7 +1364,7 @@ class MMSAR_Agent_Log {
 			$by[ $type ]['same_site']          += (int) $row['same_site'];
 			$by[ $type ]['same_site_recorded'] += (int) $row['same_site_recorded'];
 
-			if ( self::CLIENT_BROWSER !== $type ) {
+			if ( ! MMSAR_Agent_Log_Signals::cloud_assessed( $type ) ) {
 				continue;
 			}
 			$network = MMSAR_Agent_Log_Signals::cloud_network( (string) $row['ip'] );
@@ -2017,7 +2024,7 @@ class MMSAR_Agent_Log {
 				  AND ( %s = ''
 				        OR ( FIND_IN_SET( 'signed', %s ) > 0 AND signature_agent <> '' )
 				        OR ( FIND_IN_SET( 'same_site', %s ) > 0 AND same_site = 1 )
-				        OR ( client_type = 'browser' AND FIND_IN_SET( ip, %s ) > 0 ) )
+				        OR ( client_type IN ( 'browser', 'http' ) AND FIND_IN_SET( ip, %s ) > 0 ) )
 				ORDER BY id DESC LIMIT %d",
 				self::table(),
 				$cursor,

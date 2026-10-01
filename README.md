@@ -1,6 +1,6 @@
 # Make My Site Agent-Ready — WordPress Plugin
 
-A WordPress plugin that makes your site ready for AI agents and language models. Serves clean markdown at `.md` URLs, an Open Knowledge Format bundle at `/okf/`, `/llms.txt` and `/llms-full.txt` site indexes, an `/openapi.json` API description, a read-only MCP server, `/auth.md`, an Agentic Resource Discovery catalog, an `?mode=agent` view, an NLWeb `/ask` endpoint with a Schemamap, `/.well-known/security.txt`, and a machine-readable `/.well-known/api-catalog`, exposes Agent Skills discovery, sends `Link` response headers advertising all of it, declares AI usage preferences via Content Signals in `robots.txt` and a TDMRep reservation header, adds AI crawler rules, agent-recoverable 404s and `Deprecation`/`Sunset` headers for retiring endpoints, optionally points agents at the markdown alternate via JSON-LD structured data (merging into Yoast SEO's own schema when active, so nothing is duplicated), and exposes WordPress Abilities API endpoints for AI agent management.
+A WordPress plugin that makes your site ready for AI agents and language models. Serves clean markdown at `.md` URLs, an Open Knowledge Format bundle at `/okf/`, `/llms.txt` and `/llms-full.txt` site indexes, an `/openapi.json` API description, a read-only MCP server, `/auth.md`, an Agentic Resource Discovery catalog, an `?mode=agent` view, an NLWeb `/ask` endpoint with a Schemamap, `/.well-known/security.txt`, and a machine-readable `/.well-known/api-catalog`, exposes Agent Skills discovery, sends `Link` response headers advertising all of it, declares AI usage preferences via Content Signals in `robots.txt` and a TDMRep reservation header, adds AI crawler rules, agent-recoverable 404s and `Deprecation`/`Sunset` headers for retiring endpoints, optionally points agents at the markdown alternate via JSON-LD structured data (merging into Yoast SEO's own schema when active, so nothing is duplicated), can submit changed pages to IndexNow, keeps an optional agent request log that opens on a Summary of what the traffic means, and exposes WordPress Abilities API endpoints for AI agent management.
 
 ## Why
 
@@ -10,7 +10,7 @@ Eight existing plugins were analyzed before building the original `.md`/llms.txt
 
 ## Features
 
-Every feature below can be switched off individually under **Settings > Agent-Ready**. Most default on — publishing a new file or header that changes no existing response is low-risk enough to ship active. A handful default off instead, each for its own stated reason: content negotiation and the footer llms.txt link change something visible to a human visitor; the MCP server, NLWeb and MCP Apps UI run a query per request rather than serving a static file; the agent log writes to a database table nobody asked for until they opt in. The settings page states the reason on each toggle. A disabled feature registers nothing at all — no rewrite rule, no filter, no `Link` header — so the site behaves as if that part of the plugin did not exist.
+Every feature below can be switched off individually under **Settings > Agent-Ready**. Most default on — publishing a new file or header that changes no existing response is low-risk enough to ship active. A handful default off instead, each for its own stated reason: content negotiation and the footer llms.txt link change something visible to a human visitor; the MCP server, NLWeb and MCP Apps UI run a query per request rather than serving a static file; the agent log writes to a database table nobody asked for until they opt in; IndexNow is the only feature that sends anything to an outside service; and counting AI referrals adds the plugin's only visitor-side script. The settings page states the reason on each toggle. A disabled feature registers nothing at all — no rewrite rule, no filter, no `Link` header — so the site behaves as if that part of the plugin did not exist.
 
 ### Content access
 - **`.md` URL suffix** — any post or page is available at its URL with `.md` appended (e.g., `your-site.com/my-post.md`)
@@ -20,6 +20,7 @@ Every feature below can be switched off individually under **Settings > Agent-Re
 - **`/llms.txt` site index** (v2 of the [llms.txt](https://llmstxt.org/) proposal) — lists all available markdown URLs organized by category, cached with 24-hour transient. Large sites can also publish a scoped index per section (e.g. `/writing/llms.txt`) — each page advertises whichever index actually covers it via `rel="describedby"`, header or `<link>`, rather than always pointing at the site-wide one.
 - **`/llms-full.txt`** — full site content concatenated as markdown in a single file, for LLMs that want everything at once
 - **OKF bundle** at `/okf/` — the same content as an [Open Knowledge Format](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md) v0.2 tree: a root index, one index per post type, and one typed Markdown "concept" file per post/page (YAML front matter: `type`, `title`, `description`, `resource`, `tags`, `modified`), plus a `log.md` change log. Lets an agent fetch and address individual pieces of the corpus rather than either scraping HTML or downloading everything in `llms-full.txt`. Reuses the same generated markdown as the `.md` URLs — nothing is converted twice.
+- **Noindex respected** — a page your SEO plugin marks noindex is left out of `llms.txt`, `llms-full.txt`, the OKF indexes, MCP search and list, and NLWeb. Its own `.md` URL keeps working, as the HTML page does: noindex means "don't list this", and password protection is the tool for "don't serve this". Read from Yoast SEO and Rank Math (only while each is active); anything else can answer through the `mmsar_post_is_noindex` filter. On by default, switchable under Markdown Endpoints. "Discourage search engines" is deliberately not read, or every staging copy would publish empty indexes
 - **`<link rel="alternate">`** — HTML pages include a link tag pointing to their markdown version
 - **Markdown from the canonical URL** — opt-in, off by default. Answers a request for an ordinary page with its markdown when the request's `Accept` header prefers markdown, which is how AI fetch tools actually ask; the `.md` mirror only helps a client that already knows the mirror exists. The `Accept` parsing is strict where it protects people — markdown must be named explicitly, which no browser does, and a wildcard counts only towards HTML — and generous where it does not: markdown weighted equally with HTML (`text/markdown, text/html, */*`) gets markdown, since naming it at all is a choice only an agent makes. The same rule decides the Markdown body of an agent-recoverable 404. `Vary: Accept` is sent on both representations. Ships with a self-check (see Architecture notes) because whether this is safe depends on infrastructure the plugin cannot see.
 - **`?mode=agent`** — appended to any URL, returns that page as Markdown; on the homepage, returns a summary of every machine-readable surface the site has. A convention rather than a standard, but it gives a client the one lever it always has (a query parameter) when it's handed a bare URL and doesn't already know the site's other conventions.
@@ -35,12 +36,14 @@ Every feature below can be switched off individually under **Settings > Agent-Re
 - **MCP Apps UI** (experimental, off by default) — lets an MCP client render the search/list tools' results as a card list instead of plain text. Marked experimental because no MCP Apps host was available to verify it against; a client that ignores the metadata still gets the normal text result.
 - **Agent-recoverable 404s** — a normal 404 tells an agent only that its URL was wrong. This adds `Link` headers and `<link>` tags pointing at the sitemap, `llms.txt` and the endpoint catalog, and returns a short Markdown list of those destinations (instead of the themed error page) to clients that asked for Markdown explicitly. The 404 page itself looks identical to visitors.
 - **`Link` response headers** (RFC 8288) — every front-end response carries `Link` headers pointing to the resources above that are actually switched on; singular posts/pages add one pointing to their markdown alternate. Lets agents that only read headers, never HTML, still find these resources.
+- **IndexNow** (off by default) — submits a page's URL to [IndexNow](https://www.indexnow.org/) when it is published, changed or removed, so Bing, Yandex, Seznam, Naver and the other participating engines recrawl it instead of waiting. Bing's index is what ChatGPT search and Copilot ground on, which is why an agent-readiness plugin does this; Google does not take part. Serves the key file at `/{key}.txt` (IndexNow only accepts URLs at or below the key file, so it has to be at the root). Sends on `shutdown` of the save request itself, no cron. A post's old URL is sent too when it is unpublished, protected, or moved to a new slug. Skipped when Yoast SEO Premium, Rank Math's Instant Indexing, the IndexNow plugin or All in One SEO's IndexNow add-on already submits (`mmsar_indexnow_handled_elsewhere` covers anything else). The plugin's only outbound request to a third party: see External services in `readme.txt`
 - **Structured data (JSON-LD)** — opt-in, off by default. Points agents at the markdown alternate via an `encoding`/`MediaObject` field. When Yoast SEO is active and produces schema for the page, this merges directly into Yoast's own `Article`/`WebPage` piece — no duplicate block, nothing else in Yoast's graph touched. Otherwise (no Yoast, or a page type Yoast doesn't cover), a standalone minimal `Article`/`WebPage` JSON-LD block is added instead. Enable in Settings > Agent-Ready.
 
 ### Usage preferences and crawler rules
 - **Content Signals** — `Content-Signal: search=..., ai-input=..., ai-train=...` (per [contentsignals.org](https://contentsignals.org/) / the IETF AI Preferences draft) declared under each AI crawler's group in `robots.txt`. Configurable per-site: allow indexing, allow live AI retrieval, allow/decline model training use, independently.
 - **TDMRep reservation header** — sends `tdm-reservation: 1` or `0` on every response, the machine-readable form the EU's Copyright in the Digital Single Market Directive (Article 4) requires for a text-and-data-mining reservation to actually count — without it, mining is permitted by default. Not a separate setting: the value is derived from the AI Train answer in Content Signals above, so the two can never disagree. An optional Policy URL is sent alongside as `tdm-policy` when reserving.
 - **AI crawler rules in `robots.txt`** — explicit `Allow: /` entries for GPTBot, ClaudeBot, Anthropic-AI, GoogleOther, PerplexityBot, FacebookBot, Amazonbot, CCBot, and LinkupBot. Each group carries the site's Content-Signal line, so a training crawler is told what the content may be used for rather than being left to the general rules. Appends rather than replaces, so it works alongside a `robots.txt` generated by an SEO plugin. Also adds a `Sitemap:` directive if nothing else already has — detecting Yoast, Rank Math, All in One SEO, SEOPress, or WordPress core sitemaps to get the filename right. Switch this feature off and the plugin stops touching `robots.txt` entirely, including the rewrite rule that routes it through WordPress.
+- **Decline AI training crawlers** (off by default) — Content-Signal asks; this enforces as far as robots.txt can. Each token in `mmsar_training_crawler_tokens()` (GPTBot, ClaudeBot, Anthropic-AI, CCBot, Applebot-Extended, meta-externalagent, FacebookBot, Bytespider, Amazonbot, cohere-ai, cohere-training-data-crawler, Diffbot) gets `Disallow: /`. Search and assistant crawlers stay allowed. Google-Extended is excluded on purpose, because Google documents it as governing Gemini's grounding as well as training. The endpoint `Allow:` carve-outs below skip groups made only of declined crawlers, which would otherwise reopen part of the site to them.
 - **`/.well-known/security.txt`** — serves a security.txt file (RFC 9116). Enter your security contact as a full URL, a path like `/contact`, or an email address; the plugin expands it into a valid Contact URI. Falls back to the site admin email if unset. A free-text field is available for sites needing extra fields such as Encryption or Policy.
 
 ### Lifecycle
@@ -49,10 +52,11 @@ Every feature below can be switched off individually under **Settings > Agent-Re
 ### Configuration and operations
 - **Settings page** (Settings > Agent-Ready) — per-feature on/off toggles, post type selector, CSS root selector, robots.txt preview and extra-rules textarea, security contact, Content Signals toggles, a TDMRep policy URL, a structured data (JSON-LD) toggle, and a "View" link to every endpoint currently being served
 - **Bulk regeneration** — "Regenerate All" button on the settings page
-- **Agent request log** (off by default) — records which agents fetch the surfaces above, and robots.txt and the site's feeds, on its own screen at Settings > Agent Log, with filters, a Journeys view, a retention setting, a dashboard widget, a CSV export, and a read-only ability so an agent can read it too. Verifies each claimed crawler identity and tags every recognised bot with a category, so AI traffic can be separated from search and SEO traffic. Browser-shaped rows carry three signals — a Web Bot Auth signature (recorded, not verified), a published cloud-provider network, and whether the request followed a link on the site — because an agent driving a real browser otherwise looks exactly like a reader. See [The agent log](#the-agent-log)
+- **Agent request log** (off by default) — records which agents fetch the surfaces above, and robots.txt and the site's feeds, on its own screen at Settings > Agent Log, with filters, a Journeys view, a retention setting, a dashboard widget, a CSV export, and a read-only ability so an agent can read it too. Verifies each claimed crawler identity and tags every recognised bot with a category, so AI traffic can be separated from search and SEO traffic. Browser-shaped rows carry three signals — a Web Bot Auth signature (recorded, not verified), a published cloud-provider network, and whether the request followed a link on the site — because an agent driving a real browser otherwise looks exactly like a reader; the cloud-network signal also covers HTTP clients such as axios or curl. The screen opens on a Summary of what the last 30 days mean, with findings under three questions (being read, being cited, broken or ignored), also on the dashboard widget and as the `get-agent-insights` ability. See [The agent log](#the-agent-log)
+- **Visitors sent by AI assistants** (off by default, needs the agent log) — counts people who arrive from ChatGPT, Perplexity, Claude, Gemini, Copilot and other assistants, per assistant and landing page, shown on the Agent Log screen. Kept as a daily count only. See [Visitors sent by AI assistants](#visitors-sent-by-ai-assistants)
 - **Proper HTTP headers** — `Content-Type: text/markdown`, `X-Robots-Tag: noindex`, `X-Content-Type-Options: nosniff`, canonical link
 - **Password protection** — password-protected posts return 403 on `.md` URLs, and are excluded from every aggregate document (`llms-full.txt`, the OKF bundle) and the agent log
-- **Clean uninstall** — removes all plugin data (post meta, options, transients)
+- **Clean uninstall** — removes all plugin data (post meta, options, transients, and the agent log and AI referral tables)
 
 ## How it works
 
@@ -496,12 +500,13 @@ authenticated admin contexts, and all of them bounded by a wall-clock budget.
 `client_type` separates browser engines from HTTP clients. It cannot separate a person from an agent
 driving a real browser, because that agent *is* a browser and sends everything a reader sends. Since
 1.48.0 browser-shaped traffic carries three signals, shown in a *Signals* column and filterable. None
-is a verdict, and none moves a row out of the browser count; they annotate it.
+is a verdict, and none moves a row out of the browser count; they annotate it. Since 1.55.0 the cloud
+signal also covers HTTP clients, where it answers a different question (see below).
 
 | Signal | What it is | What it cannot tell you |
 |---|---|---|
 | **Signed** | The request carried a [Web Bot Auth](https://datatracker.ietf.org/doc/draft-ietf-webbotauth-httpsig-protocol/) signature (HTTP Message Signatures, RFC 9421, `tag="web-bot-auth"`) and a `Signature-Agent` naming the operator, stored as its origin — `https://chatgpt.com` for ChatGPT agent. | Whether the claim is true. The signature is recorded, not verified: checking it means fetching the operator's key directory, which is a call to a third party this plugin does not make. Copying the headers is trivial. |
-| **Cloud network** | The address is in a published AWS (EC2), Google Cloud, Azure, Oracle, DigitalOcean, Linode or Vultr range. Cloud browser agents arrive this way. | Whether the visitor is an agent. People on some VPNs and corporate security proxies arrive from the same ranges. Cloudflare WARP, iCloud Private Relay and home and mobile networks are deliberately not in the list. |
+| **Cloud network** | The address is in a published AWS (EC2), Google Cloud, Azure, Oracle, DigitalOcean, Linode or Vultr range. Cloud browser agents arrive this way. Assessed on browser and HTTP-client rows, not on named crawlers. | Whether the visitor is an agent. People on some VPNs and corporate security proxies arrive from the same ranges. Cloudflare WARP, iCloud Private Relay and home and mobile networks are deliberately not in the list. |
 | **Came from a link here** | The Referer's host is this site's. Separates a click, such as the footer's llms.txt link, from a direct fetch. | Where the click came from. Only yes or no is stored. |
 
 **The cloud signal is derived on read, not stored.** Almost all published cloud address space comes in
@@ -513,6 +518,13 @@ derived makes it retroactive: entries logged before 1.48.0 are covered. The rang
 published list, and dated; a stale snapshot misses new ranges rather than accusing anyone. The
 generator drops IANA special-purpose blocks, because Vultr's own feed lists `2002::/16` (6to4), which
 would otherwise label real people as a Vultr network.
+
+**On HTTP clients the cloud signal is attribution, not a human-or-agent test (1.55.0).** A request from
+axios, curl or python-requests is already known to be software, and most of them name nothing. Whether
+one runs on a cloud provider or on someone's own connection is the only thing the log can say about
+who runs it. It does separate them: on the site this plugin was built on, 20% of HTTP-client requests
+came from a published cloud range, against 11% of browser requests. Named crawlers are left out,
+because their operator's own verification method says more than their network does.
 
 **What no signal covers:** an agent that runs inside the person's own browser, such as Claude for
 Chrome or Perplexity Comet. It signs nothing, uses the person's own network and follows links the
@@ -543,8 +555,51 @@ The log is off by default. When it is on, this is what it keeps about people:
 - **Web Bot Auth signatures come from agents, never from people's browsers**, so recording one stores
   nothing about a reader.
 
+- **AI referral counts keep nothing about the visitor.** A day, an assistant, a landing page and a
+  count. No address, no user-agent, no referrer URL, no cookie.
+
 Recognised crawlers keep their full address, because verification needs it. Uninstalling the plugin
 drops the table, and the Agent Log screen can clear it at any time.
+
+### The Summary
+
+The Agent Log opens on a Summary: what the last 30 days mean, not the rows themselves. Findings sit under three questions, and each one is a sentence, the numbers behind it, a link to the matching log rows, and either an action or "what it means":
+
+- **Am I being read?** Who takes the Markdown version (by crawler and category), edited pages no AI search crawler has re-read (links to IndexNow), and coverage, but only when it is below 80%.
+- **Am I being cited?** The pages AI assistants (ChatGPT-User, Claude-User and similar) fetched while answering someone, and the visitors they sent.
+- **What's broken or being ignored?** Training crawlers reading despite `ai-train=no`, or despite the decline above once two days have passed, and 404s for known agent standards with what to do about each. Paths that match no standard, mostly security probes, are counted in one line rather than listed.
+
+Every finding has a threshold and stays silent below it. A row whose identity check failed is never counted. Verified rows and user-run clients such as Claude Code count, and the copy says the latter may be the owner. Unconfirmed rows are reported alongside. Computed on read and cached for an hour. The same findings are on the dashboard widget (the top one) and in the `get-agent-insights` ability.
+
+The thresholds and wording came from testing every candidate finding against 30 days of the author's own log. Two obvious ones were noise there: "pages no AI crawler read" (81 of 82 were read) and the raw 404 list (mostly probes).
+
+### Visitors sent by AI assistants
+
+Off by default, and only available while the log is on. The log answers "who reads this site";
+this answers the next question, "does any of it send people back".
+
+A visit counts when the referrer is an assistant's own domain (`chatgpt.com`, `perplexity.ai`,
+`claude.ai`, `gemini.google.com`, `copilot.microsoft.com`, `chat.deepseek.com`, `grok.com`,
+`chat.mistral.ai`, `meta.ai`, `you.com`, `phind.com`, `duck.ai`, matched dot-bounded) or the
+landing URL carries a matching `utm_source`. `bing.com` and `google.com` are deliberately absent:
+they carry Copilot and AI Overviews clicks, but also every ordinary search click.
+
+**It needs a script, which is the one thing this plugin runs in a visitor's browser.** An assistant
+referral is an ordinary page view, and a cached page view never reaches PHP. On the author's site a
+repeat request carrying `Referer: perplexity.ai`, or `?utm_source=chatgpt.com`, was a Cloudflare
+`HIT`. The inline script (about 1.2 KB) is printed through `wp_print_inline_script_tag()`, so a CSP
+nonce filter can reach it. It does nothing unless the referrer or `utm_source` matches, and then
+sends one `POST` to `/wp-json/mmsar/v1/referral` with the referrer host, the `utm_source` and the
+path.
+
+**The server trusts none of it.** It re-classifies against the same list, counts the landing page
+as the permalink it resolves to (`/` for the front page, `(other)` for anything that is not a
+published post), never the path sent, and counts one address once per assistant and page per half
+hour. Counts live in their own table, `{prefix}mmsar_referrals`, not in the agent log. These are
+people, and the log's surface categories and identity checks are built for agents.
+
+**It is a floor.** Many assistant apps open links without a referrer, and only ChatGPT tags
+`utm_source` consistently.
 
 ### Reading it
 
@@ -593,6 +648,7 @@ This plugin exposes abilities for the [WordPress Abilities API](https://develope
 | `make-my-site-agent-ready/list-endpoints` | Always on | Lists every endpoint being published, flagging which are managed on the settings page and which a plugin or theme registered in code, plus where each is actually appearing right now. |
 | `make-my-site-agent-ready/set-endpoint` | Always on | Adds an endpoint, or updates one already managed on the settings page. Send only the fields you want changed when updating. |
 | `make-my-site-agent-ready/delete-endpoint` | Always on (destructive) | Removes an endpoint managed on the settings page. |
+| `make-my-site-agent-ready/get-agent-insights` | Always on (read-only) | The Agent Log Summary as data: findings about the last 30 days under read, cited and broken, each with a kind, a sentence, supporting items and usually an action. Counts only verified crawler identities and user-run clients, never forged ones. Cached hourly; pass `fresh` to recompute |
 | `make-my-site-agent-ready/get-agent-log` | Always on (read-only) | Reads the agent request log: counts by agent, by surface, by requested detail and by day across the whole log, a verification breakdown, plus a page of individual entries. Pass `summary_only` for the aggregates alone, which carry counts of distinct IPs but no addresses, or `verified` to list only entries with a given verdict — `failed` lists the requests that forged a crawler identity. Every entry and `by_agent` row carries a `crawler_category`, `by_crawler_category` breaks traffic down by kind of bot, and the `crawler_category` input filter (`ai` for all three AI categories) separates AI traffic from search and SEO traffic. A `signals` block, a per-entry `signals` object and a `signal` filter carry the browser signals (signed, cloud network, came from a link on the site), each with its limits stated in the schema. `surface_categories` counts every entry by surface category — `docs`, `markdown`, `html`, `notfound`, `robots` and `feed` — and the `surface` filter takes the same values. |
 
 Endpoints a plugin or theme registered in code are read-only to `set-endpoint` and `delete-endpoint`: both return a `409` explaining that the owning plugin or theme has to be edited instead. Reporting success for a write that changed nothing would be worse than refusing it.

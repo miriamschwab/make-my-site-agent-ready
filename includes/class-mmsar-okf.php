@@ -316,7 +316,9 @@ class MMSAR_OKF {
 		foreach ( mmsar_get_enabled_post_types() as $post_type ) {
 			$count = wp_count_posts( $post_type );
 			$total = isset( $count->publish ) ? (int) $count->publish : 0;
-			if ( 0 === $total ) {
+			// The type index leaves noindexed posts out, so this count does too.
+			$total -= MMSAR_Noindex::count_for_type( $post_type );
+			if ( $total <= 0 ) {
 				continue;
 			}
 			$obj     = get_post_type_object( $post_type );
@@ -358,12 +360,14 @@ class MMSAR_OKF {
 		$label = $obj ? $obj->labels->name : $post_type;
 
 		$posts = get_posts(
-			array(
-				'post_type'      => $post_type,
-				'post_status'    => 'publish',
-				'posts_per_page' => -1,
-				'orderby'        => 'title',
-				'order'          => 'ASC',
+			MMSAR_Noindex::exclude(
+				array(
+					'post_type'      => $post_type,
+					'post_status'    => 'publish',
+					'posts_per_page' => -1,
+					'orderby'        => 'title',
+					'order'          => 'ASC',
+				)
 			)
 		);
 
@@ -411,13 +415,15 @@ class MMSAR_OKF {
 	 */
 	private static function generate_log() {
 		$posts = get_posts(
-			array(
-				'post_type'      => mmsar_get_enabled_post_types(),
-				'post_status'    => 'publish',
-				// phpcs:ignore WordPress.WP.PostsPerPage.posts_per_page_posts_per_page -- Intentional, fixed cap on a log that only ever runs on request, not per page load; see the docblock above.
-				'posts_per_page' => 200,
-				'orderby'        => 'modified',
-				'order'          => 'DESC',
+			MMSAR_Noindex::exclude(
+				array(
+					'post_type'      => mmsar_get_enabled_post_types(),
+					'post_status'    => 'publish',
+					// phpcs:ignore WordPress.WP.PostsPerPage.posts_per_page_posts_per_page -- Intentional, fixed cap on a log that only ever runs on request, not per page load; see the docblock above.
+					'posts_per_page' => 200,
+					'orderby'        => 'modified',
+					'order'          => 'DESC',
+				)
 			)
 		);
 

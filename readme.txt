@@ -4,7 +4,7 @@ Tags: markdown, llm, ai, llms-txt, agents
 Requires at least: 6.2
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.54.0
+Stable tag: 1.55.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -40,14 +40,19 @@ Every feature below can be switched off individually under Settings > Agent-Read
 * **TDMRep reservation header** — Sends `tdm-reservation: 1` or `0` on every response, the machine-readable form EU copyright law (DSM Directive Article 4) requires for a text-and-data-mining reservation to count. The value is derived from the AI Train setting above, not a separate choice, so the two can never disagree. An optional Policy URL is sent alongside it when reserving
 * **Structured data (JSON-LD)** — Optional (off by default) pointer to the markdown alternate on each enabled post/page. When Yoast SEO is active and produces schema for the page, the pointer merges directly into Yoast's own `Article`/`WebPage` piece — no duplicate block. Otherwise, a standalone `Article`/`WebPage` JSON-LD block is added instead. Enable in Settings > Agent-Ready.
 * **AI crawler rules** — Gives each named AI crawler its own group in `robots.txt` — GPTBot, ClaudeBot, Anthropic-AI, GoogleOther, PerplexityBot, FacebookBot, Amazonbot, CCBot and LinkupBot — with an explicit `Allow: /` and the site's Content-Signal line, so a training crawler is told what the content may be used for instead of falling through to general rules that may say nothing about it
+* **Decline AI training crawlers** — Optional (off by default). Content Signals ask crawlers not to train on your content; this makes it a robots.txt rule. GPTBot, ClaudeBot, CCBot, Amazonbot, Applebot-Extended, meta-externalagent, Bytespider and other crawlers that collect for model training get `Disallow: /`, and nothing this plugin adds reopens any part of the site to them. Search and assistant crawlers stay allowed, so you remain visible in AI search and answers. The Agent Log's Summary shows whether they comply
 * **llms.txt discovery in robots.txt** — Adds an `Llms-txt:` directive pointing at your `/llms.txt`, so agents that fetch `robots.txt` first are told where the index is. Skipped if llms.txt is switched off, or if `robots.txt` already mentions it
 * **Endpoints stay reachable** — If `robots.txt` disallows a path one of your published endpoints lives on (several SEO plugins disallow `/wp-json/` by default), an `Allow:` line for that individual endpoint is added above the rule blocking it. The endpoint stays reachable to agents that found it in your api-catalog, llms.txt or Agent Skills index; the rest of the REST API stays disallowed
 * **Deprecation/Sunset headers** — For surfaces you schedule for retirement (via a filter), responses carry `Deprecation` and `Sunset` headers so an agent is told a URL is going away before it does. Empty, and inactive, until you fill in a schedule
-* **Agent request log** — Optional (off by default). Records which agents fetch the surfaces above, robots.txt and your RSS and Atom feeds, and optionally page views, on its own screen at Settings > Agent Log, with filters, a Journeys view, CSV export, a dashboard widget and a read-only ability. Each entry's claimed crawler identity is checked against the operator's published IP ranges or forward-confirmed reverse DNS, a user-run client such as Claude Code is labelled as one instead of being called a forgery, and every recognised bot carries a category — AI training, AI search, AI assistant, search engine, SEO tool, monitoring, scanner or other — so AI traffic can be read apart from search and SEO traffic. robots.txt and feeds are counted under surfaces of their own, never as page views or agent documents, so the comparison between the two stays honest. Browser-shaped traffic, which looks like a person whether or not an agent is driving the browser, carries three signals: a Web Bot Auth signature and the operator it claims (recorded, not verified), a published cloud-provider network, and whether the request followed a link on the site
+* **Agent request log** — Optional (off by default). Records which agents fetch the surfaces above, robots.txt and your RSS and Atom feeds, and optionally page views, on its own screen at Settings > Agent Log, with filters, a Journeys view, CSV export, a dashboard widget and a read-only ability. Each entry's claimed crawler identity is checked against the operator's published IP ranges or forward-confirmed reverse DNS, a user-run client such as Claude Code is labelled as one instead of being called a forgery, and every recognised bot carries a category — AI training, AI search, AI assistant, search engine, SEO tool, monitoring, scanner or other — so AI traffic can be read apart from search and SEO traffic. robots.txt and feeds are counted under surfaces of their own, never as page views or agent documents, so the comparison between the two stays honest. Browser-shaped traffic, which looks like a person whether or not an agent is driving the browser, carries three signals: a Web Bot Auth signature and the operator it claims (recorded, not verified), a published cloud-provider network, and whether the request followed a link on the site. The cloud-network signal also covers scripts and other HTTP clients, telling a hosted service from one run on someone's own connection
+* **Agent Log Summary** — The Agent Log opens on what the last 30 days mean rather than on raw rows, organised as three questions: Am I being read? (who reads your Markdown, and edited pages AI search hasn't re-read), Am I being cited? (the pages AI assistants fetch to answer people, and the visitors they send), and What's broken or being ignored? (training crawlers reading despite your "no training", and standards agents looked for and didn't find). Each finding says what it means or what to do, links to the log rows behind it, and stays quiet when there is nothing worth saying. Forged crawler identities are never counted. Also on the dashboard widget and as a read-only ability for agents
 * **YAML frontmatter** — Title, date, modified date, author, URL, markdown URL, content type, excerpt, meta description (from Yoast SEO, when it has one), categories, and tags. The excerpt and the description can each be switched off. A theme or plugin can add fields of its own with the `mmsar_frontmatter` filter
 * **Pre-generated** — Markdown is generated when posts are saved, so `.md` requests are instant
 * **Discoverable** — Adds `<link rel="alternate" type="text/markdown">` to page headers
-* **Lightweight** — No cron jobs, no frontend JavaScript. The agent request log's table is the plugin's only database table
+* **Noindex respected** — A page your SEO plugin marks noindex is left out of llms.txt, llms-full.txt, the OKF indexes, MCP search and list, and NLWeb. Its own `.md` URL keeps working, like the page itself. Read from Yoast SEO and Rank Math; other plugins can answer through the `mmsar_post_is_noindex` filter. On by default, and can be switched off
+* **IndexNow** — Optional (off by default). Tells Bing, Yandex, Seznam, Naver and the other IndexNow engines when a page is published, changed or removed, so they recrawl it sooner. Bing's index is what ChatGPT search and Copilot answer from. Google does not take part. Skipped automatically when another plugin already submits. The only feature that contacts an outside service; see External services below
+* **Visitors sent by AI assistants** — Optional (off by default, needs the agent request log). Counts people who arrive from ChatGPT, Perplexity, Claude, Gemini, Copilot and other assistants, and which pages they land on, on the Agent Log screen. Keeps a daily count per assistant and page, nothing about the visitor. Adds a small script to your pages, because cached pages never reach WordPress; it sends one request only when the visitor came from an assistant
+* **Lightweight** — No cron jobs. Nothing runs in a visitor's browser unless you switch on AI referral counting. The plugin's only database tables are the agent request log's and, once you switch it on, the AI referral counts'
 
 **How it works:**
 
@@ -56,6 +61,14 @@ Every feature below can be switched off individually under Settings > Agent-Read
 3. The `/llms.txt` file lists all available markdown URLs organized by category
 4. The `/llms-full.txt` file concatenates the full content of all posts and pages
 5. The OKF bundle at `/okf/` wraps the same markdown in typed front matter, addressable one concept at a time
+
+== External services ==
+
+This plugin contacts one outside service, and only if you switch it on.
+
+**IndexNow (api.indexnow.org).** Off by default. When the IndexNow feature is on, publishing, updating, unpublishing or moving a post or page in one of the content types you selected sends a request to https://api.indexnow.org/indexnow. It contains your site's host name, your IndexNow key, the address of the key file on your site, and the public URLs that changed. Nothing about your visitors or your users is sent. The service passes the URLs to the search engines that take part in IndexNow, including Bing, Yandex, Seznam and Naver. IndexNow terms: https://www.indexnow.org/terms. Microsoft's privacy statement, which covers the shared endpoint: https://privacy.microsoft.com/privacystatement. Participating engines: https://www.indexnow.org/searchengines.json.
+
+Nothing else in this plugin sends data off your site. AI referral counting (off by default) runs a script in your visitors' browsers that reports to your own site only.
 
 == Installation ==
 
@@ -175,9 +188,40 @@ For people, this is what it keeps:
 * **The cloud-network signal stores nothing.** It is worked out, when the log is read, from the network address the log already holds.
 * **Web Bot Auth signatures** are sent by agents, never by people's browsers, so recording that one was present stores nothing about a reader.
 
+* **AI referral counts**, if you switch them on, keep a day, the assistant, the landing page and a number. No address, no browser details, no referrer URL, no cookie. The half-hour throttle that stops one visitor counting twice uses their address in memory only.
+
 Recognised crawlers keep their full address, because verifying who they are needs it. The whole table is removed when you delete the plugin, and the Agent Log screen can clear it at any time.
 
+= Are pages marked noindex left out? =
+
+Yes, by default. A page Yoast SEO or Rank Math marks noindex, by itself or through its content type's default, is left out of llms.txt, llms-full.txt, the OKF indexes, MCP search and list, and NLWeb. Its `.md` address keeps working, because the page itself is still public; use password protection for content that must not be read. Switch this off under Settings > Agent-Ready > Markdown Endpoints > Noindexed Content.
+
+"Discourage search engines from indexing this site" is not treated as noindex, so a staging copy still publishes its indexes. For another SEO plugin, return true from the `mmsar_post_is_noindex` filter:
+
+`add_filter( 'mmsar_post_is_noindex', function( $noindex, $post ) {`
+`    return $noindex || 'noindex' === get_post_meta( $post->ID, 'my_robots', true );`
+`}, 10, 2 );`
+
+= Can I stay in AI search but stop AI training? =
+
+Yes. Under Settings > Agent-Ready > robots.txt, tick "Decline AI training crawlers". Crawlers that collect for model training (GPTBot, ClaudeBot, CCBot, Amazonbot, Applebot-Extended, meta-externalagent, FacebookBot, Bytespider, cohere and Diffbot) get `Disallow: /`. The crawlers that power AI search and answers, such as OAI-SearchBot, ChatGPT-User, Claude-SearchBot, Claude-User, PerplexityBot and Amzn-SearchBot, are separate and stay allowed.
+
+Google-Extended is left alone, because Google uses it to control live answers in Gemini as well as training. robots.txt is a convention: well-behaved crawlers follow it, and the Agent Log's Summary tells you, from two days after you switch it on, whether any verified training crawler kept reading.
+
+= Why do AI referral counts look low? =
+
+They are a floor. Many AI apps open links without telling the site where the visitor came from, and only ChatGPT reliably tags its links with `utm_source`. Those visits look like direct visits and cannot be counted. Pages already in your cache pick up the counting script when the cache next refreshes, and a security plugin that blocks the REST API for visitors stops the count entirely.
+
 == Changelog ==
+
+= 1.55.0 - 2026-10-01 =
+
+* New: pages marked noindex in Yoast SEO or Rank Math are left out of llms.txt, llms-full.txt, the OKF indexes, MCP search and list, and NLWeb. Their `.md` URLs keep working. On by default, with a switch under Markdown Endpoints, and a `mmsar_post_is_noindex` filter for other SEO plugins.
+* New: IndexNow, off by default. Tells Bing and the other IndexNow engines when a page is published, changed, unpublished or moved. Skipped when another plugin already submits. This is the plugin's first and only contact with an outside service, described under External services.
+* New: the Agent Log opens on a Summary of what the last 30 days mean, grouped under three questions: Am I being read? Am I being cited? What's broken or being ignored? Each finding says what it means or what to do and links to the rows behind it. The top finding also appears on the dashboard widget, and a read-only Get Agent Insights ability returns them for agents. The list and Journeys views are one tab across.
+* New: decline AI training crawlers, off by default. Writes `Disallow: /` for crawlers that collect for model training and leaves AI search and assistant crawlers allowed.
+* New: count visitors sent by AI assistants, off by default and part of the agent request log. Shows which assistants send people and where they land, on the Agent Log screen. Stores daily counts only, nothing about the visitor. Adds a small script to your pages, which sends one request only when the visitor came from an assistant.
+* Changed: the Cloud network signal on the Agent Log now covers scripts and other HTTP clients too, not only browsers. An unnamed tool such as axios or curl running on AWS or Google Cloud now shows as coming from that provider, which tells a hosted service from someone running a script on their own connection. Named crawlers are not included. It works on entries already in the log.
 
 = 1.54.0 - 2026-09-29 =
 

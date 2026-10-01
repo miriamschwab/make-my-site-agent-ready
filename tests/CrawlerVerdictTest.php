@@ -22,6 +22,7 @@
  * @package Make_My_Site_Agent_Ready
  */
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -83,13 +84,12 @@ final class CrawlerVerdictTest extends TestCase {
 	}
 
 	/**
-	 * @dataProvider verdictShapes
-	 *
 	 * @param string $shape    What this row represents, for the failure message.
 	 * @param string $agent    Value as stored in the log's `agent` column.
 	 * @param string $ip       Value as stored in the log's `ip` column.
 	 * @param string $expected Expected verdict.
 	 */
+	#[DataProvider( 'verdictShapes' )]
 	public function test_verdict_for_shape( string $shape, string $agent, string $ip, string $expected ): void {
 		$this->assertSame(
 			$expected,
@@ -103,7 +103,7 @@ final class CrawlerVerdictTest extends TestCase {
 	 *
 	 * @return array<string, array{0:string,1:string,2:string,3:string}>
 	 */
-	public function verdictShapes(): array {
+	public static function verdictShapes(): array {
 		$linkup_raw   = 'LinkupBot/1.0 (LinkupBot for web indexing; https://linkup.so/bot; bot@linkup.so)';
 		$impostor_raw = 'LinkUpBot (job aggregator; linkup.com)';
 		$ssi_raw      = 'SSI-Nutch/1.23 (SSI broad web crawler; https://ssi.inc/; adi@ssi.inc)';

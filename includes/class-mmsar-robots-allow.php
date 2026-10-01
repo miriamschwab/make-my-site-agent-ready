@@ -64,9 +64,19 @@ class MMSAR_Robots_Allow {
 		$lines      = explode( "\n", $output );
 		$insertions = array();
 
+		$declined = function_exists( 'mmsar_declines_training' ) && mmsar_declines_training()
+			? array_map( 'strtolower', mmsar_training_crawler_tokens() )
+			: array();
+
 		foreach ( self::parse_groups( $lines ) as $group ) {
+			// A group made only of training crawlers the owner declined is a refusal, not an
+			// accident of an SEO plugin's defaults: carving endpoints out of it would reopen part of
+			// the site to exactly the crawlers the owner asked to stay out.
+			if ( $declined && $group['agents'] && ! array_diff( $group['agents'], $declined ) ) {
+				continue;
+			}
 			foreach ( $paths as $path ) {
-				$index = self::blocking_rule_index( $group, $path );
+				$index = self::blocking_rule_index( $group['rules'], $path );
 				if ( null === $index ) {
 					continue;
 				}
@@ -165,11 +175,13 @@ class MMSAR_Robots_Allow {
 	 * Getting that wrong would put an Allow in the wrong group, where it means nothing.
 	 *
 	 * @param string[] $lines The document, split into lines.
-	 * @return array[] Groups, each a list of array( index, directive, value ).
+	 * @return array[] Groups, each array( 'agents' => lowercase user-agent tokens, 'rules' => list of
+	 *                 array( index, directive, value ) ).
 	 */
 	private static function parse_groups( $lines ) {
 		$groups        = array();
 		$current       = array();
+		$agents        = array();
 		$seen_rule     = false;
 		$has_useragent = false;
 
@@ -196,12 +208,17 @@ class MMSAR_Robots_Allow {
 				// User-agent line joins the group being opened.
 				if ( $seen_rule ) {
 					if ( $has_useragent ) {
-						$groups[] = $current;
+						$groups[] = array(
+							'agents' => $agents,
+							'rules'  => $current,
+						);
 					}
 					$current   = array();
+					$agents    = array();
 					$seen_rule = false;
 				}
 				$has_useragent = true;
+				$agents[]      = strtolower( $value );
 				continue;
 			}
 
@@ -224,7 +241,10 @@ class MMSAR_Robots_Allow {
 		}
 
 		if ( $has_useragent ) {
-			$groups[] = $current;
+			$groups[] = array(
+				'agents' => $agents,
+				'rules'  => $current,
+			);
 		}
 
 		return $groups;

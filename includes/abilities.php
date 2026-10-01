@@ -94,6 +94,62 @@ function mmsar_register_abilities() {
 		)
 	);
 
+	// The Agent Log's Summary as data: the same findings, the same hourly cache. Read-only. Exists
+	// so an agent asked "what is happening with AI on my site" answers from the plugin's own reading
+	// of the log, thresholds and counting rules included, rather than re-deriving one from rows.
+	wp_register_ability(
+		'make-my-site-agent-ready/get-agent-insights',
+		array(
+			'label'               => __( 'Get Agent Insights', 'make-my-site-agent-ready' ),
+			'description'         => __( 'What the last 30 days of AI agent traffic mean for this site, as findings grouped under three questions: read (is the site being read by AI crawlers, and in which format), cited (which pages AI assistants fetch to answer people, and how many visitors they send), and broken (training crawlers reading despite the site\'s preferences, standards agents looked for and did not find). Each finding has a kind (todo: worth acting on; meaning: what the numbers say), a one-sentence text, supporting items, and usually an action. Only requests whose crawler identity checked out are counted, plus user-run clients such as Claude Code; forged identities never are. Every count is a floor. Cached for an hour; pass fresh to recompute.', 'make-my-site-agent-ready' ),
+			'category'            => 'make-my-site-agent-ready',
+			'input_schema'        => array(
+				'type'       => 'object',
+				'properties' => array(
+					'fresh' => array(
+						'type'        => 'boolean',
+						'default'     => false,
+						'description' => 'Recompute instead of reading the hourly cache.',
+					),
+				),
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'days'      => array(
+						'type'        => 'integer',
+						'description' => 'Days the findings cover, ending now.',
+					),
+					'generated' => array(
+						'type'        => 'integer',
+						'description' => 'When the findings were computed, as a Unix timestamp.',
+					),
+					'questions' => array(
+						'type'        => 'object',
+						'description' => 'Findings keyed by question: read, cited, broken. An empty list means nothing reached the threshold for reporting.',
+					),
+					'info'      => array(
+						'type'        => 'array',
+						'description' => 'One-line facts with nothing to act on, such as how many requests forged a crawler identity.',
+					),
+				),
+			),
+			'permission_callback' => fn() => current_user_can( 'manage_options' ),
+			'execute_callback'    => function ( $input = array() ) {
+				$fresh = is_array( $input ) && ! empty( $input['fresh'] );
+				return MMSAR_Agent_Insights::get( $fresh );
+			},
+			'meta'                => array(
+				'mcp'         => array( 'public' => true ),
+				'annotations' => array(
+					'readonly'    => true,
+					'destructive' => false,
+					'idempotent'  => true,
+				),
+			),
+		)
+	);
+
 	wp_register_ability(
 		'make-my-site-agent-ready/list-endpoints',
 		array(
@@ -515,7 +571,7 @@ function mmsar_register_abilities() {
 						'type'        => 'string',
 						'enum'        => array( '', 'signed', 'cloud', 'same_site' ),
 						'default'     => '',
-						'description' => 'Restrict entries to one browser signal — evidence about browser-shaped traffic that client_type cannot see. "signed" carried a Web Bot Auth signature (claimed, not verified). "cloud" is a browser-shaped request from a published cloud-provider range. "same_site" followed a link on this site. When a signal is given and client is left empty, browsers are included, since browsers are what the signals pick out. Read the signals block for what each one can and cannot tell before relying on it. Applies to entries only.',
+						'description' => 'Restrict entries to one browser signal — evidence about browser-shaped traffic that client_type cannot see. "signed" carried a Web Bot Auth signature (claimed, not verified). "cloud" is a browser or HTTP-client request from a published cloud-provider range (named crawlers are not assessed). "same_site" followed a link on this site. When a signal is given and client is left empty, browsers are included, since browsers are what the signals pick out. Read the signals block for what each one can and cannot tell before relying on it. Applies to entries only.',
 					),
 					'verified'         => array(
 						'type'        => 'string',
@@ -580,7 +636,7 @@ function mmsar_register_abilities() {
 					),
 					'signals'             => array(
 						'type'        => 'object',
-						'description' => 'Three signals about browser-shaped traffic, which client_type alone cannot tell apart from people: an agent driving a real browser sends exactly what a reader sends. **They annotate rows; they move nothing out of the browser count**, so client_types is unchanged by them. None is a verdict. **What they cannot see:** an agent running inside the person\'s own browser (Claude for Chrome, Perplexity Comet and the like) sends no signature, uses the person\'s own home or mobile network, and follows links like a person. It is indistinguishable from a human reader here, and no signal below covers it.',
+						'description' => 'Three signals about browser-shaped traffic, which client_type alone cannot tell apart from people: an agent driving a real browser sends exactly what a reader sends. **They annotate rows; they move nothing out of the browser count**, so client_types is unchanged by them. None is a verdict. **What they cannot see:** an agent running inside the person\'s own browser (Claude for Chrome, Perplexity Comet and the like) sends no signature, uses the person\'s own home or mobile network, and follows links like a person. It is indistinguishable from a human reader here, and no signal below covers it. The cloud signal is also assessed on http rows (since 1.55.0), where it is attribution rather than a human-or-agent question: it tells a hosted script from one run on someone\'s own connection.',
 						'properties'  => array(
 							'cloud_ranges_captured' => array(
 								'type'        => 'string',
@@ -588,7 +644,7 @@ function mmsar_register_abilities() {
 							),
 							'by_client'             => array(
 								'type'                 => 'object',
-								'description'          => 'Signal counts per client type ("crawler", "browser", "http", "unrecorded"), over the whole log. Each carries requests; signed (Web Bot Auth signature present — the claim, not a verification: no key is fetched and no signature is checked, and anything can copy the headers; human browsers never sign); same_site (followed a link on this site, judged from the Referer host; only yes/no is stored) and same_site_recorded (rows carrying that signal at all — it is recorded from 1.48.0, so compute shares over this, not over requests); cloud_network (the stored address is in a published AWS, Google Cloud, Azure, Oracle, DigitalOcean, Linode or Vultr range — a fact about the network, not the visitor: cloud-hosted browser agents arrive this way, and so do people on some VPNs and corporate security proxies; Cloudflare WARP, iCloud Private Relay and residential networks are not in the list) with by_cloud_provider; and cloud_partial (a stored network that only partly overlaps a narrower cloud range, so which side the request came from cannot be told). The cloud counts are assessed on browser rows only and are zero elsewhere. They are worked out from the stored address on every read, so they cover rows logged before this signal existed, and a refresh of the bundled ranges re-labels old rows too.',
+								'description'          => 'Signal counts per client type ("crawler", "browser", "http", "unrecorded"), over the whole log. Each carries requests; signed (Web Bot Auth signature present — the claim, not a verification: no key is fetched and no signature is checked, and anything can copy the headers; human browsers never sign); same_site (followed a link on this site, judged from the Referer host; only yes/no is stored) and same_site_recorded (rows carrying that signal at all — it is recorded from 1.48.0, so compute shares over this, not over requests); cloud_network (the stored address is in a published AWS, Google Cloud, Azure, Oracle, DigitalOcean, Linode or Vultr range — a fact about the network, not the visitor: cloud-hosted browser agents arrive this way, and so do people on some VPNs and corporate security proxies; Cloudflare WARP, iCloud Private Relay and residential networks are not in the list) with by_cloud_provider; and cloud_partial (a stored network that only partly overlaps a narrower cloud range, so which side the request came from cannot be told). The cloud counts are assessed on browser and http rows (http since 1.55.0, where they tell a hosted script such as axios on AWS from one run on someone\'s own connection) and are zero on crawler and unrecorded rows. They are worked out from the stored address on every read, so they cover rows logged before this signal existed, and a refresh of the bundled ranges re-labels old rows too.',
 								'additionalProperties' => array(
 									'type'       => 'object',
 									'properties' => array(
@@ -794,7 +850,7 @@ function mmsar_register_abilities() {
 										),
 										'cloud_network'   => array(
 											'type'        => array( 'string', 'null' ),
-											'description' => 'On browser rows: the cloud provider whose published range holds the stored address ("aws", "gcp", "azure", "oracle", "digitalocean", "linode", "vultr"), "partial" when the stored network only partly overlaps one, or "" for none. Null on other client types, where it is not assessed. A fact about the network, not the visitor.',
+											'description' => 'On browser and http rows: the cloud provider whose published range holds the stored address ("aws", "gcp", "azure", "oracle", "digitalocean", "linode", "vultr"), "partial" when the stored network only partly overlaps one, or "" for none. Null on crawler and unrecorded rows, where it is not assessed. A fact about the network, not the visitor.',
 										),
 										'same_site'       => array(
 											'type'        => array( 'boolean', 'null' ),

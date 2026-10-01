@@ -10,6 +10,7 @@
  * @package Make_My_Site_Agent_Ready
  */
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -18,11 +19,10 @@ use PHPUnit\Framework\TestCase;
 final class FrontmatterFilterTest extends TestCase {
 
 	/**
-	 * @dataProvider fieldShapes
-	 *
 	 * @param mixed    $fields   What the filter returned.
 	 * @param string[] $expected YAML lines.
 	 */
+	#[DataProvider( 'fieldShapes' )]
 	public function test_renders_fields( $fields, array $expected ): void {
 		$this->assertSame( $expected, MMSAR_Converter::extra_frontmatter_lines( $fields ) );
 	}
@@ -30,7 +30,7 @@ final class FrontmatterFilterTest extends TestCase {
 	/**
 	 * @return array<string, array{0:mixed,1:string[]}>
 	 */
-	public function fieldShapes(): array {
+	public static function fieldShapes(): array {
 		return array(
 			'nothing'                      => array( array(), array() ),
 			'not an array'                 => array( 'series: x', array() ),
@@ -57,10 +57,9 @@ final class FrontmatterFilterTest extends TestCase {
 	}
 
 	/**
-	 * @dataProvider rejectedFields
-	 *
 	 * @param array $fields What the filter returned.
 	 */
+	#[DataProvider( 'rejectedFields' )]
 	public function test_skips_field( array $fields ): void {
 		$this->assertSame( array( 'kept: "yes"' ), MMSAR_Converter::extra_frontmatter_lines( $fields + array( 'kept' => 'yes' ) ) );
 	}
@@ -70,7 +69,7 @@ final class FrontmatterFilterTest extends TestCase {
 	 *
 	 * @return array<string, array{0:array}>
 	 */
-	public function rejectedFields(): array {
+	public static function rejectedFields(): array {
 		$cases = array();
 		foreach ( MMSAR_Converter::CORE_FRONTMATTER_KEYS as $core ) {
 			$cases[ 'core key ' . $core ] = array( array( $core => 'override' ) );
@@ -109,11 +108,10 @@ final class FrontmatterFilterTest extends TestCase {
 	 * is a line break, because `\n---\n` inside a value would close the frontmatter for any reader
 	 * that splits on delimiter lines.
 	 *
-	 * @dataProvider escapedStrings
-	 *
 	 * @param string $value    Raw value.
 	 * @param string $expected Rendered line.
 	 */
+	#[DataProvider( 'escapedStrings' )]
 	public function test_escapes_string( string $value, string $expected ): void {
 		$this->assertSame( array( $expected ), MMSAR_Converter::extra_frontmatter_lines( array( 'series' => $value ) ) );
 	}
@@ -121,7 +119,7 @@ final class FrontmatterFilterTest extends TestCase {
 	/**
 	 * @return array<string, array{0:string,1:string}>
 	 */
-	public function escapedStrings(): array {
+	public static function escapedStrings(): array {
 		return array(
 			'double quote'             => array( 'say "hi"', 'series: "say \"hi\""' ),
 			'backslash'                => array( 'C:\path', 'series: "C:\\\\path"' ),
@@ -142,11 +140,10 @@ final class FrontmatterFilterTest extends TestCase {
 	 * The SEO description line: omitted when empty, stripped of HTML, escaped and flattened like
 	 * every other string.
 	 *
-	 * @dataProvider descriptions
-	 *
 	 * @param string $raw      Description as the SEO plugin or filter returned it.
 	 * @param string $expected Rendered line, or '' for no line.
 	 */
+	#[DataProvider( 'descriptions' )]
 	public function test_description_line( string $raw, string $expected ): void {
 		$this->assertSame( $expected, MMSAR_Converter::description_line( $raw ) );
 	}
@@ -154,7 +151,7 @@ final class FrontmatterFilterTest extends TestCase {
 	/**
 	 * @return array<string, array{0:string,1:string}>
 	 */
-	public function descriptions(): array {
+	public static function descriptions(): array {
 		return array(
 			'plain'               => array( 'Bulk PageSpeed scans from wp-admin.', 'description: "Bulk PageSpeed scans from wp-admin."' ),
 			'empty'               => array( '', '' ),

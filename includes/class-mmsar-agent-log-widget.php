@@ -110,6 +110,8 @@ class MMSAR_Agent_Log_Widget {
 			? (int) $summary['counts'][ MMSAR_Agent_Log_Verify::FAILED ]
 			: 0;
 
+		self::render_top_insight();
+
 		// On any site running this, a non-zero forged count is the headline finding — it is the one
 		// thing here that changes how every other number should be read. Shown before the entries
 		// rather than as a column on them, because it is a fact about the whole log.
@@ -370,6 +372,42 @@ class MMSAR_Agent_Log_Widget {
 			}
 			echo '</p>';
 		}
+	}
+
+	/**
+	 * The one Summary finding most worth seeing, with a link to the rest.
+	 *
+	 * Something to do beats something to know, and a finding about being cited beats one about
+	 * being read, because that is the order an owner cares in. Reads the Summary's hourly cache, so
+	 * the dashboard costs a cache read on most loads and never a DNS lookup.
+	 *
+	 * @return void
+	 */
+	private static function render_top_insight() {
+		$insights = MMSAR_Agent_Insights::get();
+		$order    = array( 'cited', 'broken', 'read' );
+		$pick     = null;
+		foreach ( array( 'todo', 'meaning' ) as $kind ) {
+			foreach ( $order as $question ) {
+				foreach ( (array) ( $insights['questions'][ $question ] ?? array() ) as $finding ) {
+					if ( $kind === $finding['kind'] ) {
+						$pick = $finding;
+						break 3;
+					}
+				}
+			}
+		}
+		if ( null === $pick ) {
+			return;
+		}
+		echo '<p style="margin:0 0 8px;padding:6px 8px;background:#f0f6fc;border-left:3px solid ' . esc_attr( 'todo' === $pick['kind'] ? '#dba617' : '#2271b1' ) . ';">';
+		echo '<strong>' . esc_html( $pick['title'] ) . '.</strong> ' . esc_html( $pick['text'] ) . ' ';
+		printf(
+			'<a href="%1$s">%2$s</a>',
+			esc_url( admin_url( 'options-general.php?page=' . MMSAR_Agent_Log_Page::SLUG . '&view=summary' ) ),
+			esc_html__( 'See the summary', 'make-my-site-agent-ready' )
+		);
+		echo '</p>';
 	}
 
 	/**

@@ -458,13 +458,15 @@ class MMSAR_LLMs_Txt {
 		$site_name = self::decode( get_bloginfo( 'name' ) );
 
 		$posts = get_posts(
-			array(
-				'post_type'      => $post_type,
-				'post_status'    => 'publish',
-				'posts_per_page' => -1,
-				'orderby'        => 'date',
-				'order'          => 'DESC',
-				'has_password'   => false,
+			MMSAR_Noindex::exclude(
+				array(
+					'post_type'      => $post_type,
+					'post_status'    => 'publish',
+					'posts_per_page' => -1,
+					'orderby'        => 'date',
+					'order'          => 'DESC',
+					'has_password'   => false,
+				)
 			)
 		);
 
@@ -652,13 +654,15 @@ class MMSAR_LLMs_Txt {
 			return array();
 		}
 		return get_posts(
-			array(
-				'post_type'      => $type,
-				'post_status'    => 'publish',
-				'has_password'   => false,
-				'posts_per_page' => -1,
-				'orderby'        => 'title',
-				'order'          => 'ASC',
+			MMSAR_Noindex::exclude(
+				array(
+					'post_type'      => $type,
+					'post_status'    => 'publish',
+					'has_password'   => false,
+					'posts_per_page' => -1,
+					'orderby'        => 'title',
+					'order'          => 'ASC',
+				)
 			)
 		);
 	}
@@ -674,13 +678,15 @@ class MMSAR_LLMs_Txt {
 		$result = array();
 		foreach ( $custom as $type ) {
 			$posts = get_posts(
-				array(
-					'post_type'      => $type,
-					'post_status'    => 'publish',
-					'has_password'   => false,
-					'posts_per_page' => -1,
-					'orderby'        => 'title',
-					'order'          => 'ASC',
+				MMSAR_Noindex::exclude(
+					array(
+						'post_type'      => $type,
+						'post_status'    => 'publish',
+						'has_password'   => false,
+						'posts_per_page' => -1,
+						'orderby'        => 'title',
+						'order'          => 'ASC',
+					)
 				)
 			);
 			if ( ! empty( $posts ) ) {
@@ -702,14 +708,16 @@ class MMSAR_LLMs_Txt {
 			return array();
 		}
 		return get_posts(
-			array(
-				'post_type'      => 'post',
-				'post_status'    => 'publish',
-				'has_password'   => false,
-				'cat'            => $cat_id,
-				'posts_per_page' => -1,
-				'orderby'        => 'date',
-				'order'          => 'DESC',
+			MMSAR_Noindex::exclude(
+				array(
+					'post_type'      => 'post',
+					'post_status'    => 'publish',
+					'has_password'   => false,
+					'cat'            => $cat_id,
+					'posts_per_page' => -1,
+					'orderby'        => 'date',
+					'order'          => 'DESC',
+				)
 			)
 		);
 	}

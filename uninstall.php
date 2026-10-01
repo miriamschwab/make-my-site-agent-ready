@@ -26,6 +26,12 @@ delete_option( 'mmsar_agent_log_migrated' );
 delete_option( 'mmsar_agent_log_pages' );
 delete_option( 'mmsar_negotiation_check' );
 delete_option( 'mmsar_negotiation_reset_done' );
+delete_option( 'mmsar_indexnow_key' );
+delete_option( 'mmsar_indexnow_last' );
+delete_option( 'mmsar_referrals' );
+delete_option( 'mmsar_referrals_db_version' );
+delete_option( 'mmsar_decline_training' );
+delete_option( 'mmsar_decline_training_since' );
 delete_transient( 'llmmd_llms_txt' );
 delete_transient( 'mmsar_llms_full_txt' );
 delete_transient( 'mmsar_flush_needed' );
@@ -56,3 +62,7 @@ $wpdb->query( $wpdb->prepare( "DELETE FROM {$wpdb->postmeta} WHERE meta_key = %s
 // The agent log's own table.
 // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.DirectDatabaseQuery.SchemaChange -- Dropping this plugin's own table on uninstall.
 $wpdb->query( $wpdb->prepare( 'DROP TABLE IF EXISTS %i', $wpdb->prefix . 'mmsar_agent_log' ) );
+
+// The AI referral counts' own table (1.55.0). Holds counts only, no visitor data.
+// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.DirectDatabaseQuery.SchemaChange -- Dropping this plugin's own table on uninstall.
+$wpdb->query( $wpdb->prepare( 'DROP TABLE IF EXISTS %i', $wpdb->prefix . 'mmsar_referrals' ) );

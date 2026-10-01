@@ -10,6 +10,7 @@
  * @package Make_My_Site_Agent_Ready
  */
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -18,11 +19,10 @@ use PHPUnit\Framework\TestCase;
 final class AcceptTest extends TestCase {
 
 	/**
-	 * @dataProvider markdownHeaders
-	 *
 	 * @param string $header   Accept header.
 	 * @param bool   $expected Whether Markdown is served.
 	 */
+	#[DataProvider( 'markdownHeaders' )]
 	public function test_prefers_markdown( string $header, bool $expected ): void {
 		$this->assertSame( $expected, MMSAR_Accept::prefers_markdown( $header ), sprintf( 'Wrong answer for Accept: %s', $header ) );
 	}
@@ -30,7 +30,7 @@ final class AcceptTest extends TestCase {
 	/**
 	 * @return array<string, array{0:string,1:bool}>
 	 */
-	public function markdownHeaders(): array {
+	public static function markdownHeaders(): array {
 		return array(
 			// Browsers. None names Markdown, so none can ever match — this is the guarantee.
 			'Chrome navigation'                    => array( 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7', false ),

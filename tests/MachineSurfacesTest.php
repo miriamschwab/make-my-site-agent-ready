@@ -13,6 +13,7 @@
  * @package Make_My_Site_Agent_Ready
  */
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 if ( ! function_exists( 'mmsar_feature_enabled' ) ) {
@@ -319,12 +320,11 @@ final class MachineSurfacesTest extends TestCase {
 	}
 
 	/**
-	 * @dataProvider categorisedRows
-	 *
 	 * @param string $surface  Stored surface.
 	 * @param string $detail   Stored detail.
 	 * @param string $expected Category.
 	 */
+	#[DataProvider( 'categorisedRows' )]
 	public function test_category_of_a_stored_row( string $surface, string $detail, string $expected ): void {
 		$this->assertSame( array( $expected ), $this->categorise( array( array( $surface, $detail ) ) ) );
 	}
@@ -332,7 +332,7 @@ final class MachineSurfacesTest extends TestCase {
 	/**
 	 * @return array<string, array{0:string,1:string,2:string}>
 	 */
-	public function categorisedRows(): array {
+	public static function categorisedRows(): array {
 		return array(
 			'robots.txt, 1.49.0 onward'           => array( 'robots.txt', '', 'robots' ),
 			'robots.txt stored as a page view'    => array( 'HTML page view (asked for HTML)', '/robots.txt', 'robots' ),
@@ -491,11 +491,10 @@ final class MachineSurfacesTest extends TestCase {
 	/**
 	 * The detail is the canonical path of the feed that was served, whatever the request line said.
 	 *
-	 * @dataProvider feedPaths
-	 *
 	 * @param array  $query    Query state.
 	 * @param string $expected Stored detail.
 	 */
+	#[DataProvider( 'feedPaths' )]
 	public function test_feed_detail( array $query, string $expected ): void {
 		$this->request( self::MINIFLUX, self::AWS, array( 'is_feed' => true ) + $query, array( 'REQUEST_URI' => '/?feed=rss2&s=private+words&cachebust=81723' ) );
 		$this->feed( 200 );
@@ -505,7 +504,7 @@ final class MachineSurfacesTest extends TestCase {
 	/**
 	 * @return array<string, array{0:array,1:string}>
 	 */
-	public function feedPaths(): array {
+	public static function feedPaths(): array {
 		$term = new WP_Term(
 			(object) array(
 				'term_id'  => 3,
@@ -566,24 +565,24 @@ final class MachineSurfacesTest extends TestCase {
 	 * /comments/feed/ to the homepage, after wp_headers has run — was never served a feed, and
 	 * neither was one that errored.
 	 *
-	 * @dataProvider unservedStatuses
-	 *
 	 * @param int $status HTTP status.
 	 */
+	#[DataProvider( 'unservedStatuses' )]
 	public function test_a_feed_that_was_not_served_is_not_recorded( int $status ): void {
 		$this->request( self::MINIFLUX, self::AWS, array( 'is_feed' => true, 'feed' => 'atom' ) );
 		$this->feed( $status );
 		$this->assertSame( array(), $this->rows() );
 
-		// And the note does not survive to be recorded by a later response.
+		// And the note does not survive to be recorded by a later response. Read the store directly:
+		// PHPStan carries the first assertion's narrowing of rows() across the static call.
 		MMSAR_Agent_Log::record_feed_response( 200 );
-		$this->assertSame( array(), $this->rows() );
+		$this->assertSame( array(), $this->db->rows );
 	}
 
 	/**
 	 * @return array<string, array{0:int}>
 	 */
-	public function unservedStatuses(): array {
+	public static function unservedStatuses(): array {
 		return array(
 			'301 redirect' => array( 301 ),
 			'302 redirect' => array( 302 ),
@@ -615,13 +614,12 @@ final class MachineSurfacesTest extends TestCase {
 	 * Decision 6B. The page-view address rule, except that a self-hosted reader keeps its full
 	 * address only from inside a cloud range.
 	 *
-	 * @dataProvider feedAddresses
-	 *
 	 * @param string $ua     User-agent.
 	 * @param string $ip     Client address.
 	 * @param array  $extra  Further headers.
 	 * @param string $stored Expected stored address.
 	 */
+	#[DataProvider( 'feedAddresses' )]
 	public function test_feed_address_rule( string $ua, string $ip, array $extra, string $stored ): void {
 		$this->request( $ua, $ip, array( 'is_feed' => true, 'feed' => 'feed' ), $extra );
 		$this->feed( 200 );
@@ -631,7 +629,7 @@ final class MachineSurfacesTest extends TestCase {
 	/**
 	 * @return array<string, array{0:string,1:string,2:array,3:string}>
 	 */
-	public function feedAddresses(): array {
+	public static function feedAddresses(): array {
 		$browser = array(
 			'HTTP_SEC_FETCH_MODE' => 'navigate',
 			'HTTP_SEC_FETCH_DEST' => 'document',

@@ -9,6 +9,7 @@
  * @package Make_My_Site_Agent_Ready
  */
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -27,8 +28,6 @@ final class CrawlerCategoryTest extends TestCase {
 	}
 
 	/**
-	 * @dataProvider trimmedAgents
-	 *
 	 * The stored label for an unrecognised caller must keep the part that tells two callers apart.
 	 * Truncating from the left kept only what every browser of a family sends identically: on the
 	 * site this was found on, one 80-character label covered 725 requests from 339 addresses.
@@ -36,6 +35,7 @@ final class CrawlerCategoryTest extends TestCase {
 	 * @param string $ua       Raw user-agent.
 	 * @param string $expected Expected stored label.
 	 */
+	#[DataProvider( 'trimmedAgents' )]
 	public function test_trimmed_user_agent( string $ua, string $expected ): void {
 		$this->assertSame( $expected, MMSAR_Agent_Log::trimmed_user_agent( $ua ), sprintf( 'Wrong stored label for %s', $ua ) );
 	}
@@ -43,7 +43,7 @@ final class CrawlerCategoryTest extends TestCase {
 	/**
 	 * @return array<string, array{0:string,1:string}>
 	 */
-	public function trimmedAgents(): array {
+	public static function trimmedAgents(): array {
 		$chrome  = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36';
 		$firefox = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:109.0) Gecko/20100101 Firefox/119.0';
 		return array(
@@ -65,8 +65,6 @@ final class CrawlerCategoryTest extends TestCase {
 	}
 
 	/**
-	 * @dataProvider attributorNames
-	 *
 	 * An attribution names who was behind a forged crawler identity, so a name that identifies
 	 * nobody is worse than no name at all. The live log carried rows reading "spoofed by Mozilla":
 	 * the old parser took the first token before a slash, which is right for a bare `OraBot/1.0`
@@ -76,6 +74,7 @@ final class CrawlerCategoryTest extends TestCase {
 	 * @param string $agent    Raw user-agent.
 	 * @param string $expected Expected display name, '' for no usable name.
 	 */
+	#[DataProvider( 'attributorNames' )]
 	public function test_attributor_short_name( string $agent, string $expected ): void {
 		$this->assertSame( $expected, MMSAR_Agent_Log_Attribution::short_name( $agent ), sprintf( 'Wrong attributor name for %s', $agent ) );
 	}
@@ -83,7 +82,7 @@ final class CrawlerCategoryTest extends TestCase {
 	/**
 	 * @return array<string, array{0:string,1:string}>
 	 */
-	public function attributorNames(): array {
+	public static function attributorNames(): array {
 		return array(
 			'bare product token'              => array( 'OraBot/1.0 (+https://ora.ai/bot)', 'OraBot' ),
 			'name inside compatible comment'  => array( 'Mozilla/5.0 (compatible; SemrushBot/7~bl; +http://www.semrush.com/bot.html)', 'SemrushBot' ),
@@ -172,11 +171,10 @@ final class CrawlerCategoryTest extends TestCase {
 	}
 
 	/**
-	 * @dataProvider categoryShapes
-	 *
 	 * @param string $agent    Stored agent value.
 	 * @param string $expected Expected category.
 	 */
+	#[DataProvider( 'categoryShapes' )]
 	public function test_category_for_stored_value( string $agent, string $expected ): void {
 		$this->assertSame( $expected, MMSAR_Agent_Log::crawler_category( $agent ), sprintf( 'Wrong category for %s', $agent ) );
 	}
@@ -186,7 +184,7 @@ final class CrawlerCategoryTest extends TestCase {
 	 *
 	 * @return array<string, array{0:string,1:string}>
 	 */
-	public function categoryShapes(): array {
+	public static function categoryShapes(): array {
 		return array(
 			'FeedBurner, bare label'                   => array( 'FeedBurner', MMSAR_Agent_Log::CRAWLER_OTHER ),
 			'FeedBurner, raw user-agent'               => array( 'FeedBurner/1.0 (http://www.FeedBurner.com)', MMSAR_Agent_Log::CRAWLER_OTHER ),
@@ -263,14 +261,13 @@ final class CrawlerCategoryTest extends TestCase {
 	}
 
 	/**
-	 * @dataProvider newVerdicts
-	 *
 	 * @param string   $agent    Stored agent value.
 	 * @param string   $ip       Stored address.
 	 * @param string   $host     What the fake reverse lookup returns.
 	 * @param string[] $forward  What the fake forward lookup returns.
 	 * @param string   $expected Expected verdict.
 	 */
+	#[DataProvider( 'newVerdicts' )]
 	public function test_new_crawler_verdicts( string $agent, string $ip, string $host, array $forward, string $expected ): void {
 		wp_stub_reset();
 		add_filter( 'mmsar_agent_log_reverse_lookup', static fn() => $host );
@@ -283,7 +280,7 @@ final class CrawlerCategoryTest extends TestCase {
 	 *
 	 * @return array<string, array{0:string,1:string,2:string,3:string[],4:string}>
 	 */
-	public function newVerdicts(): array {
+	public static function newVerdicts(): array {
 		$ahrefs = '54.36.148.1';
 		return array(
 			'AhrefsBot, forward-confirmed ahrefs.net'  => array( 'AhrefsBot', $ahrefs, 'proxy-de002-cip10.ahrefs.net', array( $ahrefs ), 'verified' ),
@@ -426,8 +423,6 @@ final class CrawlerCategoryTest extends TestCase {
 	}
 
 	/**
-	 * @dataProvider storedLabels
-	 *
 	 * The label written at record time, from the full user-agent each bot actually sends. This is
 	 * the other half of the stored-shape rule: the cases above read a stored value, these produce
 	 * one.
@@ -435,6 +430,7 @@ final class CrawlerCategoryTest extends TestCase {
 	 * @param string $ua       Raw user-agent.
 	 * @param string $expected Expected stored label.
 	 */
+	#[DataProvider( 'storedLabels' )]
 	public function test_label_for_user_agent( string $ua, string $expected ): void {
 		$this->assertSame( $expected, MMSAR_Agent_Log::label_for( $ua ), sprintf( 'Wrong stored label for %s', $ua ) );
 	}
@@ -442,7 +438,7 @@ final class CrawlerCategoryTest extends TestCase {
 	/**
 	 * @return array<string, array{0:string,1:string}>
 	 */
-	public function storedLabels(): array {
+	public static function storedLabels(): array {
 		return array(
 			'CensysInspect'      => array( 'Mozilla/5.0 (compatible; CensysInspect/1.1; +https://about.censys.io/)', 'CensysInspect' ),
 			'Cortex Xpanse'      => array( 'Hello from Palo Alto Networks, find out more about our scans in https://docs-cortex.paloaltonetworks.com/r/1/Cortex-Xpanse/Scanning-activity', 'Cortex Xpanse (Palo Alto Networks)' ),

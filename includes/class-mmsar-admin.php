@@ -171,6 +171,10 @@ class MMSAR_Admin {
 				__( 'TDM reservation (TDMRep)', 'make-my-site-agent-ready' ),
 				__( 'Sends a tdm-reservation response header declaring whether you reserve the right to object to text and data mining of this content — the machine-readable notice EU copyright law (DSM Directive Article 4) requires for that reservation to count. Its value is not a separate setting: it is derived from the AI Train answer in Content Signals below, so the two can never contradict each other. Set a Policy URL below to say where a would-be licensee should ask.', 'make-my-site-agent-ready' ),
 			),
+			'indexnow'             => array(
+				__( 'IndexNow', 'make-my-site-agent-ready' ),
+				__( 'Tells search engines that take part in IndexNow — Bing, Yandex, Seznam, Naver and others — the moment a page is published, changed or removed, so they recrawl it instead of waiting. Bing\'s index is what ChatGPT search and Copilot answer from, which is why this is here. Google does not take part. Publishes a key file at your site root that proves the requests come from you. This is the only feature that sends anything to an outside service: your site\'s address and the changed page URLs go to api.indexnow.org, nothing about visitors. Skipped automatically when another plugin already does it. Off by default.', 'make-my-site-agent-ready' ),
+			),
 			'okf_bundle'           => array(
 				__( 'OKF bundle', 'make-my-site-agent-ready' ),
 				__( 'Publishes your content as an Open Knowledge Format (v0.2) bundle at /okf/ — one typed Markdown concept file per post/page, with a browsable index per post type and a root index and change log. Lets an agent ingest the whole corpus in one pass instead of scraping page by page. Reuses the same Markdown already generated for the .md URLs above.', 'make-my-site-agent-ready' ),
@@ -195,6 +199,10 @@ class MMSAR_Admin {
 		// this is the one feature whose safety depends on infrastructure in front of WordPress.
 		// It cannot run here: the new value is not stored until this callback returns, so the
 		// feature would still be off when the probes went out.
+		// The key has to exist before the rewrite flush below, because the key file's rule names it.
+		if ( '1' === $out['indexnow'] ) {
+			MMSAR_IndexNow::key();
+		}
 		if ( '1' === $out['markdown_negotiation'] && ! mmsar_feature_enabled( 'markdown_negotiation' ) ) {
 			MMSAR_Negotiation_Check::schedule();
 		}
@@ -222,7 +230,7 @@ class MMSAR_Admin {
 	 * have a single fixed endpoint are here — markdown is per-page, so it has no one URL to link to.
 	 */
 	public static function get_feature_urls() {
-		return array(
+		$urls = array(
 			'llms_txt'      => '/llms.txt',
 			'llms_full_txt' => '/llms-full.txt',
 			'robots_txt'    => '/robots.txt',
@@ -238,6 +246,12 @@ class MMSAR_Admin {
 			'nlweb'         => '/schema-map.xml',
 			'okf_bundle'    => '/okf/index.md',
 		);
+		// Only once a key exists: building this list must not create one for a feature that is off.
+		$indexnow_key = get_option( MMSAR_IndexNow::KEY_OPTION, '' );
+		if ( MMSAR_IndexNow::is_valid_key( $indexnow_key ) ) {
+			$urls['indexnow'] = '/' . $indexnow_key . '.txt';
+		}
+		return $urls;
 	}
 
 	/**
@@ -284,12 +298,16 @@ class MMSAR_Admin {
 		foreach ( self::get_feature_labels() as $key => $labels ) {
 			list( $label, $description ) = $labels;
 			$checked                     = mmsar_feature_enabled( $key ) ? 'checked' : '';
-			echo '<div style="margin-bottom:14px;">';
+			// The id is what the Agent Log's Summary links to when a finding says "switch this on".
+			echo '<div id="mmsar-feature-' . esc_attr( $key ) . '" style="margin-bottom:14px;scroll-margin-top:48px;">';
 			echo '<label style="font-weight:600;">';
 			echo '<input type="checkbox" name="mmsar_features[' . esc_attr( $key ) . ']" value="1" ' . esc_attr( $checked ) . '> ';
 			echo esc_html( $label );
 			echo '</label>';
 			echo '<p class="description" style="margin-left:24px;">' . esc_html( $description ) . '</p>';
+			if ( 'indexnow' === $key && mmsar_feature_enabled( 'indexnow' ) ) {
+				self::render_indexnow_status();
+			}
 
 			// Action links under the description: a live "View" link to the served file (only when the
 			// feature is on, so we never link to a 404), and a jump link to its settings section below.
@@ -317,6 +335,33 @@ class MMSAR_Admin {
 
 			echo '</div>';
 		}
+	}
+
+	/**
+	 * One line under the IndexNow toggle: who is submitting, and how the last submission went.
+	 *
+	 * @return void
+	 */
+	private static function render_indexnow_status() {
+		$elsewhere = MMSAR_IndexNow::handled_elsewhere();
+		if ( '' !== $elsewhere ) {
+			/* translators: %s: name of another plugin. */
+			$text = sprintf( __( 'Not submitting: %s already sends your changes to IndexNow.', 'make-my-site-agent-ready' ), $elsewhere );
+		} else {
+			$last = get_option( MMSAR_IndexNow::LAST_OPTION, array() );
+			if ( ! is_array( $last ) || empty( $last['time'] ) ) {
+				$text = __( 'Nothing submitted yet. The next post you publish or update is sent.', 'make-my-site-agent-ready' );
+			} else {
+				$text = sprintf(
+					/* translators: 1: number of URLs, 2: how long ago, 3: what the response meant. */
+					_n( 'Last submission: %1$d URL, %2$s ago. %3$s', 'Last submission: %1$d URLs, %2$s ago. %3$s', (int) $last['count'], 'make-my-site-agent-ready' ),
+					(int) $last['count'],
+					human_time_diff( (int) $last['time'] ),
+					MMSAR_IndexNow::describe_code( isset( $last['code'] ) ? (int) $last['code'] : 0 )
+				);
+			}
+		}
+		echo '<p class="description" style="margin-left:24px;"><strong>' . esc_html( $text ) . '</strong></p>';
 	}
 
 	/**
@@ -620,6 +665,37 @@ class MMSAR_Admin {
 	}
 
 	/**
+	 * The AI referrals switch.
+	 *
+	 * @return void
+	 */
+	public static function render_referrals_field() {
+		echo '<label id="mmsar-referrals" style="scroll-margin-top:48px;"><input type="checkbox" name="' . esc_attr( MMSAR_Referrals::OPTION ) . '" value="1" ' . checked( '1', (string) get_option( MMSAR_Referrals::OPTION, '' ), false ) . '> ';
+		esc_html_e( 'Count people who arrive from ChatGPT, Perplexity, Claude, Gemini, Copilot and other AI assistants', 'make-my-site-agent-ready' );
+		echo '</label>';
+		echo '<p class="description">';
+		esc_html_e( 'Shows which assistants send people to your site, and which pages they land on, on the Agent Log screen. A visit is counted when the page it lands on was linked from an AI assistant, judged from the referring site or a utm_source tag. Only a daily count per assistant and page is kept: no address, no browser details, no cookie.', 'make-my-site-agent-ready' );
+		echo '</p>';
+		echo '<p class="description">';
+		esc_html_e( 'This adds a small script to your pages, the only thing this plugin runs in a visitor\'s browser. It is needed because cached pages never reach WordPress, so a visit could not be counted otherwise. It stays silent unless the visitor came from an AI assistant, and then sends one request. The count is a floor: many assistant apps open links without saying where they came from. Off by default. Pages already cached pick the script up when the cache next refreshes.', 'make-my-site-agent-ready' );
+		echo '</p>';
+	}
+
+	/**
+	 * Sanitizes the referrals switch, and creates the table when it is first switched on.
+	 *
+	 * @param mixed $value Submitted value.
+	 * @return string
+	 */
+	public static function sanitize_referrals( $value ) {
+		$on = '1' === ( is_scalar( $value ) ? (string) $value : '' );
+		if ( $on ) {
+			MMSAR_Referrals::maybe_install();
+		}
+		return $on ? '1' : '';
+	}
+
+	/**
 	 * Sanitizes the page-view mode, keeping the pre-1.25.0 checkbox value meaningful.
 	 *
 	 * @param mixed $value Submitted value.
@@ -745,6 +821,14 @@ class MMSAR_Admin {
 		);
 
 		add_settings_field(
+			'mmsar_respect_noindex',
+			__( 'Noindexed Content', 'make-my-site-agent-ready' ),
+			array( __CLASS__, 'render_respect_noindex_field' ),
+			'make-my-site-agent-ready',
+			'mmsar_main'
+		);
+
+		add_settings_field(
 			'mmsar_frontmatter_summary',
 			__( 'Summary in Frontmatter', 'make-my-site-agent-ready' ),
 			array( __CLASS__, 'render_frontmatter_summary_field' ),
@@ -782,6 +866,15 @@ class MMSAR_Admin {
 			)
 		);
 
+		register_setting(
+			'mmsar_settings_group',
+			'mmsar_decline_training',
+			array(
+				'sanitize_callback' => array( __CLASS__, 'sanitize_decline_training' ),
+				'default'           => '',
+			)
+		);
+
 		add_settings_section(
 			'mmsar_robots_txt',
 			__( 'robots.txt', 'make-my-site-agent-ready' ),
@@ -797,6 +890,14 @@ class MMSAR_Admin {
 		// These two only make sense while the plugin is actually generating robots.txt. When it
 		// isn't, the section shows the opt-out explanation on its own.
 		if ( mmsar_feature_enabled( 'robots_txt' ) ) {
+			add_settings_field(
+				'mmsar_decline_training',
+				__( 'AI training crawlers', 'make-my-site-agent-ready' ),
+				array( __CLASS__, 'render_decline_training_field' ),
+				'make-my-site-agent-ready',
+				'mmsar_robots_txt'
+			);
+
 			add_settings_field(
 				'mmsar_robots_txt_preview',
 				__( 'Current Content', 'make-my-site-agent-ready' ),
@@ -825,6 +926,15 @@ class MMSAR_Admin {
 			)
 		);
 
+		register_setting(
+			'mmsar_settings_group',
+			MMSAR_Referrals::OPTION,
+			array(
+				'sanitize_callback' => array( __CLASS__, 'sanitize_referrals' ),
+				'default'           => '',
+			)
+		);
+
 		if ( mmsar_feature_enabled( 'agent_log' ) ) {
 			add_settings_section(
 				'mmsar_agent_log',
@@ -837,6 +947,14 @@ class MMSAR_Admin {
 				'mmsar_agent_log_pages',
 				__( 'Also log normal page views', 'make-my-site-agent-ready' ),
 				array( __CLASS__, 'render_agent_log_pages_field' ),
+				'make-my-site-agent-ready',
+				'mmsar_agent_log'
+			);
+
+			add_settings_field(
+				'mmsar_referrals',
+				__( 'Count visitors sent by AI assistants', 'make-my-site-agent-ready' ),
+				array( __CLASS__, 'render_referrals_field' ),
 				'make-my-site-agent-ready',
 				'mmsar_agent_log'
 			);
@@ -1011,6 +1129,14 @@ class MMSAR_Admin {
 		}
 		self::frontmatter_summary_notices( $sanitized );
 
+		// Same absent-means-on rule as the summary boxes, with its own form marker.
+		$key = MMSAR_Noindex::SETTING;
+		if ( ! empty( $input['noindex_form'] ) || isset( $input[ $key ] ) ) {
+			$sanitized[ $key ] = empty( $input[ $key ] ) ? '0' : '1';
+		} elseif ( is_array( $current ) && isset( $current[ $key ] ) ) {
+			$sanitized[ $key ] = '0' === (string) $current[ $key ] ? '0' : '1';
+		}
+
 		mmsar_flush_generated_documents();
 
 		return $sanitized;
@@ -1098,6 +1224,23 @@ class MMSAR_Admin {
 	}
 
 	/**
+	 * Render the noindex checkbox.
+	 *
+	 * @return void
+	 */
+	public static function render_respect_noindex_field() {
+		echo '<label>';
+		echo '<input type="checkbox" name="llmmd_settings[' . esc_attr( MMSAR_Noindex::SETTING ) . ']" value="1" ' . checked( MMSAR_Noindex::enabled(), true, false ) . '> ';
+		echo esc_html__( 'Leave pages marked noindex out of the lists agents read', 'make-my-site-agent-ready' );
+		echo '</label>';
+		echo '<input type="hidden" name="llmmd_settings[noindex_form]" value="1">';
+		echo '<p class="description">' . esc_html__( 'A page your SEO plugin marks noindex is left out of llms.txt, llms-full.txt, the OKF bundle, MCP search and list, and NLWeb. Its own .md address keeps working, like the page itself. Read from Yoast SEO and Rank Math; other plugins can use the mmsar_post_is_noindex filter.', 'make-my-site-agent-ready' ) . '</p>';
+		if ( ! defined( 'WPSEO_VERSION' ) && ! defined( 'RANK_MATH_VERSION' ) && ! has_filter( 'mmsar_post_is_noindex' ) ) {
+			echo '<p class="description"><strong>' . esc_html__( 'Neither Yoast SEO nor Rank Math is active, so no page is currently treated as noindex.', 'make-my-site-agent-ready' ) . '</strong></p>';
+		}
+	}
+
+	/**
 	 * Render the frontmatter summary checkboxes.
 	 *
 	 * @return void
@@ -1124,6 +1267,52 @@ class MMSAR_Admin {
 			echo '<p class="description"><strong>' . esc_html__( 'No meta description source was found on this site, so the description line is currently never written.', 'make-my-site-agent-ready' ) . '</strong></p>';
 		}
 		echo '<p class="description">' . esc_html__( 'Changes apply to existing markdown after Regenerate All, at the bottom of this page.', 'make-my-site-agent-ready' ) . '</p>';
+	}
+
+	/**
+	 * The decline-training checkbox.
+	 *
+	 * @return void
+	 */
+	public static function render_decline_training_field() {
+		echo '<label id="mmsar-decline-training" style="scroll-margin-top:48px;"><input type="checkbox" name="mmsar_decline_training" value="1" ' . checked( mmsar_declines_training(), true, false ) . '> ';
+		esc_html_e( 'Decline AI training crawlers', 'make-my-site-agent-ready' );
+		echo '</label>';
+		echo '<p class="description">';
+		esc_html_e( 'Content Signals below ask crawlers not to use your content for training, but a crawler can read the request and fetch everything anyway. This makes it a rule: each crawler that collects for model training gets Disallow: / in robots.txt, and nothing this plugin adds reopens any part of the site to it. Crawlers that search or answer questions are not affected, so you stay visible in ChatGPT search, Claude, Perplexity and similar.', 'make-my-site-agent-ready' );
+		echo '</p>';
+		echo '<p class="description">';
+		printf(
+			/* translators: %s: comma-separated list of crawler names */
+			esc_html__( 'Declined: %s.', 'make-my-site-agent-ready' ),
+			'<code>' . esc_html( implode( ', ', mmsar_training_crawler_tokens() ) ) . '</code>'
+		);
+		echo ' ';
+		esc_html_e( 'Google-Extended is left alone, because Google uses it to control live answers in Gemini as well as training. robots.txt is a convention crawlers choose to follow; the Agent Log shows whether they do. Off by default.', 'make-my-site-agent-ready' );
+		echo '</p>';
+		$signals = get_option( 'mmsar_content_signals', array() );
+		if ( mmsar_declines_training() && is_array( $signals ) && isset( $signals['ai_train'] ) && 'yes' === $signals['ai_train'] ) {
+			echo '<p class="description"><strong>' . esc_html__( 'Your Content Signal below still says training is allowed. You may want to set AI Train to No so the two agree.', 'make-my-site-agent-ready' ) . '</strong></p>';
+		}
+	}
+
+	/**
+	 * Sanitizes the decline-training switch, recording when it was switched on.
+	 *
+	 * The date lets the Agent Log tell apart training reads from before the decline from reads
+	 * that ignored it.
+	 *
+	 * @param mixed $value Submitted value.
+	 * @return string
+	 */
+	public static function sanitize_decline_training( $value ) {
+		$on = '1' === ( is_scalar( $value ) ? (string) $value : '' );
+		if ( $on && ! mmsar_declines_training() ) {
+			update_option( 'mmsar_decline_training_since', time(), false );
+		} elseif ( ! $on ) {
+			delete_option( 'mmsar_decline_training_since' );
+		}
+		return $on ? '1' : '';
 	}
 
 	/**
