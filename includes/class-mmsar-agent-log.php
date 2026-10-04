@@ -718,7 +718,7 @@ class MMSAR_Agent_Log {
 	 * Addresses never contain a comma, so they go to FIND_IN_SET as themselves.
 	 *
 	 * @param array $filters Keys 'verdicts', 'clients', 'categories', 'crawlers', 'signals', each an array of values.
-	 * @return array{verdicts: string, clients: string, categories: string, crawlers: string, signals: string, cloud_ips: string}
+	 * @return array{verdicts: string, clients: string, also_surface: string, categories: string, crawlers: string, signals: string, cloud_ips: string}
 	 */
 	private static function normalize_filters( $filters ) {
 		$filters = is_array( $filters ) ? $filters : array();
@@ -743,8 +743,14 @@ class MMSAR_Agent_Log {
 				array_merge( self::client_types(), array( 'unrecorded' ) )
 			)
 		);
+		// The default excludes browser rows, which are mostly people reading pages. WebMCP calls are
+		// the exception: they are agent tool calls that happen to come from a browser (1.57.0), so the
+		// default view lets that one surface through whatever its client type. Any explicit client
+		// choice is taken literally.
+		$also_surface = '';
 		if ( ! $clients && ! $signals ) {
-			$clients = array( self::CLIENT_CRAWLER, self::CLIENT_HTTP, 'unrecorded' );
+			$clients      = array( self::CLIENT_CRAWLER, self::CLIENT_HTTP, 'unrecorded' );
+			$also_surface = self::SURFACE_WEBMCP;
 		} elseif ( ! $clients ) {
 			$clients = array_merge( self::client_types(), array( 'unrecorded' ) );
 		}
@@ -775,12 +781,13 @@ class MMSAR_Agent_Log {
 		}
 
 		return array(
-			'verdicts'   => implode( ',', $verdicts ),
-			'clients'    => implode( ',', $clients ),
-			'categories' => implode( ',', $categories ),
-			'crawlers'   => $crawlers ? self::crawler_filter_hashes( $crawlers ) : '',
-			'signals'    => implode( ',', $signals ),
-			'cloud_ips'  => in_array( MMSAR_Agent_Log_Signals::CLOUD, $signals, true ) ? self::cloud_filter_ips() : '',
+			'verdicts'     => implode( ',', $verdicts ),
+			'clients'      => implode( ',', $clients ),
+			'also_surface' => $also_surface,
+			'categories'   => implode( ',', $categories ),
+			'crawlers'     => $crawlers ? self::crawler_filter_hashes( $crawlers ) : '',
+			'signals'      => implode( ',', $signals ),
+			'cloud_ips'    => in_array( MMSAR_Agent_Log_Signals::CLOUD, $signals, true ) ? self::cloud_filter_ips() : '',
 		);
 	}
 
@@ -891,7 +898,7 @@ class MMSAR_Agent_Log {
 				"SELECT logged_at, surface, detail, arguments, agent, ip, verified, verified_at, client_type, signature_agent, same_site
 				FROM %i
 				WHERE ( %s = '' OR FIND_IN_SET( IF( verified = '', 'pending', verified ), %s ) > 0 )
-				  AND ( %s = '' OR FIND_IN_SET( IF( client_type = '', 'unrecorded', client_type ), %s ) > 0 )
+				  AND ( %s = '' OR FIND_IN_SET( IF( client_type = '', 'unrecorded', client_type ), %s ) > 0 OR ( %s <> '' AND surface = %s ) )
 				  AND ( %s = '' OR FIND_IN_SET(
 				        CASE WHEN surface = %s OR ( surface LIKE %s AND ( detail = %s OR detail LIKE %s ) ) THEN 'robots'
 				             WHEN surface = %s THEN 'feed'
@@ -910,6 +917,8 @@ class MMSAR_Agent_Log {
 				$f['verdicts'],
 				$f['clients'],
 				$f['clients'],
+				$f['also_surface'],
+				$f['also_surface'],
 				$f['categories'],
 				$cat['robots'],
 				$cat['html'],
@@ -950,7 +959,7 @@ class MMSAR_Agent_Log {
 			$wpdb->prepare(
 				"SELECT COUNT(*) FROM %i
 				WHERE ( %s = '' OR FIND_IN_SET( IF( verified = '', 'pending', verified ), %s ) > 0 )
-				  AND ( %s = '' OR FIND_IN_SET( IF( client_type = '', 'unrecorded', client_type ), %s ) > 0 )
+				  AND ( %s = '' OR FIND_IN_SET( IF( client_type = '', 'unrecorded', client_type ), %s ) > 0 OR ( %s <> '' AND surface = %s ) )
 				  AND ( %s = '' OR FIND_IN_SET(
 				        CASE WHEN surface = %s OR ( surface LIKE %s AND ( detail = %s OR detail LIKE %s ) ) THEN 'robots'
 				             WHEN surface = %s THEN 'feed'
@@ -968,6 +977,8 @@ class MMSAR_Agent_Log {
 				$f['verdicts'],
 				$f['clients'],
 				$f['clients'],
+				$f['also_surface'],
+				$f['also_surface'],
 				$f['categories'],
 				$cat['robots'],
 				$cat['html'],
@@ -1244,7 +1255,7 @@ class MMSAR_Agent_Log {
 				FROM %i
 				WHERE ( %s = '' OR ip = %s OR ip LIKE %s )
 				  AND ( %s = '' OR FIND_IN_SET( IF( verified = '', 'pending', verified ), %s ) > 0 )
-				  AND ( %s = '' OR FIND_IN_SET( IF( client_type = '', 'unrecorded', client_type ), %s ) > 0 )
+				  AND ( %s = '' OR FIND_IN_SET( IF( client_type = '', 'unrecorded', client_type ), %s ) > 0 OR ( %s <> '' AND surface = %s ) )
 				  AND ( %s = '' OR FIND_IN_SET(
 				        CASE WHEN surface = %s OR ( surface LIKE %s AND ( detail = %s OR detail LIKE %s ) ) THEN 'robots'
 				             WHEN surface = %s THEN 'feed'
@@ -1266,6 +1277,8 @@ class MMSAR_Agent_Log {
 				$f['verdicts'],
 				$f['clients'],
 				$f['clients'],
+				$f['also_surface'],
+				$f['also_surface'],
 				$f['categories'],
 				$cat['robots'],
 				$cat['html'],
@@ -2014,7 +2027,7 @@ class MMSAR_Agent_Log {
 				FROM %i
 				WHERE id < %d
 				  AND ( %s = '' OR FIND_IN_SET( IF( verified = '', 'pending', verified ), %s ) > 0 )
-				  AND ( %s = '' OR FIND_IN_SET( IF( client_type = '', 'unrecorded', client_type ), %s ) > 0 )
+				  AND ( %s = '' OR FIND_IN_SET( IF( client_type = '', 'unrecorded', client_type ), %s ) > 0 OR ( %s <> '' AND surface = %s ) )
 				  AND ( %s = '' OR FIND_IN_SET(
 				        CASE WHEN surface = %s OR ( surface LIKE %s AND ( detail = %s OR detail LIKE %s ) ) THEN 'robots'
 				             WHEN surface = %s THEN 'feed'
@@ -2034,6 +2047,8 @@ class MMSAR_Agent_Log {
 				$f['verdicts'],
 				$f['clients'],
 				$f['clients'],
+				$f['also_surface'],
+				$f['also_surface'],
 				$f['categories'],
 				$cat['robots'],
 				$cat['html'],
@@ -2252,6 +2267,11 @@ class MMSAR_Agent_Log {
 	 */
 	const SURFACE_ROBOTS = 'robots.txt';
 	const SURFACE_FEED   = 'Feed';
+
+	/**
+	 * The surface WebMCP tool calls are recorded under (1.57.0).
+	 */
+	const SURFACE_WEBMCP = 'WebMCP JSON-RPC';
 
 	/**
 	 * Feed readers that are software a person installs, not a service one operator runs.

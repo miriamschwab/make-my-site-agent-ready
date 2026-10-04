@@ -2,6 +2,12 @@
 
 All notable changes to Make My Site Agent-Ready.
 
+## 1.57.0 — 2026-10-04
+
+- New: WebMCP (off by default, needs the MCP server). Pages offer the MCP server's read-only tools to an AI agent working in the visitor's browser, through `document.modelContext`, so it can search the site, list content, read a page (the one it is on, by default) and get an overview. The tools are read from the server card and every call goes to the MCP endpoint, so nothing is implemented twice. A small inline script checks for the API and stops in browsers without it; where it exists, the bridge script loads from a versioned path. Calls are logged under their own surface, `WebMCP JSON-RPC`, with the caller's address shortened to its network, because the caller is a person's browser. They appear in the Agent Log's default view, unlike other browser rows.
+- New: a WebMCP settings section, with the current status, the tools a browser gets, and a field for origin-trial tokens. Each token is checked when saved (right site, WebMCP trial, not expired, not third-party) and printed as an `origin-trial` meta tag on every page, whether or not the bridge is on, since a token serves any WebMCP tools on the site. Site Health warns when WebMCP is in use and its token is missing or expires within 14 days.
+- Changed: the MCP server card lists each tool's annotations.
+
 ## 1.56.0 — 2026-10-04
 
 - New: MCP `list_content` and `search_content` take an optional `topic`, the slug of a category, tag or other public taxonomy term attached to the content types the plugin serves. A slug shared by several taxonomies matches all of them. An unknown slug returns an error that lists the site's topics instead of an empty result. New filter `mmsar_mcp_topic_taxonomies`.

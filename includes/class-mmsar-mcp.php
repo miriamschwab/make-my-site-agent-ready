@@ -129,12 +129,13 @@ class MMSAR_MCP {
 	 * @return WP_REST_Response Response.
 	 */
 	public static function handle( WP_REST_Request $request ) {
-		$rate = self::consume_rate_limit();
+		$route = self::route_of( $request );
+		$rate  = self::consume_rate_limit();
 		if ( ! $rate['allowed'] ) {
 			// Recorded, because a client being turned away is the one MCP event that leaves no
 			// other trace: it never reaches dispatch(), so without this a caller hammering the
 			// endpoint hard enough to be refused looks identical to a caller that never came.
-			MMSAR_Agent_Log::record( 'MCP JSON-RPC', 'rate limited', true );
+			MMSAR_Agent_Log::record( $route['surface'], 'rate limited', true, $route['anonymize'] );
 
 			// -32000 is in the JSON-RPC implementation-defined server error range. The HTTP status
 			// matters too: a client that understands 429 can back off without parsing the body.
@@ -150,7 +151,7 @@ class MMSAR_MCP {
 			// where an object belongs. A body that is not valid JSON at all never gets here: the
 			// REST server rejects it with rest_invalid_json before any route callback runs, so
 			// that case is outside what this endpoint can see, let alone record.
-			MMSAR_Agent_Log::record( 'MCP JSON-RPC', 'parse error', true );
+			MMSAR_Agent_Log::record( $route['surface'], 'parse error', true, $route['anonymize'] );
 			return self::error_response( null, -32700, 'Parse error: request body is not valid JSON.', 400 );
 		}
 
@@ -159,7 +160,7 @@ class MMSAR_MCP {
 		if ( isset( $body[0] ) ) {
 			$results = array();
 			foreach ( $body as $single ) {
-				$result = is_array( $single ) ? self::dispatch( $single ) : null;
+				$result = is_array( $single ) ? self::dispatch( $single, $route ) : null;
 				if ( null !== $result ) {
 					$results[] = $result;
 				}
@@ -171,11 +172,30 @@ class MMSAR_MCP {
 			return self::with_rate_limit_headers( new WP_REST_Response( $results, 200 ), $rate );
 		}
 
-		$result = self::dispatch( $body );
+		$result = self::dispatch( $body, $route );
 		if ( null === $result ) {
 			return self::with_rate_limit_headers( new WP_REST_Response( null, 202 ), $rate );
 		}
 		return self::with_rate_limit_headers( new WP_REST_Response( $result, 200 ), $rate );
+	}
+
+	/**
+	 * How a request reached the endpoint: over MCP, or from the WebMCP bridge in a browser.
+	 *
+	 * The bridge marks its calls with `X-MMSAR-Surface: webmcp`. The header only labels the route
+	 * in the log and grants nothing, so a client that forges it gains nothing but a different
+	 * label. A WebMCP call comes from the visitor's own browser, so its address is a person's and
+	 * is stored at network level, like a page view.
+	 *
+	 * @param WP_REST_Request $request The request.
+	 * @return array{surface: string, anonymize: bool}
+	 */
+	private static function route_of( WP_REST_Request $request ) {
+		$webmcp = 'webmcp' === strtolower( trim( (string) $request->get_header( 'x_mmsar_surface' ) ) );
+		return array(
+			'surface'   => $webmcp ? MMSAR_Agent_Log::SURFACE_WEBMCP : 'MCP JSON-RPC',
+			'anonymize' => $webmcp,
+		);
 	}
 
 	/**
@@ -258,9 +278,10 @@ class MMSAR_MCP {
 	 * Route one JSON-RPC message to its handler.
 	 *
 	 * @param array $message Decoded JSON-RPC message.
+	 * @param array $route   How the request arrived, from route_of().
 	 * @return array|null The response object, or null for a notification.
 	 */
-	private static function dispatch( $message ) {
+	private static function dispatch( $message, $route ) {
 		$method = isset( $message['method'] ) ? (string) $message['method'] : '';
 		$params = isset( $message['params'] ) && is_array( $message['params'] ) ? $message['params'] : array();
 		// A message with no id is a notification: it is acted on, but never answered. Note that
@@ -279,10 +300,10 @@ class MMSAR_MCP {
 		// are two entries. Every stored value is bounded by a check against the site except an
 		// opted-in search query, and the rate limit above caps how many of those one caller can send.
 		MMSAR_Agent_Log::record(
-			'MCP JSON-RPC',
+			$route['surface'],
 			$detail,
 			true,
-			false,
+			$route['anonymize'],
 			'' === $arguments ? null : $detail . ' ' . $arguments,
 			$arguments
 		);
@@ -1616,6 +1637,11 @@ class MMSAR_MCP {
 				'description' => $tool['description'],
 				'inputSchema' => $tool['inputSchema'],
 			);
+			// Carried since 1.57.0 because the WebMCP bridge reads tools from this card and
+			// registers only the read-only ones in the browser.
+			if ( isset( $tool['annotations'] ) && is_array( $tool['annotations'] ) ) {
+				$tools[ count( $tools ) - 1 ]['annotations'] = $tool['annotations'];
+			}
 		}
 
 		$card = array(

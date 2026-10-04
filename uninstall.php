@@ -25,6 +25,7 @@ delete_option( 'mmsar_agent_log_db_version' );
 delete_option( 'mmsar_agent_log_migrated' );
 delete_option( 'mmsar_agent_log_pages' );
 delete_option( 'mmsar_agent_log_queries' );
+delete_option( 'mmsar_webmcp_tokens' );
 delete_option( 'mmsar_negotiation_check' );
 delete_option( 'mmsar_negotiation_reset_done' );
 delete_option( 'mmsar_indexnow_key' );

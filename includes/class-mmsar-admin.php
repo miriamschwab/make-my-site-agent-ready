@@ -213,6 +213,10 @@ class MMSAR_Admin {
 				__( 'IndexNow', 'make-my-site-agent-ready' ),
 				__( 'Tells search engines that take part in IndexNow — Bing, Yandex, Seznam, Naver and others — the moment a page is published, changed or removed, so they recrawl it instead of waiting. Bing\'s index is what ChatGPT search and Copilot answer from, which is why this is here. Google does not take part. Publishes a key file at your site root that proves the requests come from you. This is the only feature that sends anything to an outside service: your site\'s address and the changed page URLs go to api.indexnow.org, nothing about visitors. Skipped automatically when another plugin already does it. Off by default.', 'make-my-site-agent-ready' ),
 			),
+			'webmcp'               => array(
+				__( 'WebMCP (agents in the browser)', 'make-my-site-agent-ready' ),
+				__( 'Offers the MCP server\'s read-only tools to AI agents working inside a visitor\'s browser, through WebMCP, so an agent on any page can search the site, list content, read a page (the one it is on, by default) and get an overview. Needs the MCP server above. Adds a small inline script to every page that checks whether the browser supports WebMCP and stops there if it doesn\'t, which is almost every browser today. Browser support is an experimental trial, so see the WebMCP section below for the token that switches it on. Off by default.', 'make-my-site-agent-ready' ),
+			),
 			'okf_bundle'           => array(
 				__( 'OKF bundle', 'make-my-site-agent-ready' ),
 				__( 'Publishes your content as an Open Knowledge Format (v0.2) bundle at /okf/ — one typed Markdown concept file per post/page, with a browsable index per post type and a root index and change log. Lets an agent ingest the whole corpus in one pass instead of scraping page by page. Reuses the same Markdown already generated for the .md URLs above.', 'make-my-site-agent-ready' ),
@@ -320,6 +324,7 @@ class MMSAR_Admin {
 			'robots_txt'           => 'mmsar-section-robots',
 			'security_txt'         => 'mmsar-section-security',
 			'tdmrep'               => 'mmsar-section-tdmrep',
+			'webmcp'               => 'mmsar-section-webmcp',
 		);
 	}
 
@@ -703,6 +708,121 @@ class MMSAR_Admin {
 	}
 
 	/**
+	 * The WebMCP section: what it is, and exactly what is true on this site right now.
+	 *
+	 * @return void
+	 */
+	public static function render_webmcp_section() {
+		echo '<p>';
+		esc_html_e( 'The MCP server above is for AI agents that connect to your site from anywhere. WebMCP is for an agent working inside a visitor\'s browser tab, such as an assistant built into the browser. With WebMCP on, every page tells that agent which tools it can use here, and the agent calls them instead of reading the page the way a person would. These are the same read-only tools as the MCP server, answered by the same server, so they reach nothing the MCP server doesn\'t.', 'make-my-site-agent-ready' );
+		echo '</p>';
+		echo '<p>';
+		esc_html_e( 'Browser support is experimental. Chrome and Microsoft Edge offer WebMCP as an origin trial, currently until March 2027: a site registers for the trial and gets a token, and only pages carrying that token get the API in an ordinary browser. Without one, only browsers with the WebMCP testing flag switched on see the tools.', 'make-my-site-agent-ready' );
+		echo '</p>';
+
+		$lines = array();
+		$https = 'https' === wp_parse_url( home_url( '/' ), PHP_URL_SCHEME );
+		if ( ! $https ) {
+			$lines[] = array( 'warning', __( 'This site is not served over HTTPS. Browsers only offer WebMCP on secure pages, so nothing here will work until it is.', 'make-my-site-agent-ready' ) );
+		}
+		if ( ! mmsar_feature_enabled( 'webmcp' ) ) {
+			$lines[] = array( 'info', __( 'Off. Switch on "WebMCP (agents in the browser)" in the list above to offer this site\'s tools in the browser.', 'make-my-site-agent-ready' ) );
+		} elseif ( ! mmsar_feature_enabled( 'mcp_server' ) ) {
+			$lines[] = array( 'warning', __( 'Switched on, but the MCP server is off, so there are no tools to offer. Switch on "MCP server (read-only)" above.', 'make-my-site-agent-ready' ) );
+		} else {
+			$names   = wp_list_pluck( MMSAR_WebMCP::browser_tools(), 'name' );
+			$lines[] = array(
+				'success',
+				/* translators: %s: comma-separated list of tool names */
+				sprintf( __( 'On. Pages offer these tools to an agent in the browser: %s.', 'make-my-site-agent-ready' ), implode( ', ', $names ) ),
+			);
+		}
+
+		$usable = 0;
+		foreach ( MMSAR_WebMCP::tokens() as $token ) {
+			$check = MMSAR_WebMCP::check_token( $token, home_url( '/' ) );
+			if ( in_array( $check['state'], array( 'valid', 'expiring' ), true ) ) {
+				++$usable;
+			}
+		}
+		if ( 0 === $usable ) {
+			$lines[] = array( mmsar_feature_enabled( 'webmcp' ) ? 'warning' : 'info', __( 'No token yet, so ordinary Chrome and Edge visitors don\'t get WebMCP. Add one below.', 'make-my-site-agent-ready' ) );
+		}
+
+		$colors = array(
+			'success' => '#00a32a',
+			'info'    => '#646970',
+			'warning' => '#dba617',
+		);
+		echo '<ul style="margin:.5em 0 1em;">';
+		foreach ( $lines as $line ) {
+			echo '<li style="border-left:4px solid ' . esc_attr( $colors[ $line[0] ] ) . ';padding:2px 0 2px 8px;">' . esc_html( $line[1] ) . '</li>';
+		}
+		echo '</ul>';
+
+		echo '<p class="description">';
+		esc_html_e( 'To check it in Chrome, open DevTools on any page of your site, go to Application, then WebMCP. It lists the tools the page registered and lets you run each one.', 'make-my-site-agent-ready' );
+		echo '</p>';
+	}
+
+	/**
+	 * The origin-trial token field, with setup steps and each saved token's status.
+	 *
+	 * @return void
+	 */
+	public static function render_webmcp_tokens_field() {
+		$origin = wp_parse_url( home_url( '/' ), PHP_URL_SCHEME ) . '://' . wp_parse_url( home_url( '/' ), PHP_URL_HOST );
+		$port   = wp_parse_url( home_url( '/' ), PHP_URL_PORT );
+		if ( $port ) {
+			$origin .= ':' . $port;
+		}
+
+		printf(
+			'<textarea name="%1$s" id="mmsar_webmcp_tokens" rows="4" class="large-text code" spellcheck="false" aria-describedby="mmsar-webmcp-token-help">%2$s</textarea>',
+			esc_attr( MMSAR_WebMCP::TOKENS_OPTION ),
+			esc_textarea( implode( "\n", MMSAR_WebMCP::tokens() ) )
+		);
+
+		$tokens = MMSAR_WebMCP::tokens();
+		if ( ! empty( $tokens ) ) {
+			echo '<ul style="margin:.5em 0;">';
+			foreach ( $tokens as $index => $token ) {
+				$check = MMSAR_WebMCP::check_token( $token, home_url( '/' ) );
+				echo '<li>';
+				/* translators: %d: token number, starting at 1 */
+				echo '<strong>' . esc_html( sprintf( __( 'Token %d:', 'make-my-site-agent-ready' ), $index + 1 ) ) . '</strong> ';
+				echo esc_html( MMSAR_WebMCP::state_message( $check ) );
+				echo '</li>';
+			}
+			echo '</ul>';
+		}
+
+		echo '<div id="mmsar-webmcp-token-help" class="description"><p>';
+		esc_html_e( 'One token per line. To get one:', 'make-my-site-agent-ready' );
+		echo '</p><ol>';
+		echo '<li>' . wp_kses(
+			sprintf(
+				/* translators: %s: link to Chrome's origin trials page */
+				__( 'Open the WebMCP trial on %s and press Register. You sign in with a Google account.', 'make-my-site-agent-ready' ),
+				'<a href="https://developer.chrome.com/origintrials/#/view_trial/4163014905550602241" target="_blank" rel="noopener">' . esc_html__( 'Chrome Origin Trials', 'make-my-site-agent-ready' ) . '</a>'
+			),
+			array(
+				'a' => array(
+					'href'   => array(),
+					'target' => array(),
+					'rel'    => array(),
+				),
+			)
+		) . '</li>';
+		echo '<li>' . esc_html__( 'For Web Origin, enter exactly this, with nothing after it:', 'make-my-site-agent-ready' ) . ' <code>' . esc_html( $origin ) . '</code></li>';
+		echo '<li>' . esc_html__( 'Leave "Third-party matching" unticked: the token is printed by your own site. Tick "match all subdomains" only if you also want it on a subdomain, such as a staging copy.', 'make-my-site-agent-ready' ) . '</li>';
+		echo '<li>' . esc_html__( 'Copy the token it gives you and paste it here. Microsoft Edge runs its own trial with its own token, which can go on a second line.', 'make-my-site-agent-ready' ) . '</li>';
+		echo '</ol><p>';
+		esc_html_e( 'A token works for every WebMCP tool on your site, not just this plugin\'s: a theme or another plugin that registers its own tools needs it too. It is printed in each page\'s head even while the switch above is off. Tokens expire with the trial, and each one is checked when you save: a token for another site, another trial, or past its date is not kept. Pages your cache already holds pick up a change when the cache next refreshes.', 'make-my-site-agent-ready' );
+		echo '</p></div>';
+	}
+
+	/**
 	 * The search-query logging switch.
 	 *
 	 * @return void
@@ -983,6 +1103,37 @@ class MMSAR_Admin {
 				'mmsar_robots_txt'
 			);
 		}
+
+		// WebMCP: the origin-trial tokens, and what the bridge offers. Shown whether or not the bridge
+		// is on, because a token serves any WebMCP tools on the site, not only this plugin's.
+		register_setting(
+			'mmsar_settings_group',
+			MMSAR_WebMCP::TOKENS_OPTION,
+			array(
+				'type'              => 'array',
+				'sanitize_callback' => array( 'MMSAR_WebMCP', 'sanitize_tokens' ),
+				'default'           => array(),
+			)
+		);
+
+		add_settings_section(
+			'mmsar_webmcp',
+			__( 'WebMCP', 'make-my-site-agent-ready' ),
+			array( __CLASS__, 'render_webmcp_section' ),
+			'make-my-site-agent-ready',
+			array(
+				'before_section' => '<div id="mmsar-section-webmcp" style="scroll-margin-top:48px;">',
+				'after_section'  => '</div>',
+			)
+		);
+
+		add_settings_field(
+			'mmsar_webmcp_tokens',
+			__( 'Origin-trial tokens', 'make-my-site-agent-ready' ),
+			array( __CLASS__, 'render_webmcp_tokens_field' ),
+			'make-my-site-agent-ready',
+			'mmsar_webmcp'
+		);
 
 		// Agent log: the one sub-option, kept on its own because it is the only setting that makes
 		// the plugin inspect ordinary page requests rather than just its own endpoints.

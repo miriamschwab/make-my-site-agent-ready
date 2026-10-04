@@ -22,7 +22,7 @@ jobs:
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           git archive --format=zip --prefix=make-my-site-agent-ready/ HEAD \
-            includes make-my-site-agent-ready.php readme.txt uninstall.php vendor composer.json composer.lock \
+            assets includes make-my-site-agent-ready.php readme.txt uninstall.php vendor composer.json composer.lock \
             > "make-my-site-agent-ready-${VERSION}.zip"
 
       - name: Create GitHub release

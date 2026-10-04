@@ -4,11 +4,11 @@ Tags: markdown, llm, ai, llms-txt, agents
 Requires at least: 6.2
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.56.0
+Stable tag: 1.57.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Makes your WordPress site agent-ready: markdown URLs, OKF bundle, llms.txt, MCP, OpenAPI, api-catalog, Agent Skills, TDMRep, and AI crawler rules.
+Makes your WordPress site agent-ready: markdown URLs, llms.txt, MCP and WebMCP, OKF bundle, OpenAPI, api-catalog, Agent Skills, and AI crawler rules.
 
 == Description ==
 
@@ -27,6 +27,7 @@ Every feature below can be switched off individually under Settings > Agent-Read
 * **OKF bundle** — Serves `/okf/`, the same content as an Open Knowledge Format v0.2 tree: a root index, one index per post type, and one typed Markdown "concept" file per post/page (front matter: type, title, description, resource, tags, modified), plus a change log at `/okf/log.md`. Reuses the same generated markdown as the `.md` URLs
 * **OpenAPI specification** — Serves `/openapi.json`, an OpenAPI 3.1 description of every public endpoint this plugin serves, generated from the site's actual registered routes
 * **MCP server** — Optional (off by default). A read-only Model Context Protocol endpoint AI clients can connect to directly, with tools to search the site, list content, read a page as Markdown, and get an overview of the site. Search and list can be narrowed to one topic (a category or tag), and the overview lists the topics. Rate-limited, and exposes nothing llms-full.txt doesn't already publish
+* **WebMCP** — Optional (off by default, needs the MCP server). Offers the MCP server's read-only tools to an AI agent working inside a visitor's browser, through WebMCP, so it can search the site, list content, read a page (the one it is on, by default) and get an overview without reading the page the way a person would. The tools come from the MCP server and every call is answered by it, so nothing is implemented twice. Adds a small inline script that checks for the browser API and stops at once where it is missing, which today is almost everywhere. Browser support is an experimental Chrome and Edge trial: paste your site's origin-trial token into the WebMCP settings section to switch it on for ordinary visitors. The token also serves any WebMCP tools your theme or other plugins register
 * **auth.md** — Serves `/auth.md`, a plain-language explanation of how an agent gets access to the site — usually "you don't need credentials," stated so an agent doesn't assume otherwise
 * **Agentic Resource Discovery catalog** — Serves `/.well-known/ai-catalog.json` (also at `/.well-known/ard.json`), a typed inventory of the site's agentic resources with stable identifiers
 * **security.txt** — Serves `/.well-known/security.txt` (RFC 9116). Enter your security contact as a full URL, a path like `/contact`, or an email address, and the plugin formats it correctly
@@ -52,7 +53,7 @@ Every feature below can be switched off individually under Settings > Agent-Read
 * **Noindex respected** — A page your SEO plugin marks noindex is left out of llms.txt, llms-full.txt, the OKF indexes, MCP search and list, and NLWeb. Its own `.md` URL keeps working, like the page itself. Read from Yoast SEO and Rank Math; other plugins can answer through the `mmsar_post_is_noindex` filter. On by default, and can be switched off
 * **IndexNow** — Optional (off by default). Tells Bing, Yandex, Seznam, Naver and the other IndexNow engines when a page is published, changed or removed, so they recrawl it sooner. Bing's index is what ChatGPT search and Copilot answer from. Google does not take part. Skipped automatically when another plugin already submits. The only feature that contacts an outside service; see External services below
 * **Visitors sent by AI assistants** — Optional (off by default, needs the agent request log). Counts people who arrive from ChatGPT, Perplexity, Claude, Gemini, Copilot and other assistants, and which pages they land on, on the Agent Log screen. Keeps a daily count per assistant and page, nothing about the visitor. Adds a small script to your pages, because cached pages never reach WordPress; it sends one request only when the visitor came from an assistant
-* **Lightweight** — No cron jobs. Nothing runs in a visitor's browser unless you switch on AI referral counting. The plugin's only database tables are the agent request log's and, once you switch it on, the AI referral counts'
+* **Lightweight** — No cron jobs. Nothing runs in a visitor's browser unless you switch on AI referral counting or WebMCP. The plugin's only database tables are the agent request log's and, once you switch it on, the AI referral counts'
 
 **How it works:**
 
@@ -190,6 +191,8 @@ For people, this is what it keeps:
 
 * **MCP calls** record what the agent asked each tool for, but only values that match something on your site: a content type, a topic, the path of the page it read. Search terms are free text an agent may have copied from a person, so they are not stored unless you tick "Record what agents search for". When you do, anything that looks like an email address or a phone number is replaced first, and each search is kept to 300 characters.
 
+* **WebMCP calls**, if you switch WebMCP on, come from a visitor's own browser, so they are stored with the network rather than the full address, like a page view. They are logged under their own surface and, unlike other browser traffic, shown in the Agent Log's default view.
+
 * **AI referral counts**, if you switch them on, keep a day, the assistant, the landing page and a number. No address, no browser details, no referrer URL, no cookie. The half-hour throttle that stops one visitor counting twice uses their address in memory only.
 
 Recognised crawlers keep their full address, because verifying who they are needs it. The whole table is removed when you delete the plugin, and the Agent Log screen can clear it at any time. Suggested wording for your privacy policy, matching the options you have switched on, is under Settings > Privacy.
@@ -210,11 +213,28 @@ Yes. Under Settings > Agent-Ready > robots.txt, tick "Decline AI training crawle
 
 Google-Extended is left alone, because Google uses it to control live answers in Gemini as well as training. robots.txt is a convention: well-behaved crawlers follow it, and the Agent Log's Summary tells you, from two days after you switch it on, whether any verified training crawler kept reading.
 
+= What is WebMCP, and do I need it? =
+
+WebMCP is a proposed web standard that lets a page tell an AI agent running in the visitor's browser which tools it offers, so the agent can call them instead of reading the page the way a person would. With it switched on, every page offers this plugin's read-only tools: search the site, list content, read a page, and get an overview. They are the same tools as the MCP server, answered by the same server.
+
+You don't need it for AI search, crawlers or assistants that fetch your pages: llms.txt, the Markdown URLs and the MCP server already serve those. WebMCP is for agents built into the browser itself. Browser support is still experimental, so switching it on is a way to be ready, and to see in the Agent Log whether any browser agent uses it.
+
+= How do I get a WebMCP origin-trial token? =
+
+Chrome and Microsoft Edge offer WebMCP as an origin trial. Ordinary visitors only get the browser API on a page that carries a token registered for that site. Under Settings > Agent-Ready > WebMCP you'll find the steps and your site's exact origin. In short: open the WebMCP trial on Chrome Origin Trials, press Register, enter your origin with nothing after it, leave third-party matching unticked, and paste the token you get into the WebMCP section. Edge has its own trial and token, which can go on a second line.
+
+Each token is checked when you save: one for another site, another trial, or past its date is not kept. Tokens expire with the trial (currently March 2027), and Site Health warns you two weeks before yours does. In Chrome, DevTools > Application > WebMCP shows the tools a page registered and lets you run each one.
+
 = Why do AI referral counts look low? =
 
 They are a floor. Many AI apps open links without telling the site where the visitor came from, and only ChatGPT reliably tags its links with `utm_source`. Those visits look like direct visits and cannot be counted. Pages already in your cache pick up the counting script when the cache next refreshes, and a security plugin that blocks the REST API for visitors stops the count entirely.
 
 == Changelog ==
+
+= 1.57.0 - 2026-10-04 =
+* New: WebMCP (off by default, needs the MCP server). Pages offer the MCP server's read-only tools to an AI agent working in the visitor's browser, through `document.modelContext`, so it can search the site, list content, read a page (the one it is on, by default) and get an overview. The tools are read from the server card and every call goes to the MCP endpoint, so nothing is implemented twice. A small inline script checks for the API and stops in browsers without it; where it exists, the bridge script loads from a versioned path. Calls are logged under their own surface, `WebMCP JSON-RPC`, with the caller's address shortened to its network, because the caller is a person's browser. They appear in the Agent Log's default view, unlike other browser rows.
+* New: a WebMCP settings section, with the current status, the tools a browser gets, and a field for origin-trial tokens. Each token is checked when saved (right site, WebMCP trial, not expired, not third-party) and printed as an `origin-trial` meta tag on every page, whether or not the bridge is on, since a token serves any WebMCP tools on the site. Site Health warns when WebMCP is in use and its token is missing or expires within 14 days.
+* Changed: the MCP server card lists each tool's annotations.
 
 = 1.56.0 - 2026-10-04 =
 * New: MCP `list_content` and `search_content` take an optional `topic`, the slug of a category, tag or other public taxonomy term attached to the content types the plugin serves. A slug shared by several taxonomies matches all of them. An unknown slug returns an error that lists the site's topics instead of an empty result. New filter `mmsar_mcp_topic_taxonomies`.
