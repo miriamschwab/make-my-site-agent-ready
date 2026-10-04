@@ -2,6 +2,11 @@
 
 All notable changes to Make My Site Agent-Ready.
 
+## 1.55.1 — 2026-10-04
+
+- Changed: on the Agent Log Summary, information cards are marked FYI (was "What it means"), and both card labels are now coloured badges.
+- Changed: clearer wording when no visitors from AI assistants have been counted yet.
+
 ## 1.55.0 — 2026-10-01
 
 - New: noindex is respected. A page Yoast SEO or Rank Math marks noindex (per post, or by its type's default) is left out of `llms.txt` and its scoped indexes, `llms-full.txt`, the OKF type indexes, root counts and log, MCP `search_content` and `list_content`, and NLWeb. The `.md` URL, OKF concept file and MCP `get_content` still serve it. On by default (`respect_noindex` in `llmmd_settings`, absent reads as on). Each SEO plugin is read only while it is active, and `blog_public = 0` is deliberately ignored. New filter `mmsar_post_is_noindex` (bool, `WP_Post`). Rank Math's reading follows its stored settings and has not been tested against a live Rank Math install.

@@ -966,8 +966,10 @@ class MMSAR_Agent_Log_Page {
 		$colour = $todo ? '#dba617' : '#2271b1';
 		echo '<div style="background:#fff;border:1px solid #c3c4c7;border-left:4px solid ' . esc_attr( $colour ) . ';padding:.8rem 1.1rem;margin:0 0 .8rem;">';
 		echo '<p style="margin:0 0 .3rem;"><strong>' . esc_html( $finding['title'] ) . '</strong>';
-		echo ' <span style="font-size:11px;color:#646970;text-transform:uppercase;letter-spacing:.03em;margin-left:.4em;">'
-			. esc_html( $todo ? __( 'Worth doing', 'make-my-site-agent-ready' ) : __( 'What it means', 'make-my-site-agent-ready' ) )
+		// A badge in the card's own colour, so the kind reads at a glance and not only from the border.
+		echo ' <span style="display:inline-block;vertical-align:1px;margin-left:.5em;padding:1px 7px;border-radius:3px;font-size:11px;font-weight:600;line-height:1.6;text-transform:uppercase;letter-spacing:.03em;'
+			. ( $todo ? 'background:#fcf0c3;color:#614200;' : 'background:#e5f0f8;color:#135e96;' ) . '">'
+			. esc_html( $todo ? __( 'Worth doing', 'make-my-site-agent-ready' ) : __( 'FYI', 'make-my-site-agent-ready' ) )
 			. '</span></p>';
 		echo '<p style="margin:.2rem 0 .5rem;">' . esc_html( $finding['text'] ) . '</p>';
 

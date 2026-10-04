@@ -673,7 +673,7 @@ class MMSAR_Agent_Insights {
 				'id'    => 'referrals',
 				'kind'  => 'meaning',
 				'title' => __( 'People assistants send you', 'make-my-site-agent-ready' ),
-				'text'  => __( 'None counted in the last 30 days. Counting starts once cached pages pick up the script, and many assistant apps hide where a visitor came from, so this is always a floor.', 'make-my-site-agent-ready' ),
+				'text'  => __( 'No visitors from AI assistants counted in the last 30 days. Most assistant apps don\'t say they sent someone, so the real number may be higher. If you only just switched this on, cached pages can take a while to start counting.', 'make-my-site-agent-ready' ),
 				'items' => array(),
 			);
 		}

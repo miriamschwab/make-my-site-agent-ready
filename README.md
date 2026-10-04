@@ -563,7 +563,7 @@ drops the table, and the Agent Log screen can clear it at any time.
 
 ### The Summary
 
-The Agent Log opens on a Summary: what the last 30 days mean, not the rows themselves. Findings sit under three questions, and each one is a sentence, the numbers behind it, a link to the matching log rows, and either an action or "what it means":
+The Agent Log opens on a Summary: what the last 30 days mean, not the rows themselves. Findings sit under three questions, and each one is a sentence, the numbers behind it, a link to the matching log rows, and a badge saying which kind it is: **Worth doing** when there is an action, **FYI** when it is context only:
 
 - **Am I being read?** Who takes the Markdown version (by crawler and category), edited pages no AI search crawler has re-read (links to IndexNow), and coverage, but only when it is below 80%.
 - **Am I being cited?** The pages AI assistants (ChatGPT-User, Claude-User and similar) fetched while answering someone, and the visitors they sent.

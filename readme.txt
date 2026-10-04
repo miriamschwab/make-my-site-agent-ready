@@ -4,7 +4,7 @@ Tags: markdown, llm, ai, llms-txt, agents
 Requires at least: 6.2
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.55.0
+Stable tag: 1.55.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -213,6 +213,11 @@ Google-Extended is left alone, because Google uses it to control live answers in
 They are a floor. Many AI apps open links without telling the site where the visitor came from, and only ChatGPT reliably tags its links with `utm_source`. Those visits look like direct visits and cannot be counted. Pages already in your cache pick up the counting script when the cache next refreshes, and a security plugin that blocks the REST API for visitors stops the count entirely.
 
 == Changelog ==
+
+= 1.55.1 - 2026-10-04 =
+
+* Changed: on the Agent Log Summary, information cards are marked FYI (was "What it means"), and both card labels are now coloured badges.
+* Changed: clearer wording when no visitors from AI assistants have been counted yet.
 
 = 1.55.0 - 2026-10-01 =
 
