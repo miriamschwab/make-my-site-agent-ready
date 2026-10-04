@@ -22,8 +22,46 @@ class MMSAR_Admin {
 	public static function init() {
 		add_action( 'admin_menu', array( __CLASS__, 'add_menu' ) );
 		add_action( 'admin_init', array( __CLASS__, 'register_settings' ) );
+		add_action( 'admin_init', array( __CLASS__, 'add_privacy_policy_content' ) );
 		add_action( 'admin_notices', array( __CLASS__, 'static_robots_notice' ) );
 		add_action( 'admin_notices', array( __CLASS__, 'structured_data_conflict_notice' ) );
+	}
+
+	/**
+	 * Suggested privacy-policy text, shown in the policy guide under Settings > Privacy.
+	 *
+	 * Written for what the plugin stores when its logging options are on, since the log is the one
+	 * part of the plugin that keeps anything about a visitor. Sentences for options that are off
+	 * are left out, so the suggestion describes this site rather than every possible one.
+	 *
+	 * @return void
+	 */
+	public static function add_privacy_policy_content() {
+		if ( ! function_exists( 'wp_add_privacy_policy_content' ) || ! mmsar_feature_enabled( 'agent_log' ) ) {
+			return;
+		}
+
+		$paragraphs   = array();
+		$paragraphs[] = __( 'When an automated agent, such as an AI assistant or a search crawler, requests one of the machine-readable files this site publishes for agents (for example llms.txt, the Markdown version of a page, or the MCP server), we record the request: the time, what was requested, the software name the agent sent, and its IP address. For visitors we judge to be people, we store a shortened address that identifies a network rather than a device.', 'make-my-site-agent-ready' );
+
+		if ( 'all' === MMSAR_Agent_Log::page_view_mode() ) {
+			$paragraphs[] = __( 'We also record ordinary page views, so that agent traffic can be compared with all traffic. For a page view we keep the time, the page, the browser\'s software name and a shortened address.', 'make-my-site-agent-ready' );
+		}
+
+		if ( mmsar_feature_enabled( 'mcp_server' ) && MMSAR_MCP_Arguments::queries_enabled() ) {
+			$paragraphs[] = __( 'When an agent searches this site through its MCP server, we also record the search terms. Anything that looks like an email address or a phone number is removed before it is stored.', 'make-my-site-agent-ready' );
+		}
+
+		$limit        = MMSAR_Agent_Log::get_limit();
+		$paragraphs[] = $limit > 0
+			/* translators: %s: number of log entries kept */
+			? sprintf( __( 'Only the most recent %s entries are kept; older ones are deleted automatically.', 'make-my-site-agent-ready' ), number_format_i18n( $limit ) )
+			: __( 'These records are kept until an administrator deletes them.', 'make-my-site-agent-ready' );
+
+		wp_add_privacy_policy_content(
+			__( 'Make My Site Agent-Ready', 'make-my-site-agent-ready' ),
+			wp_kses_post( wpautop( implode( "\n\n", $paragraphs ), false ) )
+		);
 	}
 
 	/**
@@ -619,7 +657,7 @@ class MMSAR_Admin {
 		echo '</p>';
 
 		echo '<p class="description">';
-		esc_html_e( 'The same agent, file and IP is recorded at most once every five minutes, so a crawler looping on one URL cannot flood the log. Nothing is recorded on an ordinary page view unless the option below is ticked. robots.txt and your feeds are recorded either way, each under its own surface rather than as page views; a feed read in a browser or a desktop reader, or by a self-hosted reader outside the big cloud providers, is stored against its network rather than its full address. Two kinds of request carry a detail alongside the file: a 404 records the path the agent asked for, and an MCP call records the method it invoked — including which tool, so the log shows whether the MCP server is being used or only discovered. A person who follows a link on this site to one of these files, such as the footer llms.txt link, is stored against their network rather than their full address, and only whether a request came from a link here is kept — never the address it came from.', 'make-my-site-agent-ready' );
+		esc_html_e( 'The same agent, file and IP is recorded at most once every five minutes, so a crawler looping on one URL cannot flood the log. Nothing is recorded on an ordinary page view unless the option below is ticked. robots.txt and your feeds are recorded either way, each under its own surface rather than as page views; a feed read in a browser or a desktop reader, or by a self-hosted reader outside the big cloud providers, is stored against its network rather than its full address. Two kinds of request carry a detail alongside the file: a 404 records the path the agent asked for, and an MCP call records the method it invoked — including which tool, so the log shows whether the MCP server is being used or only discovered, and what the agent asked that tool for. A person who follows a link on this site to one of these files, such as the footer llms.txt link, is stored against their network rather than their full address, and only whether a request came from a link here is kept — never the address it came from.', 'make-my-site-agent-ready' );
 		echo '</p>';
 	}
 
@@ -662,6 +700,37 @@ class MMSAR_Admin {
 		echo '<p class="description">';
 		esc_html_e( 'One entry per visitor, per page, per five minutes. Keeping everything is a reasonable choice if the log is being used to answer a question about agent behaviour over time, and the retention limit on the Agent Log screen is there if the table ever outgrows its usefulness.', 'make-my-site-agent-ready' );
 		echo '</p>';
+	}
+
+	/**
+	 * The search-query logging switch.
+	 *
+	 * @return void
+	 */
+	public static function render_agent_log_queries_field() {
+		echo '<label><input type="checkbox" name="' . esc_attr( MMSAR_MCP_Arguments::QUERY_OPTION ) . '" value="1" ' . checked( true, MMSAR_MCP_Arguments::queries_enabled(), false ) . '> ';
+		esc_html_e( 'Store the words agents search for through the MCP server', 'make-my-site-agent-ready' );
+		echo '</label>';
+		echo '<p class="description">';
+		esc_html_e( 'The log already records which MCP tool an agent called, and what it asked that tool for when the answer is something your site knows: a content type, a topic, the page it read. Those are stored only after they match something real on your site. A search query is different. It is free text, and an agent searching on someone\'s behalf may include that person\'s details, so it is not stored unless you tick this.', 'make-my-site-agent-ready' );
+		echo '</p>';
+		echo '<p class="description">';
+		printf(
+			/* translators: %d: maximum number of characters stored */
+			esc_html__( 'When ticked, anything that looks like an email address or a phone number is replaced before storage, and each query is kept to %d characters. It is stored alongside the caller\'s address, like every other entry. Consider mentioning it in your privacy policy; suggested text is under Settings > Privacy.', 'make-my-site-agent-ready' ),
+			(int) MMSAR_MCP_Arguments::MAX_QUERY
+		);
+		echo '</p>';
+	}
+
+	/**
+	 * Sanitizes an on/off checkbox stored as '1' or ''.
+	 *
+	 * @param mixed $value Submitted value.
+	 * @return string
+	 */
+	public static function sanitize_checkbox_flag( $value ) {
+		return '1' === ( is_scalar( $value ) ? (string) $value : '' ) ? '1' : '';
 	}
 
 	/**
@@ -928,6 +997,15 @@ class MMSAR_Admin {
 
 		register_setting(
 			'mmsar_settings_group',
+			MMSAR_MCP_Arguments::QUERY_OPTION,
+			array(
+				'sanitize_callback' => array( __CLASS__, 'sanitize_checkbox_flag' ),
+				'default'           => '',
+			)
+		);
+
+		register_setting(
+			'mmsar_settings_group',
 			MMSAR_Referrals::OPTION,
 			array(
 				'sanitize_callback' => array( __CLASS__, 'sanitize_referrals' ),
@@ -958,6 +1036,17 @@ class MMSAR_Admin {
 				'make-my-site-agent-ready',
 				'mmsar_agent_log'
 			);
+
+			// Only meaningful while there is an MCP server to search.
+			if ( mmsar_feature_enabled( 'mcp_server' ) ) {
+				add_settings_field(
+					'mmsar_agent_log_queries',
+					__( 'Record what agents search for', 'make-my-site-agent-ready' ),
+					array( __CLASS__, 'render_agent_log_queries_field' ),
+					'make-my-site-agent-ready',
+					'mmsar_agent_log'
+				);
+			}
 		}
 
 		// Content Signals settings.

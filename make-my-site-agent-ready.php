@@ -3,7 +3,7 @@
  * Plugin Name:       Make My Site Agent-Ready
  * Plugin URI:        https://miriamschwab.me/plugins/make-my-site-agent-ready
  * Description:       Makes your WordPress site ready for AI agents: .md URLs, llms.txt, llms-full.txt, an OpenAPI spec, a read-only MCP server, agent-recoverable 404s, security.txt, api-catalog, Agent Skills discovery, an OKF bundle, Link response headers, Content Signals, a TDMRep reservation header, optional JSON-LD structured data (merges into Yoast's own schema when active), and AI crawler rules in robots.txt.
- * Version:           1.55.1
+ * Version:           1.56.0
  * Author:            Miriam Schwab
  * Author URI:        https://miriamschwab.me
  * License:           GPL-2.0-or-later
@@ -19,7 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'MMSAR_VERSION', '1.55.1' );
+define( 'MMSAR_VERSION', '1.56.0' );
 define( 'MMSAR_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'MMSAR_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'MMSAR_PLUGIN_FILE', __FILE__ );
@@ -44,6 +44,7 @@ require_once MMSAR_PLUGIN_DIR . 'includes/class-mmsar-llms-txt.php';
 require_once MMSAR_PLUGIN_DIR . 'includes/class-mmsar-endpoints.php';
 require_once MMSAR_PLUGIN_DIR . 'includes/class-mmsar-agent-skills.php';
 require_once MMSAR_PLUGIN_DIR . 'includes/class-mmsar-openapi.php';
+require_once MMSAR_PLUGIN_DIR . 'includes/class-mmsar-mcp-arguments.php';
 require_once MMSAR_PLUGIN_DIR . 'includes/class-mmsar-mcp.php';
 require_once MMSAR_PLUGIN_DIR . 'includes/class-mmsar-not-found.php';
 require_once MMSAR_PLUGIN_DIR . 'includes/class-mmsar-auth-md.php';

@@ -819,6 +819,10 @@ function mmsar_register_abilities() {
 									'type'        => 'string',
 									'description' => 'What was asked for within the surface — a 404 path, an MCP method, the canonical path of a feed, or the permalink path of the post served on a Markdown surface. Empty string on surfaces where the surface name is the whole request.',
 								),
+								'arguments'        => array(
+									'type'        => 'string',
+									'description' => 'On an MCP tool call (1.56.0), what the caller asked the tool for, as space-separated key=value pairs: post_type, topic, url (the path of the post served, never the raw input), sections, and query (JSON-quoted, redacted, and only when the site owner has switched on query logging). Each value is stored only after it was checked against the site, so an empty string can mean no arguments or none that passed. Empty on every other surface and on entries recorded before 1.56.0.',
+								),
 								'ip'               => array( 'type' => 'string' ),
 								'client_type'      => array(
 									'type'        => 'string',

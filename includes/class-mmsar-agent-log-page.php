@@ -302,7 +302,7 @@ class MMSAR_Agent_Log_Page {
 		// them in the site's timezone, and a bare "logged_at" would leave a reader comparing an
 		// exported row against the screen with no way to tell which one they were holding.
 		// Appended, never reordered: the column order is documented and something is parsing it.
-		fputcsv( $handle, array( 'logged_at_utc', 'agent', 'surface', 'detail', 'ip', 'verified', 'verified_at_utc', 'client_type', 'signature_agent', 'same_site', 'cloud_network' ) );
+		fputcsv( $handle, array( 'logged_at_utc', 'agent', 'surface', 'detail', 'ip', 'verified', 'verified_at_utc', 'client_type', 'signature_agent', 'same_site', 'cloud_network', 'arguments' ) );
 
 		$cursor = 0;
 		do {
@@ -324,6 +324,7 @@ class MMSAR_Agent_Log_Page {
 						self::csv_cell( $signals['signature_agent'] ),
 						null === $signals['same_site'] ? '' : ( $signals['same_site'] ? '1' : '0' ),
 						self::csv_cell( null === $signals['cloud_network'] ? '' : $signals['cloud_network'] ),
+						self::csv_cell( isset( $row['arguments'] ) ? $row['arguments'] : '' ),
 					)
 				);
 				$cursor = (int) $row['id'];
@@ -1248,8 +1249,13 @@ class MMSAR_Agent_Log_Page {
 			}
 			echo '</td>';
 			echo '<td>' . esc_html( isset( $entry['surface'] ) ? $entry['surface'] : '—' ) . '</td>';
-			$detail = isset( $entry['detail'] ) ? (string) $entry['detail'] : '';
-			echo '<td>' . ( '' === $detail ? '<span style="color:#8c8f94;">—</span>' : '<code>' . esc_html( $detail ) . '</code>' ) . '</td>';
+			$detail    = isset( $entry['detail'] ) ? (string) $entry['detail'] : '';
+			$arguments = isset( $entry['arguments'] ) ? (string) $entry['arguments'] : '';
+			echo '<td>' . ( '' === $detail ? '<span style="color:#8c8f94;">—</span>' : '<code>' . esc_html( $detail ) . '</code>' );
+			if ( '' !== $arguments ) {
+				echo '<br><code style="font-size:11px;">' . esc_html( $arguments ) . '</code>';
+			}
+			echo '</td>';
 			$ctype = isset( $entry['client_type'] ) ? (string) $entry['client_type'] : '';
 			echo '<td><span style="font-size:11px;color:' . ( MMSAR_Agent_Log::CLIENT_BROWSER === $ctype ? '#8c8f94' : 'inherit' ) . ';">'
 				. esc_html( MMSAR_Agent_Log::client_type_label( $ctype ) ) . '</span></td>';
@@ -1468,6 +1474,9 @@ class MMSAR_Agent_Log_Page {
 			echo '<strong>' . esc_html( '' !== $hop['surface'] ? $hop['surface'] : '—' ) . '</strong>';
 			if ( '' !== $hop['detail'] ) {
 				echo ' <code>' . esc_html( $hop['detail'] ) . '</code>';
+			}
+			if ( isset( $hop['arguments'] ) && '' !== $hop['arguments'] ) {
+				echo ' <code style="font-size:11px;">' . esc_html( $hop['arguments'] ) . '</code>';
 			}
 
 			// The gap since the previous request, which is where the shape of a run shows: steady

@@ -4,7 +4,7 @@ Tags: markdown, llm, ai, llms-txt, agents
 Requires at least: 6.2
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.55.1
+Stable tag: 1.56.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -26,7 +26,7 @@ Every feature below can be switched off individually under Settings > Agent-Read
 * **llms-full.txt** — Full site content in one file at `/llms-full.txt` for LLMs that want everything
 * **OKF bundle** — Serves `/okf/`, the same content as an Open Knowledge Format v0.2 tree: a root index, one index per post type, and one typed Markdown "concept" file per post/page (front matter: type, title, description, resource, tags, modified), plus a change log at `/okf/log.md`. Reuses the same generated markdown as the `.md` URLs
 * **OpenAPI specification** — Serves `/openapi.json`, an OpenAPI 3.1 description of every public endpoint this plugin serves, generated from the site's actual registered routes
-* **MCP server** — Optional (off by default). A read-only Model Context Protocol endpoint AI clients can connect to directly, with tools to search the site, list content, and read a page as Markdown. Rate-limited, and exposes nothing llms-full.txt doesn't already publish
+* **MCP server** — Optional (off by default). A read-only Model Context Protocol endpoint AI clients can connect to directly, with tools to search the site, list content, read a page as Markdown, and get an overview of the site. Search and list can be narrowed to one topic (a category or tag), and the overview lists the topics. Rate-limited, and exposes nothing llms-full.txt doesn't already publish
 * **auth.md** — Serves `/auth.md`, a plain-language explanation of how an agent gets access to the site — usually "you don't need credentials," stated so an agent doesn't assume otherwise
 * **Agentic Resource Discovery catalog** — Serves `/.well-known/ai-catalog.json` (also at `/.well-known/ard.json`), a typed inventory of the site's agentic resources with stable identifiers
 * **security.txt** — Serves `/.well-known/security.txt` (RFC 9116). Enter your security contact as a full URL, a path like `/contact`, or an email address, and the plugin formats it correctly
@@ -44,7 +44,7 @@ Every feature below can be switched off individually under Settings > Agent-Read
 * **llms.txt discovery in robots.txt** — Adds an `Llms-txt:` directive pointing at your `/llms.txt`, so agents that fetch `robots.txt` first are told where the index is. Skipped if llms.txt is switched off, or if `robots.txt` already mentions it
 * **Endpoints stay reachable** — If `robots.txt` disallows a path one of your published endpoints lives on (several SEO plugins disallow `/wp-json/` by default), an `Allow:` line for that individual endpoint is added above the rule blocking it. The endpoint stays reachable to agents that found it in your api-catalog, llms.txt or Agent Skills index; the rest of the REST API stays disallowed
 * **Deprecation/Sunset headers** — For surfaces you schedule for retirement (via a filter), responses carry `Deprecation` and `Sunset` headers so an agent is told a URL is going away before it does. Empty, and inactive, until you fill in a schedule
-* **Agent request log** — Optional (off by default). Records which agents fetch the surfaces above, robots.txt and your RSS and Atom feeds, and optionally page views, on its own screen at Settings > Agent Log, with filters, a Journeys view, CSV export, a dashboard widget and a read-only ability. Each entry's claimed crawler identity is checked against the operator's published IP ranges or forward-confirmed reverse DNS, a user-run client such as Claude Code is labelled as one instead of being called a forgery, and every recognised bot carries a category — AI training, AI search, AI assistant, search engine, SEO tool, monitoring, scanner or other — so AI traffic can be read apart from search and SEO traffic. robots.txt and feeds are counted under surfaces of their own, never as page views or agent documents, so the comparison between the two stays honest. Browser-shaped traffic, which looks like a person whether or not an agent is driving the browser, carries three signals: a Web Bot Auth signature and the operator it claims (recorded, not verified), a published cloud-provider network, and whether the request followed a link on the site. The cloud-network signal also covers scripts and other HTTP clients, telling a hosted service from one run on someone's own connection
+* **Agent request log** — Optional (off by default). Records which agents fetch the surfaces above, robots.txt and your RSS and Atom feeds, and optionally page views, on its own screen at Settings > Agent Log, with filters, a Journeys view, CSV export, a dashboard widget and a read-only ability. Each entry's claimed crawler identity is checked against the operator's published IP ranges or forward-confirmed reverse DNS, a user-run client such as Claude Code is labelled as one instead of being called a forgery, and every recognised bot carries a category — AI training, AI search, AI assistant, search engine, SEO tool, monitoring, scanner or other — so AI traffic can be read apart from search and SEO traffic. An MCP call records which tool was used and what it asked for (a content type, a topic, the page it read), each stored only once it matches something on your site; the words agents search for are stored only if you switch that on. robots.txt and feeds are counted under surfaces of their own, never as page views or agent documents, so the comparison between the two stays honest. Browser-shaped traffic, which looks like a person whether or not an agent is driving the browser, carries three signals: a Web Bot Auth signature and the operator it claims (recorded, not verified), a published cloud-provider network, and whether the request followed a link on the site. The cloud-network signal also covers scripts and other HTTP clients, telling a hosted service from one run on someone's own connection
 * **Agent Log Summary** — The Agent Log opens on what the last 30 days mean rather than on raw rows, organised as three questions: Am I being read? (who reads your Markdown, and edited pages AI search hasn't re-read), Am I being cited? (the pages AI assistants fetch to answer people, and the visitors they send), and What's broken or being ignored? (training crawlers reading despite your "no training", and standards agents looked for and didn't find). Each finding says what it means or what to do, links to the log rows behind it, and stays quiet when there is nothing worth saying. Forged crawler identities are never counted. Also on the dashboard widget and as a read-only ability for agents
 * **YAML frontmatter** — Title, date, modified date, author, URL, markdown URL, content type, excerpt, meta description (from Yoast SEO, when it has one), categories, and tags. The excerpt and the description can each be switched off. A theme or plugin can add fields of its own with the `mmsar_frontmatter` filter
 * **Pre-generated** — Markdown is generated when posts are saved, so `.md` requests are instant
@@ -188,9 +188,11 @@ For people, this is what it keeps:
 * **The cloud-network signal stores nothing.** It is worked out, when the log is read, from the network address the log already holds.
 * **Web Bot Auth signatures** are sent by agents, never by people's browsers, so recording that one was present stores nothing about a reader.
 
+* **MCP calls** record what the agent asked each tool for, but only values that match something on your site: a content type, a topic, the path of the page it read. Search terms are free text an agent may have copied from a person, so they are not stored unless you tick "Record what agents search for". When you do, anything that looks like an email address or a phone number is replaced first, and each search is kept to 300 characters.
+
 * **AI referral counts**, if you switch them on, keep a day, the assistant, the landing page and a number. No address, no browser details, no referrer URL, no cookie. The half-hour throttle that stops one visitor counting twice uses their address in memory only.
 
-Recognised crawlers keep their full address, because verifying who they are needs it. The whole table is removed when you delete the plugin, and the Agent Log screen can clear it at any time.
+Recognised crawlers keep their full address, because verifying who they are needs it. The whole table is removed when you delete the plugin, and the Agent Log screen can clear it at any time. Suggested wording for your privacy policy, matching the options you have switched on, is under Settings > Privacy.
 
 = Are pages marked noindex left out? =
 
@@ -213,6 +215,13 @@ Google-Extended is left alone, because Google uses it to control live answers in
 They are a floor. Many AI apps open links without telling the site where the visitor came from, and only ChatGPT reliably tags its links with `utm_source`. Those visits look like direct visits and cannot be counted. Pages already in your cache pick up the counting script when the cache next refreshes, and a security plugin that blocks the REST API for visitors stops the count entirely.
 
 == Changelog ==
+
+= 1.56.0 - 2026-10-04 =
+* New: MCP `list_content` and `search_content` take an optional `topic`, the slug of a category, tag or other public taxonomy term attached to the content types the plugin serves. A slug shared by several taxonomies matches all of them. An unknown slug returns an error that lists the site's topics instead of an empty result. New filter `mmsar_mcp_topic_taxonomies`.
+* New: `get_site_overview` has a `topics` section listing the 40 most-used topics with their slugs, so an agent can find what to pass as `topic`.
+* New: the Agent Log records what an MCP tool call asked for, not only which tool. A content type, a topic, the page `get_content` served (stored as its path, never as typed) and the overview sections are stored only after they match something on the site. They appear under the detail on the Agent Log screen, in the visit view, in a new `arguments` column at the end of the CSV export, and in the `get-agent-log` ability. Two calls to one tool asking for different things are now two entries. The log table gains a column (schema version 7) on update.
+* New: an option to store what agents search for through the MCP server (Settings > Agent-Ready > Agent Request Log). Off by default. Anything that looks like an email address or a phone number is replaced before storage, and each query is kept to 300 characters.
+* New: suggested privacy-policy text for the Agent Log under Settings > Privacy, which mentions search terms only when that option is on.
 
 = 1.55.1 - 2026-10-04 =
 

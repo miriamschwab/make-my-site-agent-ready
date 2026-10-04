@@ -58,6 +58,11 @@ class MMSAR_MCP {
 	const MAX_LIMIT = 50;
 
 	/**
+	 * How many topics get_site_overview lists, and an unknown-topic error names.
+	 */
+	const OVERVIEW_TOPICS = 40;
+
+	/**
 	 * Requests allowed per IP per window, and the window in seconds.
 	 */
 	const RATE_LIMIT  = 60;
@@ -268,7 +273,19 @@ class MMSAR_MCP {
 		// the switch so an unknown method is recorded too — a client asking for something this
 		// server does not implement is worth knowing about, and it is the case least likely to be
 		// reported any other way.
-		MMSAR_Agent_Log::record( 'MCP JSON-RPC', self::log_detail( $method, $params ), true );
+		$detail    = self::log_detail( $method, $params );
+		$arguments = self::log_arguments( $detail, $params );
+		// The arguments join the throttle key, so two calls to one tool asking for different things
+		// are two entries. Every stored value is bounded by a check against the site except an
+		// opted-in search query, and the rate limit above caps how many of those one caller can send.
+		MMSAR_Agent_Log::record(
+			'MCP JSON-RPC',
+			$detail,
+			true,
+			false,
+			'' === $arguments ? null : $detail . ' ' . $arguments,
+			$arguments
+		);
 
 		switch ( $method ) {
 			case 'initialize':
@@ -349,6 +366,27 @@ class MMSAR_MCP {
 	}
 
 	/**
+	 * The stored arguments for one JSON-RPC message.
+	 *
+	 * Only for a tools/call that named one of this server's own tools, which log_detail() has
+	 * already established. A tool added through the `mmsar_mcp_tools` filter is logged by name
+	 * only: its arguments mean nothing to the checks here, so none of them could be stored safely.
+	 *
+	 * @param string $detail The detail log_detail() produced.
+	 * @param array  $params The message params.
+	 * @return string Stored argument line, possibly empty.
+	 */
+	private static function log_arguments( $detail, $params ) {
+		$own = array( 'search_content', 'get_content', 'list_content', 'get_site_overview' );
+		foreach ( $own as $tool ) {
+			if ( 'tools/call: ' . $tool === $detail ) {
+				return MMSAR_MCP_Arguments::summarize( $tool, isset( $params['arguments'] ) ? $params['arguments'] : array() );
+			}
+		}
+		return '';
+	}
+
+	/**
 	 * The initialize handshake.
 	 *
 	 * @param array $params Client params.
@@ -399,7 +437,7 @@ class MMSAR_MCP {
 			$lines[] = $description;
 		}
 		$lines[] = '';
-		$lines[] = 'Start with `search_content` when you have a topic, or `list_content` when you want to see what is here. Both return URLs; pass one to `get_content` to read the full text as Markdown. Do not fetch the site\'s HTML pages — `get_content` returns the same content already parsed.';
+		$lines[] = 'Start with `search_content` when you have a topic, or `list_content` when you want to see what is here. Both take an optional `topic` (a category or tag slug, listed by `get_site_overview`) and return URLs; pass one to `get_content` to read the full text as Markdown. Do not fetch the site\'s HTML pages — `get_content` returns the same content already parsed.';
 		$lines[] = '';
 		$lines[] = 'Everything here is public and already published. There is no draft or private content behind this server, and nothing here can modify the site.';
 
@@ -552,6 +590,10 @@ class MMSAR_MCP {
 							'description' => 'Restrict to one content type. Omit to search everything.',
 							'enum'        => array_values( mmsar_get_enabled_post_types() ),
 						),
+						'topic'     => array(
+							'type'        => 'string',
+							'description' => 'Restrict to one topic: the slug of a category, tag or other topic on this site, such as `wordpress`. Call get_site_overview with sections ["topics"] to see the topics and their slugs.',
+						),
 						'limit'     => array(
 							'type'        => 'integer',
 							'description' => 'How many results to return, 1-' . self::MAX_LIMIT . '. Default 10.',
@@ -592,7 +634,7 @@ class MMSAR_MCP {
 			array(
 				'name'        => 'list_content',
 				'title'       => 'List recent content',
-				'description' => 'Lists published content newest first, without searching. Use this to see what is on the site, to find the most recent writing, or to page through everything.',
+				'description' => 'Lists published content newest first, without searching. Use this to see what is on the site, to find the most recent writing, to see everything on one topic, or to page through everything.',
 				'inputSchema' => array(
 					'type'                 => 'object',
 					'properties'           => array(
@@ -600,6 +642,10 @@ class MMSAR_MCP {
 							'type'        => 'string',
 							'description' => 'Which content type to list. Omit for all of them.',
 							'enum'        => array_values( mmsar_get_enabled_post_types() ),
+						),
+						'topic'     => array(
+							'type'        => 'string',
+							'description' => 'Restrict to one topic: the slug of a category, tag or other topic on this site, such as `wordpress`. Call get_site_overview with sections ["topics"] to see the topics and their slugs.',
 						),
 						'limit'     => array(
 							'type'        => 'integer',
@@ -624,7 +670,7 @@ class MMSAR_MCP {
 			array(
 				'name'        => 'get_site_overview',
 				'title'       => 'Site overview',
-				'description' => 'What this site is, who runs it, how much content it has, and which machine-readable endpoints it publishes. Call this once at the start if you have no context on the site.',
+				'description' => 'What this site is, who runs it, how much content it has, which topics it covers, and which machine-readable endpoints it publishes. Call this once at the start if you have no context on the site.',
 				'inputSchema' => array(
 					'type'                 => 'object',
 					'properties'           => array(
@@ -633,7 +679,7 @@ class MMSAR_MCP {
 							'description' => 'Which parts of the overview to return. Omit for all of them. Ask for a subset when you already have context and only need one thing — `endpoints` alone is a fraction of the tokens of the whole overview.',
 							'items'       => array(
 								'type' => 'string',
-								'enum' => array( 'about', 'content', 'endpoints', 'actions' ),
+								'enum' => MMSAR_MCP_Arguments::SECTIONS,
 							),
 						),
 					),
@@ -732,28 +778,34 @@ class MMSAR_MCP {
 			return self::tool_error( 'Provide a `query` — one or more words to search for.' );
 		}
 
-		$posts = get_posts(
-			MMSAR_Noindex::exclude(
-				array(
-					'post_type'           => self::requested_post_types( $arguments ),
-					'post_status'         => 'publish',
-					's'                   => $query,
-					'posts_per_page'      => self::requested_limit( $arguments, 10 ),
-					'has_password'        => false,
-					'ignore_sticky_posts' => true,
-					'no_found_rows'       => true,
-				)
-			)
-		);
+		$topic = self::requested_topic( $arguments );
+		if ( isset( $topic['error'] ) ) {
+			return $topic['error'];
+		}
 
+		$args = array(
+			'post_type'           => self::requested_post_types( $arguments ),
+			'post_status'         => 'publish',
+			's'                   => $query,
+			'posts_per_page'      => self::requested_limit( $arguments, 10 ),
+			'has_password'        => false,
+			'ignore_sticky_posts' => true,
+			'no_found_rows'       => true,
+		);
+		if ( isset( $topic['tax_query'] ) ) {
+			$args['tax_query'] = $topic['tax_query']; // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_tax_query -- The topic filter is a taxonomy filter by definition; the result set is capped by MAX_LIMIT.
+		}
+		$posts = get_posts( MMSAR_Noindex::exclude( $args ) );
+
+		$in_topic = isset( $topic['label'] ) ? ' in ' . $topic['label'] : '';
 		if ( empty( $posts ) ) {
 			return self::tool_text(
-				'No published content matched "' . $query . '".' . "\n\n"
+				'No published content' . $in_topic . ' matched "' . $query . '".' . "\n\n"
 				. 'This is a keyword search, so try fewer or more specific words, or call list_content to see what is on the site.'
 			);
 		}
 
-		$lines = array( 'Found ' . count( $posts ) . ' result' . ( 1 === count( $posts ) ? '' : 's' ) . ' for "' . $query . '":', '' );
+		$lines = array( 'Found ' . count( $posts ) . ' result' . ( 1 === count( $posts ) ? '' : 's' ) . $in_topic . ' for "' . $query . '":', '' );
 		foreach ( $posts as $post ) {
 			$lines[] = '## ' . self::title( $post );
 			$lines[] = 'URL: ' . get_permalink( $post );
@@ -817,28 +869,37 @@ class MMSAR_MCP {
 		$offset = isset( $arguments['offset'] ) ? max( 0, (int) $arguments['offset'] ) : 0;
 		$limit  = self::requested_limit( $arguments, 20 );
 
-		$query = new WP_Query(
-			MMSAR_Noindex::exclude(
-				array(
-					'post_type'           => self::requested_post_types( $arguments ),
-					'post_status'         => 'publish',
-					'posts_per_page'      => $limit,
-					'offset'              => $offset,
-					'orderby'             => 'date',
-					'order'               => 'DESC',
-					'has_password'        => false,
-					'ignore_sticky_posts' => true,
-				)
-			)
-		);
+		$topic = self::requested_topic( $arguments );
+		if ( isset( $topic['error'] ) ) {
+			return $topic['error'];
+		}
 
+		$args = array(
+			'post_type'           => self::requested_post_types( $arguments ),
+			'post_status'         => 'publish',
+			'posts_per_page'      => $limit,
+			'offset'              => $offset,
+			'orderby'             => 'date',
+			'order'               => 'DESC',
+			'has_password'        => false,
+			'ignore_sticky_posts' => true,
+		);
+		if ( isset( $topic['tax_query'] ) ) {
+			$args['tax_query'] = $topic['tax_query']; // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_tax_query -- The topic filter is a taxonomy filter by definition; the page size is capped by MAX_LIMIT.
+		}
+		$query = new WP_Query( MMSAR_Noindex::exclude( $args ) );
+
+		$in_topic = isset( $topic['label'] ) ? ' in ' . $topic['label'] : '';
 		if ( ! $query->have_posts() ) {
-			return self::tool_text( 0 === $offset ? 'This site has no published content in those types.' : 'No more content past that offset.' );
+			if ( 0 !== $offset ) {
+				return self::tool_text( 'No more content past that offset.' );
+			}
+			return self::tool_text( '' === $in_topic ? 'This site has no published content in those types.' : 'This site has no published content' . $in_topic . ' in those types.' );
 		}
 
 		$total = (int) $query->found_posts;
 		$lines = array(
-			'Showing ' . count( $query->posts ) . ' of ' . $total . ' published item' . ( 1 === $total ? '' : 's' )
+			'Showing ' . count( $query->posts ) . ' of ' . $total . ' published item' . ( 1 === $total ? '' : 's' ) . $in_topic
 			. ( $offset ? ', starting at ' . $offset : '' ) . ':',
 			'',
 		);
@@ -863,7 +924,7 @@ class MMSAR_MCP {
 	 * @return array Tool result.
 	 */
 	private static function tool_overview( $arguments = array() ) {
-		$all    = array( 'about', 'content', 'endpoints', 'actions' );
+		$all    = MMSAR_MCP_Arguments::SECTIONS;
 		$wanted = isset( $arguments['sections'] ) && is_array( $arguments['sections'] )
 			? array_intersect( $all, array_map( 'strval', $arguments['sections'] ) )
 			: $all;
@@ -882,6 +943,9 @@ class MMSAR_MCP {
 		}
 		if ( in_array( 'content', $wanted, true ) ) {
 			$lines = array_merge( $lines, self::overview_content_lines() );
+		}
+		if ( in_array( 'topics', $wanted, true ) ) {
+			$lines = array_merge( $lines, self::overview_topic_lines() );
 		}
 		if ( in_array( 'endpoints', $wanted, true ) ) {
 			$lines = array_merge( $lines, self::overview_endpoint_lines() );
@@ -925,6 +989,34 @@ class MMSAR_MCP {
 			$counts  = wp_count_posts( $post_type );
 			$label   = $object ? $object->labels->name : $post_type;
 			$lines[] = '- ' . $label . ': ' . ( isset( $counts->publish ) ? (int) $counts->publish : 0 ) . ' published';
+		}
+		$lines[] = '';
+
+		return $lines;
+	}
+
+	/**
+	 * The overview's "topics" section: the slugs the `topic` argument accepts.
+	 *
+	 * Busiest first and capped, because a site with hundreds of tags would otherwise spend most of
+	 * the overview on the long tail. An agent that passes a slug not shown here still gets a
+	 * useful answer: either the results, or an error naming the topics that do exist.
+	 *
+	 * @return string[] Lines.
+	 */
+	private static function overview_topic_lines() {
+		$topics = self::topics( self::OVERVIEW_TOPICS );
+		if ( empty( $topics ) ) {
+			return array();
+		}
+
+		$lines = array( '## Topics', '', 'Pass a slug as `topic` to list_content or search_content.', '' );
+		foreach ( $topics as $topic ) {
+			$lines[] = '- `' . $topic['slug'] . '` — ' . $topic['name'] . ' (' . $topic['count'] . ')';
+		}
+		if ( self::OVERVIEW_TOPICS === count( $topics ) ) {
+			$lines[] = '';
+			$lines[] = 'The ' . self::OVERVIEW_TOPICS . ' most used are shown; other topics work too.';
 		}
 		$lines[] = '';
 
@@ -1157,6 +1249,179 @@ class MMSAR_MCP {
 	private static function requested_limit( $arguments, $fallback ) {
 		$limit = isset( $arguments['limit'] ) ? (int) $arguments['limit'] : $fallback;
 		return max( 1, min( self::MAX_LIMIT, $limit ) );
+	}
+
+	/**
+	 * The taxonomies a `topic` slug is looked up in.
+	 *
+	 * Every public taxonomy attached to an enabled post type that has an admin screen. The admin
+	 * screen test is what leaves out `post_format`, which is public but is a display setting rather
+	 * than a subject.
+	 *
+	 * @return string[] Taxonomy names.
+	 */
+	public static function topic_taxonomies() {
+		$names = array();
+		foreach ( get_object_taxonomies( mmsar_get_enabled_post_types(), 'objects' ) as $name => $taxonomy ) {
+			if ( ! empty( $taxonomy->public ) && ! empty( $taxonomy->show_ui ) ) {
+				$names[] = (string) $name;
+			}
+		}
+
+		/**
+		 * Filters the taxonomies the MCP `topic` argument matches against.
+		 *
+		 * @param string[] $names Taxonomy names.
+		 */
+		$filtered = apply_filters( 'mmsar_mcp_topic_taxonomies', $names );
+		return is_array( $filtered ) ? array_values( array_filter( $filtered, 'taxonomy_exists' ) ) : $names;
+	}
+
+	/**
+	 * The terms a topic slug names, across every topic taxonomy.
+	 *
+	 * A slug can name a term in more than one taxonomy — a "news" category and a "news"
+	 * tag — and an agent asking for the topic means both.
+	 *
+	 * @param string $raw Slug as the caller sent it.
+	 * @return WP_Term[] Matching terms, possibly none.
+	 */
+	private static function topic_terms( $raw ) {
+		$slug = sanitize_title( (string) $raw );
+		if ( '' === $slug ) {
+			return array();
+		}
+		$terms = array();
+		foreach ( self::topic_taxonomies() as $taxonomy ) {
+			$term = get_term_by( 'slug', $slug, $taxonomy );
+			if ( $term instanceof WP_Term ) {
+				$terms[] = $term;
+			}
+		}
+		return $terms;
+	}
+
+	/**
+	 * The canonical slug of a topic, or null when the site has no such topic.
+	 *
+	 * Public for the agent log, which stores a topic only once it is known to exist here.
+	 *
+	 * @param string $raw Slug as the caller sent it.
+	 * @return string|null
+	 */
+	public static function topic_slug( $raw ) {
+		$terms = self::topic_terms( $raw );
+		return empty( $terms ) ? null : (string) $terms[0]->slug;
+	}
+
+	/**
+	 * Resolve the `topic` argument for a query.
+	 *
+	 * @param array $arguments Tool arguments.
+	 * @return array Empty when no topic was asked for; 'tax_query' and 'label' for a known one;
+	 *               'error' (a tool result) for an unknown one.
+	 */
+	private static function requested_topic( $arguments ) {
+		if ( ! isset( $arguments['topic'] ) || ! is_scalar( $arguments['topic'] ) || '' === trim( (string) $arguments['topic'] ) ) {
+			return array();
+		}
+
+		$terms = self::topic_terms( (string) $arguments['topic'] );
+		if ( empty( $terms ) ) {
+			// An empty result would read as "nothing on that topic", which is a different and
+			// misleading answer. Naming the topics that exist lets the agent correct itself in one step.
+			$known = wp_list_pluck( self::topics( self::OVERVIEW_TOPICS ), 'slug' );
+			return array(
+				'error' => self::tool_error(
+					'This site has no topic "' . sanitize_title( (string) $arguments['topic'] ) . '".'
+					. ( empty( $known ) ? ' It has no topics at all; omit `topic`.' : "\n\n" . 'Topics on this site, most used first: ' . implode( ', ', $known ) . '.' )
+				),
+			);
+		}
+
+		$tax_query = array( 'relation' => 'OR' );
+		foreach ( $terms as $term ) {
+			$tax_query[] = array(
+				'taxonomy' => $term->taxonomy,
+				'field'    => 'term_id',
+				'terms'    => array( (int) $term->term_id ),
+			);
+		}
+
+		return array(
+			'tax_query' => $tax_query, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_tax_query -- Built here, passed to a capped query by the callers.
+			'label'     => '"' . html_entity_decode( $terms[0]->name, ENT_QUOTES | ENT_HTML5, 'UTF-8' ) . '"',
+		);
+	}
+
+	/**
+	 * The site's topics, busiest first, merged by slug across taxonomies.
+	 *
+	 * Counts are WordPress's own term counts, so they can include posts this server does not list
+	 * (noindex ones, for instance). They are a guide to what the site covers, not a promise of how
+	 * many results a call will return.
+	 *
+	 * @param int $limit Most topics to return.
+	 * @return array[] Each with 'slug', 'name' and 'count'.
+	 */
+	private static function topics( $limit ) {
+		$taxonomies = self::topic_taxonomies();
+		if ( empty( $taxonomies ) ) {
+			return array();
+		}
+		$terms = get_terms(
+			array(
+				'taxonomy'   => $taxonomies,
+				'hide_empty' => true,
+				'orderby'    => 'count',
+				'order'      => 'DESC',
+				'number'     => $limit * 2, // Headroom for a slug shared by two taxonomies.
+			)
+		);
+		if ( ! is_array( $terms ) ) {
+			return array();
+		}
+
+		$by_slug = array();
+		foreach ( $terms as $term ) {
+			if ( ! $term instanceof WP_Term ) {
+				continue;
+			}
+			if ( isset( $by_slug[ $term->slug ] ) ) {
+				$by_slug[ $term->slug ]['count'] += (int) $term->count;
+				continue;
+			}
+			$by_slug[ $term->slug ] = array(
+				'slug'  => (string) $term->slug,
+				'name'  => html_entity_decode( $term->name, ENT_QUOTES | ENT_HTML5, 'UTF-8' ),
+				'count' => (int) $term->count,
+			);
+		}
+		$topics = array_values( $by_slug );
+		usort(
+			$topics,
+			static function ( $a, $b ) {
+				return $b['count'] - $a['count'];
+			}
+		);
+		return array_slice( $topics, 0, $limit );
+	}
+
+	/**
+	 * The path of the post get_content would serve for a URL, or null.
+	 *
+	 * Public for the agent log, which stores this rather than what the caller typed.
+	 *
+	 * @param string $url URL or path, as get_content accepts it.
+	 * @return string|null
+	 */
+	public static function served_path( $url ) {
+		$post = self::resolve( trim( (string) $url ) );
+		if ( ! $post ) {
+			return null;
+		}
+		$path = wp_parse_url( (string) get_permalink( $post ), PHP_URL_PATH );
+		return is_string( $path ) && '' !== $path ? $path : '/';
 	}
 
 	/**

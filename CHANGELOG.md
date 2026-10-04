@@ -2,6 +2,14 @@
 
 All notable changes to Make My Site Agent-Ready.
 
+## 1.56.0 — 2026-10-04
+
+- New: MCP `list_content` and `search_content` take an optional `topic`, the slug of a category, tag or other public taxonomy term attached to the content types the plugin serves. A slug shared by several taxonomies matches all of them. An unknown slug returns an error that lists the site's topics instead of an empty result. New filter `mmsar_mcp_topic_taxonomies`.
+- New: `get_site_overview` has a `topics` section listing the 40 most-used topics with their slugs, so an agent can find what to pass as `topic`.
+- New: the Agent Log records what an MCP tool call asked for, not only which tool. A content type, a topic, the page `get_content` served (stored as its path, never as typed) and the overview sections are stored only after they match something on the site. They appear under the detail on the Agent Log screen, in the visit view, in a new `arguments` column at the end of the CSV export, and in the `get-agent-log` ability. Two calls to one tool asking for different things are now two entries. The log table gains a column (schema version 7) on update.
+- New: an option to store what agents search for through the MCP server (Settings > Agent-Ready > Agent Request Log). Off by default. Anything that looks like an email address or a phone number is replaced before storage, and each query is kept to 300 characters.
+- New: suggested privacy-policy text for the Agent Log under Settings > Privacy, which mentions search terms only when that option is on.
+
 ## 1.55.1 — 2026-10-04
 
 - Changed: on the Agent Log Summary, information cards are marked FYI (was "What it means"), and both card labels are now coloured badges.

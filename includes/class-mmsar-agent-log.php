@@ -29,7 +29,7 @@ class MMSAR_Agent_Log {
 	 * additive; rows before them read '' and NULL, which the readers treat as "unsigned" and "not
 	 * recorded" respectively.
 	 */
-	const DB_VERSION = 6;
+	const DB_VERSION = 7;
 
 	/**
 	 * How long a caller may go quiet before its next request counts as a new visit, in seconds.
@@ -614,6 +614,7 @@ class MMSAR_Agent_Log {
 			client_type varchar(12) NOT NULL DEFAULT '',
 			signature_agent varchar(100) NOT NULL DEFAULT '',
 			same_site tinyint(1) DEFAULT NULL,
+			arguments varchar(500) NOT NULL DEFAULT '',
 			PRIMARY KEY  (id),
 			KEY logged_at (logged_at),
 			KEY verified (verified),
@@ -887,7 +888,7 @@ class MMSAR_Agent_Log {
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- This plugin's own table; a cached read would show a stale log.
 		$rows = $wpdb->get_results(
 			$wpdb->prepare(
-				"SELECT logged_at, surface, detail, agent, ip, verified, verified_at, client_type, signature_agent, same_site
+				"SELECT logged_at, surface, detail, arguments, agent, ip, verified, verified_at, client_type, signature_agent, same_site
 				FROM %i
 				WHERE ( %s = '' OR FIND_IN_SET( IF( verified = '', 'pending', verified ), %s ) > 0 )
 				  AND ( %s = '' OR FIND_IN_SET( IF( client_type = '', 'unrecorded', client_type ), %s ) > 0 )
@@ -1136,6 +1137,7 @@ class MMSAR_Agent_Log {
 			'when'        => $when,
 			'surface'     => isset( $row['surface'] ) ? (string) $row['surface'] : '',
 			'detail'      => isset( $row['detail'] ) ? (string) $row['detail'] : '',
+			'arguments'   => isset( $row['arguments'] ) ? (string) $row['arguments'] : '',
 			'client_type' => isset( $row['client_type'] ) ? (string) $row['client_type'] : '',
 			'ip'          => isset( $row['ip'] ) ? (string) $row['ip'] : '',
 		);
@@ -1238,7 +1240,7 @@ class MMSAR_Agent_Log {
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- This plugin's own table; a cached read would show a stale log.
 		$rows = $wpdb->get_results(
 			$wpdb->prepare(
-				"SELECT logged_at, surface, detail, agent, ip, verified, verified_at, client_type, signature_agent, same_site
+				"SELECT logged_at, surface, detail, arguments, agent, ip, verified, verified_at, client_type, signature_agent, same_site
 				FROM %i
 				WHERE ( %s = '' OR ip = %s OR ip LIKE %s )
 				  AND ( %s = '' OR FIND_IN_SET( IF( verified = '', 'pending', verified ), %s ) > 0 )
@@ -2008,7 +2010,7 @@ class MMSAR_Agent_Log {
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- This plugin's own table; a cached read would show a stale log.
 		$rows = $wpdb->get_results(
 			$wpdb->prepare(
-				"SELECT id, logged_at, surface, detail, agent, ip, verified, verified_at, client_type, signature_agent, same_site
+				"SELECT id, logged_at, surface, detail, arguments, agent, ip, verified, verified_at, client_type, signature_agent, same_site
 				FROM %i
 				WHERE id < %d
 				  AND ( %s = '' OR FIND_IN_SET( IF( verified = '', 'pending', verified ), %s ) > 0 )
@@ -2683,9 +2685,13 @@ class MMSAR_Agent_Log {
 	 *                                    a bounded, site-derived value when $detail is caller input:
 	 *                                    the stored value stays faithful while the key stays safe.
 	 *                                    Null uses $detail itself.
+	 * @param string $arguments           What the caller asked for, for surfaces where that is more
+	 *                                    than the detail says: an MCP tool call's checked arguments
+	 *                                    (1.56.0). Must already be in its stored form; see
+	 *                                    MMSAR_MCP_Arguments. Empty everywhere else.
 	 * @return void
 	 */
-	public static function record( $surface, $detail = '', $throttle_on_detail = false, $anonymize = false, $throttle_detail = null ) {
+	public static function record( $surface, $detail = '', $throttle_on_detail = false, $anonymize = false, $throttle_detail = null, $arguments = '' ) {
 		if ( ! self::is_active() ) {
 			return;
 		}
@@ -2760,8 +2766,9 @@ class MMSAR_Agent_Log {
 				'client_type'     => $client_type,
 				'signature_agent' => $signature_agent,
 				'same_site'       => $same_site,
+				'arguments'       => mb_substr( (string) $arguments, 0, 500 ),
 			),
-			array( '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%d' )
+			array( '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%s' )
 		);
 
 		// Prune every so often rather than on every insert: an append is the cost this request
