@@ -354,13 +354,17 @@ the ability alongside the data:
 
 ### robots.txt and feeds
 
-Every entry falls into one of seven surface categories, filterable on the screen and in the ability:
-**Agent documents** (llms.txt, the catalogs, MCP, Agent Skills, webmcp.json and everything else this
-plugin publishes for agents), **Markdown**, **HTML pages**, **Not found**, **robots.txt**, **Feeds**
-and **WebMCP calls**. The headline the log exists to produce is agent documents and Markdown against
+Every entry falls into one of eight surface categories, filterable on the screen and in the ability:
+**Agent documents** (llms.txt, the catalogs, the MCP descriptors, Agent Skills, webmcp.json and
+everything else this plugin publishes for agents), **Markdown**, **HTML pages**, **Not found**,
+**robots.txt**, **Feeds**, **WebMCP calls** and **MCP calls**. The headline the log exists to produce is agent documents and Markdown against
 HTML pages, and robots.txt and feeds are kept out of both sides of it on purpose (1.49.0). WebMCP
 calls were agent documents until 1.58.0, when they got a category so they can be read on their own;
-like every category, it is worked out when the log is read, so older rows move with it.
+like every category, it is worked out when the log is read, so older rows move with it. MCP calls
+followed in 1.59.0, for a further reason: one MCP session writes several rows (`initialize`,
+`tools/list`, each `tools/call`) where reading a document writes one, so counting them as documents
+inflated that side of the comparison. The Agent documents count reads lower for every date as a
+result; that is the correction.
 
 - **robots.txt** is a crawler reading the rules before deciding what to fetch — neither a document nor
   a page. WordPress serves its robots.txt through the ordinary request cycle, so before 1.49.0 every
@@ -566,7 +570,9 @@ The log is off by default. When it is on, this is what it keeps about people:
 
 - **WebMCP calls come from a visitor's own browser** (1.57.0), so they are stored at network level,
   like a page view. They and requests for `webmcp.json` (1.58.0) are the browser rows the default
-  view shows, because they are agent activity rather than people reading pages.
+  view shows, because they are agent activity rather than people reading pages. So are MCP calls
+  (1.59.0): no browser makes one, so an MCP row filed as a browser is a mislabel from the 1.26.0–1.30.1
+  rule that read Node's fetch as a browser.
 - **MCP tool arguments are stored only when they match the site** (1.56.0): an enabled content
   type, an existing topic slug, the path of the post `get_content` served (never the URL as typed),
   known overview sections. A search query is free text an agent may have copied from a person, so
@@ -669,6 +675,6 @@ This plugin exposes abilities for the [WordPress Abilities API](https://develope
 | `make-my-site-agent-ready/set-endpoint` | Always on | Adds an endpoint, or updates one already managed on the settings page. Send only the fields you want changed when updating. |
 | `make-my-site-agent-ready/delete-endpoint` | Always on (destructive) | Removes an endpoint managed on the settings page. |
 | `make-my-site-agent-ready/get-agent-insights` | Always on (read-only) | The Agent Log Summary as data: findings about the last 30 days under read, cited and broken, each with a kind, a sentence, supporting items and usually an action. Counts only verified crawler identities and user-run clients, never forged ones; WebMCP tool calls, which claim no identity, count as they are. Cached hourly; pass `fresh` to recompute |
-| `make-my-site-agent-ready/get-agent-log` | Always on (read-only) | Reads the agent request log: counts by agent, by surface, by requested detail and by day across the whole log, a verification breakdown, plus a page of individual entries. Pass `summary_only` for the aggregates alone, which carry counts of distinct IPs but no addresses, or `verified` to list only entries with a given verdict — `failed` lists the requests that forged a crawler identity. Every entry and `by_agent` row carries a `crawler_category`, `by_crawler_category` breaks traffic down by kind of bot, and the `crawler_category` input filter (`ai` for all three AI categories) separates AI traffic from search and SEO traffic. A `signals` block, a per-entry `signals` object and a `signal` filter carry the browser signals (signed, cloud network, came from a link on the site), each with its limits stated in the schema. `surface_categories` counts every entry by surface category — `docs`, `markdown`, `html`, `notfound`, `robots`, `feed` and `webmcp` (WebMCP tool calls, 1.58.0) — and the `surface` filter takes the same values. Each entry carries `arguments`: on an MCP tool call, what the caller asked for (1.56.0). |
+| `make-my-site-agent-ready/get-agent-log` | Always on (read-only) | Reads the agent request log: counts by agent, by surface, by requested detail and by day across the whole log, a verification breakdown, plus a page of individual entries. Pass `summary_only` for the aggregates alone, which carry counts of distinct IPs but no addresses, or `verified` to list only entries with a given verdict — `failed` lists the requests that forged a crawler identity. Every entry and `by_agent` row carries a `crawler_category`, `by_crawler_category` breaks traffic down by kind of bot, and the `crawler_category` input filter (`ai` for all three AI categories) separates AI traffic from search and SEO traffic. A `signals` block, a per-entry `signals` object and a `signal` filter carry the browser signals (signed, cloud network, came from a link on the site), each with its limits stated in the schema. `surface_categories` counts every entry by surface category — `docs`, `markdown`, `html`, `notfound`, `robots`, `feed`, `webmcp` (WebMCP tool calls, 1.58.0) and `mcp` (MCP server calls, 1.59.0) — and the `surface` filter takes the same values. Each entry carries `arguments`: on an MCP tool call, what the caller asked for (1.56.0). |
 
 Endpoints a plugin or theme registered in code are read-only to `set-endpoint` and `delete-endpoint`: both return a `409` explaining that the owning plugin or theme has to be edited instead. Reporting success for a write that changed nothing would be worse than refusing it.

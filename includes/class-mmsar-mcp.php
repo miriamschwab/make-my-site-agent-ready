@@ -193,7 +193,7 @@ class MMSAR_MCP {
 	private static function route_of( WP_REST_Request $request ) {
 		$webmcp = 'webmcp' === strtolower( trim( (string) $request->get_header( 'x_mmsar_surface' ) ) );
 		return array(
-			'surface'   => $webmcp ? MMSAR_Agent_Log::SURFACE_WEBMCP : 'MCP JSON-RPC',
+			'surface'   => $webmcp ? MMSAR_Agent_Log::SURFACE_WEBMCP : MMSAR_Agent_Log::SURFACE_MCP,
 			'anonymize' => $webmcp,
 		);
 	}

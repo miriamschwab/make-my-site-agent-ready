@@ -346,11 +346,14 @@ final class MachineSurfacesTest extends TestCase {
 			'a feed'                              => array( 'Feed', '/feed/', 'feed' ),
 			'a comment feed'                      => array( 'Feed', '/comments/feed/', 'feed' ),
 			'llms.txt is still a document'        => array( 'llms.txt', '', 'docs' ),
-			'MCP is still a document'             => array( 'MCP JSON-RPC', 'initialize', 'docs' ),
 			// 1.58.0: served, it is an agent document; the 404s logged before it existed stay 404s.
 			'webmcp.json is a document'           => array( MMSAR_Agent_Log::SURFACE_WEBMCP_MANIFEST, '', 'docs' ),
 			'a WebMCP call has its own category'  => array( MMSAR_Agent_Log::SURFACE_WEBMCP, 'tools/call: get_content', 'webmcp' ),
-			'an MCP call is still a document'     => array( 'MCP JSON-RPC', 'tools/call: get_content', 'docs' ),
+			// 1.59.0: MCP calls have their own category; the MCP description files stay documents.
+			'an MCP call has its own category'    => array( 'MCP JSON-RPC', 'tools/call: get_content', 'mcp' ),
+			'an MCP initialize too'               => array( MMSAR_Agent_Log::SURFACE_MCP, 'initialize', 'mcp' ),
+			'mcp.json is still a document'        => array( 'mcp.json', '', 'docs' ),
+			'the server card is still a document' => array( 'mcp server-card.json', '', 'docs' ),
 			'an old webmcp.json 404 stays a 404'  => array( '404 (JSON)', '/.well-known/webmcp.json', 'notfound' ),
 			'markdown is still markdown'          => array( 'Markdown (.md URL)', '/about/', 'markdown' ),
 			'a 404 is still a 404'                => array( '404 (markdown)', '/robots.txt', 'notfound' ),

@@ -92,6 +92,8 @@ final class WebMcpLogTest extends TestCase {
 		// Exact names only: FIND_IN_SET is not a substring test.
 		'browser lookalike' => array( 'browser', 'webmcp.json.bak' ),
 		'http mcp'          => array( 'http', 'MCP JSON-RPC' ),
+		// 1.59.0: Node-fetch MCP rows filed as browser by the 1.26.0–1.30.1 rule.
+		'browser mcp'       => array( 'browser', 'MCP JSON-RPC' ),
 		'crawler llms'      => array( 'crawler', 'llms.txt' ),
 		'unrecorded'        => array( '', 'llms.txt' ),
 	);
@@ -154,8 +156,8 @@ final class WebMcpLogTest extends TestCase {
 	 */
 	public static function views(): array {
 		return array(
-			'default view shows webmcp, hides page views' => array( array(), array( 'browser webmcp', 'browser manifest', 'http mcp', 'crawler llms', 'unrecorded' ) ),
-			'browsers ticked shows every browser row'     => array( array( 'clients' => array( 'browser' ) ), array( 'browser page view', 'browser webmcp', 'browser manifest', 'browser lookalike' ) ),
+			'default view shows webmcp, hides page views' => array( array(), array( 'browser webmcp', 'browser manifest', 'http mcp', 'browser mcp', 'crawler llms', 'unrecorded' ) ),
+			'browsers ticked shows every browser row'     => array( array( 'clients' => array( 'browser' ) ), array( 'browser page view', 'browser webmcp', 'browser manifest', 'browser lookalike', 'browser mcp' ) ),
 			'http ticked is taken literally'              => array( array( 'clients' => array( 'http' ) ), array( 'http mcp' ) ),
 			'crawlers ticked is taken literally'          => array( array( 'clients' => array( 'crawler' ) ), array( 'crawler llms' ) ),
 		);

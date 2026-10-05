@@ -817,6 +817,9 @@ class MMSAR_Agent_Log {
 		// surfaces are the exception, let through whatever their client type: tool calls, which are
 		// agent calls that happen to come from a browser (1.57.0), and requests for webmcp.json, which
 		// on the site this was built for came from a browser tool checking pages for WebMCP (1.58.0).
+		// MCP calls too (1.59.0): no browser navigates to a JSON-RPC POST, so an MCP row filed as a
+		// browser is a mislabel, from the 1.26.0–1.30.1 rule that read Node's fetch as a browser.
+		// Without this the MCP filter's count and its rows disagreed.
 		// A comma-separated list for FIND_IN_SET; neither name contains a comma. Any explicit client
 		// choice is taken literally.
 		$also_surface = '';
@@ -975,6 +978,7 @@ class MMSAR_Agent_Log {
 				        CASE WHEN surface = %s OR ( surface LIKE %s AND ( detail = %s OR detail LIKE %s ) ) THEN 'robots'
 				             WHEN surface = %s THEN 'feed'
 				             WHEN surface = %s THEN 'webmcp'
+				             WHEN surface = %s THEN 'mcp'
 				             WHEN surface LIKE %s THEN 'html'
 				             WHEN surface LIKE %s THEN 'markdown'
 				             WHEN surface LIKE %s THEN 'notfound'
@@ -999,6 +1003,7 @@ class MMSAR_Agent_Log {
 				$cat['robots_query'],
 				$cat['feed'],
 				$cat['webmcp'],
+				$cat['mcp'],
 				$cat['html'],
 				$cat['markdown'],
 				$cat['notfound'],
@@ -1038,6 +1043,7 @@ class MMSAR_Agent_Log {
 				        CASE WHEN surface = %s OR ( surface LIKE %s AND ( detail = %s OR detail LIKE %s ) ) THEN 'robots'
 				             WHEN surface = %s THEN 'feed'
 				             WHEN surface = %s THEN 'webmcp'
+				             WHEN surface = %s THEN 'mcp'
 				             WHEN surface LIKE %s THEN 'html'
 				             WHEN surface LIKE %s THEN 'markdown'
 				             WHEN surface LIKE %s THEN 'notfound'
@@ -1061,6 +1067,7 @@ class MMSAR_Agent_Log {
 				$cat['robots_query'],
 				$cat['feed'],
 				$cat['webmcp'],
+				$cat['mcp'],
 				$cat['html'],
 				$cat['markdown'],
 				$cat['notfound'],
@@ -1336,6 +1343,7 @@ class MMSAR_Agent_Log {
 				        CASE WHEN surface = %s OR ( surface LIKE %s AND ( detail = %s OR detail LIKE %s ) ) THEN 'robots'
 				             WHEN surface = %s THEN 'feed'
 				             WHEN surface = %s THEN 'webmcp'
+				             WHEN surface = %s THEN 'mcp'
 				             WHEN surface LIKE %s THEN 'html'
 				             WHEN surface LIKE %s THEN 'markdown'
 				             WHEN surface LIKE %s THEN 'notfound'
@@ -1363,6 +1371,7 @@ class MMSAR_Agent_Log {
 				$cat['robots_query'],
 				$cat['feed'],
 				$cat['webmcp'],
+				$cat['mcp'],
 				$cat['html'],
 				$cat['markdown'],
 				$cat['notfound'],
@@ -1542,6 +1551,7 @@ class MMSAR_Agent_Log {
 				WHERE CASE WHEN surface = %s OR ( surface LIKE %s AND ( detail = %s OR detail LIKE %s ) ) THEN 'robots'
 				           WHEN surface = %s THEN 'feed'
 				           WHEN surface = %s THEN 'webmcp'
+				           WHEN surface = %s THEN 'mcp'
 				           WHEN surface LIKE %s THEN 'html'
 				           WHEN surface LIKE %s THEN 'markdown'
 				           WHEN surface LIKE %s THEN 'notfound'
@@ -1556,6 +1566,7 @@ class MMSAR_Agent_Log {
 				$cat['robots_query'],
 				$cat['feed'],
 				$cat['webmcp'],
+				$cat['mcp'],
 				$cat['html'],
 				$cat['markdown'],
 				$cat['notfound'],
@@ -2112,6 +2123,7 @@ class MMSAR_Agent_Log {
 				        CASE WHEN surface = %s OR ( surface LIKE %s AND ( detail = %s OR detail LIKE %s ) ) THEN 'robots'
 				             WHEN surface = %s THEN 'feed'
 				             WHEN surface = %s THEN 'webmcp'
+				             WHEN surface = %s THEN 'mcp'
 				             WHEN surface LIKE %s THEN 'html'
 				             WHEN surface LIKE %s THEN 'markdown'
 				             WHEN surface LIKE %s THEN 'notfound'
@@ -2137,6 +2149,7 @@ class MMSAR_Agent_Log {
 				$cat['robots_query'],
 				$cat['feed'],
 				$cat['webmcp'],
+				$cat['mcp'],
 				$cat['html'],
 				$cat['markdown'],
 				$cat['notfound'],
@@ -2344,6 +2357,7 @@ class MMSAR_Agent_Log {
 	const CAT_ROBOTS   = 'robots';
 	const CAT_FEED     = 'feed';
 	const CAT_WEBMCP   = 'webmcp';
+	const CAT_MCP      = 'mcp';
 
 	/**
 	 * The stored surface names for the two machine-readable files that are not agent documents.
@@ -2357,6 +2371,12 @@ class MMSAR_Agent_Log {
 	const SURFACE_WEBMCP = 'WebMCP JSON-RPC';
 
 	/**
+	 * The surface calls to the MCP server are recorded under. Named as a constant in 1.59.0, when
+	 * it got a category of its own; the stored value is unchanged since 1.19.0.
+	 */
+	const SURFACE_MCP = 'MCP JSON-RPC';
+
+	/**
 	 * The surface /.well-known/webmcp.json is recorded under (1.58.0). An agent document like the
 	 * server card, so it falls in the docs category with no pattern of its own.
 	 */
@@ -2368,7 +2388,7 @@ class MMSAR_Agent_Log {
 	 * @return string[]
 	 */
 	public static function default_view_browser_surfaces() {
-		return array( self::SURFACE_WEBMCP, self::SURFACE_WEBMCP_MANIFEST );
+		return array( self::SURFACE_WEBMCP, self::SURFACE_WEBMCP_MANIFEST, self::SURFACE_MCP );
 	}
 
 	/**
@@ -2386,7 +2406,7 @@ class MMSAR_Agent_Log {
 	 * @return string[]
 	 */
 	public static function categories() {
-		return array( self::CAT_DOCS, self::CAT_MARKDOWN, self::CAT_HTML, self::CAT_NOTFOUND, self::CAT_ROBOTS, self::CAT_FEED, self::CAT_WEBMCP );
+		return array( self::CAT_DOCS, self::CAT_MARKDOWN, self::CAT_HTML, self::CAT_NOTFOUND, self::CAT_ROBOTS, self::CAT_FEED, self::CAT_WEBMCP, self::CAT_MCP );
 	}
 
 	/**
@@ -2395,10 +2415,15 @@ class MMSAR_Agent_Log {
 	 * The CASE itself has to be a literal in every query that uses it — the statement must be a
 	 * fixed string — so it is written out five times and a test asserts the five are identical.
 	 * What it compares against is defined once, here. The order the values are passed in is:
-	 * robots, html, robots_legacy, robots_query, feed, webmcp, html, markdown, notfound.
+	 * robots, html, robots_legacy, robots_query, feed, webmcp, mcp, html, markdown, notfound.
 	 *
 	 * `webmcp` (1.58.0) is WebMCP tool calls only, so they can be filtered on their own. The other
 	 * WebMCP surface, webmcp.json, stays an agent document, like the MCP server card it mirrors.
+	 *
+	 * `mcp` (1.59.0) is calls to the MCP server from outside a browser, for the same reason: one
+	 * session writes several rows (initialize, tools/list, each tools/call) where a document fetch
+	 * writes one, so counting them as documents inflated that side of the comparison. mcp.json and
+	 * the server card stay documents.
 	 *
 	 * `robots_legacy` and `robots_query` are how a pre-1.49.0 row is recognised: it was stored as an
 	 * HTML page view whose detail is the requested URL, so `/robots.txt`, with or without a query.
@@ -2414,6 +2439,7 @@ class MMSAR_Agent_Log {
 			'robots_query'  => $wpdb->esc_like( '/robots.txt?' ) . '%',
 			'feed'          => self::SURFACE_FEED,
 			'webmcp'        => self::SURFACE_WEBMCP,
+			'mcp'           => self::SURFACE_MCP,
 			'markdown'      => $wpdb->esc_like( 'Markdown' ) . '%',
 			'notfound'      => $wpdb->esc_like( '404' ) . '%',
 		);
@@ -2441,6 +2467,8 @@ class MMSAR_Agent_Log {
 				return __( 'Feeds', 'make-my-site-agent-ready' );
 			case self::CAT_WEBMCP:
 				return __( 'WebMCP calls', 'make-my-site-agent-ready' );
+			case self::CAT_MCP:
+				return __( 'MCP calls', 'make-my-site-agent-ready' );
 			default:
 				return __( 'All surfaces', 'make-my-site-agent-ready' );
 		}

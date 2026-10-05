@@ -551,9 +551,9 @@ function mmsar_register_abilities() {
 					),
 					'surface'          => array(
 						'type'        => 'string',
-						'enum'        => array( '', 'docs', 'markdown', 'html', 'notfound', 'robots', 'feed', 'webmcp' ),
+						'enum'        => array( '', 'docs', 'markdown', 'html', 'notfound', 'robots', 'feed', 'webmcp', 'mcp' ),
 						'default'     => '',
-						'description' => 'Restrict entries by what kind of surface was requested. "docs" is the agent-facing documents: llms.txt and its scoped variants, api-catalog, the MCP descriptors, Agent Skills and SKILL.md, openapi.json, auth.md, ai-catalog, schema-map, nlweb and ?mode=agent. "markdown" is the .md mirrors and content-negotiated Markdown. "html" is ordinary page views. "notfound" is the agent 404s. "robots" is robots.txt — a crawler reading the rules before it fetches, which is neither a document nor a page view; rows stored before 1.49.0 as an HTML page view of /robots.txt are counted here too. "feed" is RSS and Atom feeds of every kind, including 304 Not Modified polls, recorded since 1.49.0. "webmcp" is tool calls from an agent in a visitor\'s browser through WebMCP (since 1.58.0 its own category; before, counted under "docs"); they are listed even with client left empty, although a browser made them. Empty string is all of them. Combine with client="crawler" or a verified filter to ask the question this log exists for: did anything real read the agent-facing documents.',
+						'description' => 'Restrict entries by what kind of surface was requested. "docs" is the agent-facing documents: llms.txt and its scoped variants, api-catalog, the MCP descriptors, Agent Skills and SKILL.md, openapi.json, auth.md, ai-catalog, schema-map, nlweb and ?mode=agent. "markdown" is the .md mirrors and content-negotiated Markdown. "html" is ordinary page views. "notfound" is the agent 404s. "robots" is robots.txt — a crawler reading the rules before it fetches, which is neither a document nor a page view; rows stored before 1.49.0 as an HTML page view of /robots.txt are counted here too. "feed" is RSS and Atom feeds of every kind, including 304 Not Modified polls, recorded since 1.49.0. "webmcp" is tool calls from an agent in a visitor\'s browser through WebMCP (since 1.58.0 its own category; before, counted under "docs"); they are listed even with client left empty, although a browser made them. "mcp" is calls to the MCP server from outside a browser: initialize, tools/list and each tools/call (since 1.59.0 its own category; before, counted under "docs"; mcp.json and the server card stay "docs"). Empty string is all of them. Combine with client="crawler" or a verified filter to ask the question this log exists for: did anything real read the agent-facing documents.',
 					),
 					'client'           => array(
 						'type'        => 'string',
@@ -614,7 +614,7 @@ function mmsar_register_abilities() {
 					),
 					'surface_categories'  => array(
 						'type'        => 'object',
-						'description' => 'Request counts by what kind of surface was asked for, over the whole log and across every client. "docs" is the agent-facing documents, "markdown" the .md mirrors and negotiated Markdown, "html" ordinary page views, "notfound" the agent 404s, "robots" robots.txt, "feed" RSS and Atom feeds, and "webmcp" WebMCP tool calls from a browser (1.58.0; part of "docs" before). Neither robots nor feed is an agent document or a page view, so both are kept out of that comparison: robots.txt rows stored before 1.49.0 as HTML page views are counted under "robots", not "html", so the html count is comparable across the whole log. Feeds are recorded only from 1.49.0. Reading docs and markdown against html is the headline this log exists to produce, but do it per client class rather than in aggregate: pass surface with client="crawler", or with a verified filter, since unbranded and forged traffic behave nothing like real crawlers.',
+						'description' => 'Request counts by what kind of surface was asked for, over the whole log and across every client. "docs" is the agent-facing documents, "markdown" the .md mirrors and negotiated Markdown, "html" ordinary page views, "notfound" the agent 404s, "robots" robots.txt, "feed" RSS and Atom feeds, and "webmcp" WebMCP tool calls from a browser (1.58.0) and "mcp" calls to the MCP server (1.59.0), both part of "docs" before, which is why docs reads lower from 1.59.0 for every date. Neither robots nor feed is an agent document or a page view, so both are kept out of that comparison: robots.txt rows stored before 1.49.0 as HTML page views are counted under "robots", not "html", so the html count is comparable across the whole log. Feeds are recorded only from 1.49.0. Reading docs and markdown against html is the headline this log exists to produce, but do it per client class rather than in aggregate: pass surface with client="crawler", or with a verified filter, since unbranded and forged traffic behave nothing like real crawlers.',
 						'properties'  => array(
 							'docs'     => array( 'type' => 'integer' ),
 							'markdown' => array( 'type' => 'integer' ),
@@ -623,6 +623,7 @@ function mmsar_register_abilities() {
 							'robots'   => array( 'type' => 'integer' ),
 							'feed'     => array( 'type' => 'integer' ),
 							'webmcp'   => array( 'type' => 'integer' ),
+							'mcp'      => array( 'type' => 'integer' ),
 						),
 					),
 					'client_types'        => array(

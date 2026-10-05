@@ -2,6 +2,11 @@
 
 All notable changes to Make My Site Agent-Ready.
 
+## 1.59.0 — 2026-10-05
+
+- New: calls to the MCP server have their own Surface filter on the Agent Log screen, "MCP calls", and their own `mcp` category in the `get-agent-log` ability, so you can see whether anything uses the tools and not just finds them. They used to be counted under Agent documents, where one MCP session wrote several rows against one row per document, so the Agent documents count now reads lower, for earlier dates too. The MCP description files (mcp.json and the server card) stay under Agent documents.
+- Fixed: the "MCP calls" filter now shows every MCP call its count includes. Some recorded in early September 2026 were filed as browser traffic, which the log hides by default, so the count said 158 and the list showed 146. A browser never makes an MCP call, so these now show whatever they were filed as, like WebMCP calls.
+
 ## 1.58.1 — 2026-10-05
 
 - Updated: the bundled crawler IP lists, re-fetched from every operator on 2026-10-05. Anthropic added two ranges and OpenAI 27, and OpenAI withdrew three (`172.182.204.0/24`, `172.182.214.0/24`, `172.182.215.0/24`); no request in the log this was tested on came from those three. Every other operator's list was unchanged.
