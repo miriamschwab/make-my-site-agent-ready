@@ -217,6 +217,10 @@ class MMSAR_Admin {
 				__( 'WebMCP (agents in the browser)', 'make-my-site-agent-ready' ),
 				__( 'Offers the MCP server\'s read-only tools to AI agents working inside a visitor\'s browser, through WebMCP, so an agent on any page can search the site, list content, read a page (the one it is on, by default) and get an overview. Needs the MCP server above. Adds a small inline script to every page that checks whether the browser supports WebMCP and stops there if it doesn\'t, which is almost every browser today. Browser support is an experimental trial, so see the WebMCP section below for the token that switches it on. Off by default.', 'make-my-site-agent-ready' ),
 			),
+			'webmcp_manifest'      => array(
+				__( 'WebMCP tool list (webmcp.json)', 'make-my-site-agent-ready' ),
+				__( 'Publishes /.well-known/webmcp.json (and /.well-known/webmcp), listing the tools your pages register through WebMCP above, so an agent or a browser tool can see them before loading a page. Takes effect only while WebMCP is on. No specification defines this file: WebMCP registers tools in the page itself, and this list is generated from the same source as the page, so it can never name a tool a page does not offer. Switch it off if another plugin publishes this address.', 'make-my-site-agent-ready' ),
+			),
 			'okf_bundle'           => array(
 				__( 'OKF bundle', 'make-my-site-agent-ready' ),
 				__( 'Publishes your content as an Open Knowledge Format (v0.2) bundle at /okf/ — one typed Markdown concept file per post/page, with a browsable index per post type and a root index and change log. Lets an agent ingest the whole corpus in one pass instead of scraping page by page. Reuses the same Markdown already generated for the .md URLs above.', 'make-my-site-agent-ready' ),
@@ -288,6 +292,10 @@ class MMSAR_Admin {
 			'nlweb'         => '/schema-map.xml',
 			'okf_bundle'    => '/okf/index.md',
 		);
+		// Only while the bridge is on too: without it the address is a 404.
+		if ( MMSAR_WebMCP::manifest_enabled() ) {
+			$urls['webmcp_manifest'] = '/.well-known/webmcp.json';
+		}
 		// Only once a key exists: building this list must not create one for a feature that is off.
 		$indexnow_key = get_option( MMSAR_IndexNow::KEY_OPTION, '' );
 		if ( MMSAR_IndexNow::is_valid_key( $indexnow_key ) ) {
@@ -325,6 +333,7 @@ class MMSAR_Admin {
 			'security_txt'         => 'mmsar-section-security',
 			'tdmrep'               => 'mmsar-section-tdmrep',
 			'webmcp'               => 'mmsar-section-webmcp',
+			'webmcp_manifest'      => 'mmsar-section-webmcp',
 		);
 	}
 
@@ -736,6 +745,9 @@ class MMSAR_Admin {
 				/* translators: %s: comma-separated list of tool names */
 				sprintf( __( 'On. Pages offer these tools to an agent in the browser: %s.', 'make-my-site-agent-ready' ), implode( ', ', $names ) ),
 			);
+			$lines[] = MMSAR_WebMCP::manifest_enabled()
+				? array( 'success', __( 'The same tools are listed at /.well-known/webmcp.json.', 'make-my-site-agent-ready' ) )
+				: array( 'info', __( 'The tool list at /.well-known/webmcp.json is switched off.', 'make-my-site-agent-ready' ) );
 		}
 
 		$usable = 0;

@@ -312,6 +312,51 @@ class MMSAR_Agent_Log {
 		// word, and on this site's log it was already inside Friendica's `Request/…` and
 		// `python-requests`.
 		'Quest',
+		// Added 1.58.0 from the 2026-10-05 bot watch. Verified by reverse DNS; see
+		// MMSAR_Agent_Log_Verify::VERIFY_HOSTS.
+		//
+		// Ibou's search crawler (https://ibou.io/iboubot.html).
+		'IbouBot',
+		// Baidu's search crawler. The bare token covers -image, -video, -news and the rest.
+		'Baiduspider',
+		// Cốc Cốc's search crawler. The bare token covers -web, -image, -fast, -ads and -shopping.
+		'coccocbot',
+		// FindFiles.net, a search engine for downloadable files (https://findfiles.net/en/bot).
+		// Guarded in AGENT_DISCLOSURES: the name is close to a plain phrase.
+		'FindFiles',
+		// Iframely builds link previews when a person shares a URL in a customer's product
+		// (https://iframely.com/docs/allowlisting). The user-agent appends the customer's name, so
+		// only the token is matched. It runs on Iframely's servers, not the sharer's device.
+		'Iframely',
+		// An experimental crawl engine for a European search engine (https://abuse.creasource.dev/).
+		// Guarded in AGENT_DISCLOSURES: the name is generic.
+		'crawl-engine',
+		// Verified by published IP list; see MMSAR_Agent_Log_Verify::VERIFY_RANGES.
+		//
+		// Amazon's search crawler for Alexa and other search experiences, not for training
+		// (https://developer.amazon.com/support/amazonbot). A different bot from Amazonbot, with
+		// its own list and no reverse DNS of its own.
+		'Amzn-SearchBot',
+		// The rest are recognise-only.
+		//
+		// IsonAI's search crawler (https://search.isonai.com/bot). It publishes an address list, but
+		// says one crawl node on a shared mobile network is left off it, so the list is not used.
+		'IsonSearchBot',
+		// Website Toolkit's on-demand site audit (https://website-toolkit.co.uk/crawler). The
+		// user-agent reads `Website-Toolkit2.0`, with no slash.
+		'Website-Toolkit',
+		// Livelap, a content discovery app (http://site.livelap.com/crawler). Does not read
+		// robots.txt.
+		'LivelapBot',
+		// Broken-link checkers inside WordPress plugins, running on the server of a site that links
+		// here. A web server rather than a person's device, so recognising them keeps a host's
+		// address, not a reader's. See the decisions log, 1.58.0.
+		'RankMath Link Checker',
+		'WPMU DEV Broken Link Checker',
+		// Elementor's agent-readiness scanner on Cloudflare Workers, confirmed by Miriam on
+		// 2026-10-05. Guarded in AGENT_DISCLOSURES by its repository link, so the bare
+		// `AgentReadyScanner/1.0` form is not recognised. Not Cloudflare's AgentReadinessScanner.
+		'AgentReadyScanner',
 	);
 
 	/**
@@ -366,117 +411,134 @@ class MMSAR_Agent_Log {
 	 * storage. A test asserts that every AGENTS entry has a category here.
 	 */
 	const CRAWLER_CATEGORIES = array(
-		'ClaudeBot'                 => self::CRAWLER_AI_TRAINING,
-		'Claude-User'               => self::CRAWLER_AI_ASSISTANT,
-		'Claude-SearchBot'          => self::CRAWLER_AI_SEARCH,
-		'Anthropic-AI'              => self::CRAWLER_AI_TRAINING,
-		'GPTBot'                    => self::CRAWLER_AI_TRAINING,
-		'ChatGPT-User'              => self::CRAWLER_AI_ASSISTANT,
-		'OAI-SearchBot'             => self::CRAWLER_AI_SEARCH,
-		'PerplexityBot'             => self::CRAWLER_AI_SEARCH,
-		'Perplexity-User'           => self::CRAWLER_AI_ASSISTANT,
+		'ClaudeBot'                    => self::CRAWLER_AI_TRAINING,
+		'Claude-User'                  => self::CRAWLER_AI_ASSISTANT,
+		'Claude-SearchBot'             => self::CRAWLER_AI_SEARCH,
+		'Anthropic-AI'                 => self::CRAWLER_AI_TRAINING,
+		'GPTBot'                       => self::CRAWLER_AI_TRAINING,
+		'ChatGPT-User'                 => self::CRAWLER_AI_ASSISTANT,
+		'OAI-SearchBot'                => self::CRAWLER_AI_SEARCH,
+		'PerplexityBot'                => self::CRAWLER_AI_SEARCH,
+		'Perplexity-User'              => self::CRAWLER_AI_ASSISTANT,
 		// A robots.txt control token rather than a crawler that visits; a row under it is a claim.
-		'Google-Extended'           => self::CRAWLER_AI_TRAINING,
+		'Google-Extended'              => self::CRAWLER_AI_TRAINING,
 		// General-purpose crawler for Google product and research teams.
-		'GoogleOther'               => self::CRAWLER_OTHER,
-		'Gemini'                    => self::CRAWLER_AI_ASSISTANT,
+		'GoogleOther'                  => self::CRAWLER_OTHER,
+		'Gemini'                       => self::CRAWLER_AI_ASSISTANT,
 		// Also a control token, like Google-Extended.
-		'Applebot-Extended'         => self::CRAWLER_AI_TRAINING,
-		'meta-externalagent'        => self::CRAWLER_AI_TRAINING,
-		'Bytespider'                => self::CRAWLER_AI_TRAINING,
+		'Applebot-Extended'            => self::CRAWLER_AI_TRAINING,
+		'meta-externalagent'           => self::CRAWLER_AI_TRAINING,
+		'Bytespider'                   => self::CRAWLER_AI_TRAINING,
 		// An open dataset, used mostly for model training.
-		'CCBot'                     => self::CRAWLER_AI_TRAINING,
-		'cohere-ai'                 => self::CRAWLER_AI_TRAINING,
-		'DuckAssistBot'             => self::CRAWLER_AI_SEARCH,
+		'CCBot'                        => self::CRAWLER_AI_TRAINING,
+		'cohere-ai'                    => self::CRAWLER_AI_TRAINING,
+		'DuckAssistBot'                => self::CRAWLER_AI_SEARCH,
 		// Amazon says it may train models; it also feeds Alexa answers.
-		'Amazonbot'                 => self::CRAWLER_AI_TRAINING,
-		'YouBot'                    => self::CRAWLER_AI_SEARCH,
+		'Amazonbot'                    => self::CRAWLER_AI_TRAINING,
+		'YouBot'                       => self::CRAWLER_AI_SEARCH,
 		// Builds a knowledge graph sold largely for AI use.
-		'Diffbot'                   => self::CRAWLER_AI_TRAINING,
-		'LinkupBot'                 => self::CRAWLER_AI_SEARCH,
+		'Diffbot'                      => self::CRAWLER_AI_TRAINING,
+		'LinkupBot'                    => self::CRAWLER_AI_SEARCH,
 		// Inferred: SSI publishes no crawler documentation.
-		'SSI-Nutch'                 => self::CRAWLER_AI_TRAINING,
-		'AhrefsBot'                 => self::CRAWLER_SEO,
-		'Barkrowler'                => self::CRAWLER_SEO,
-		'SeznamBot'                 => self::CRAWLER_SEARCH,
-		'MojeekBot'                 => self::CRAWLER_SEARCH,
-		'SERankingBacklinksBot'     => self::CRAWLER_SEO,
-		'DuckDuckBot'               => self::CRAWLER_SEARCH,
-		'PetalBot'                  => self::CRAWLER_SEARCH,
-		'ExaSearchBot'              => self::CRAWLER_AI_SEARCH,
-		'ShapBot'                   => self::CRAWLER_AI_SEARCH,
-		'SofyaBot'                  => self::CRAWLER_AI_SEARCH,
-		'SemrushBot'                => self::CRAWLER_SEO,
-		'MJ12bot'                   => self::CRAWLER_SEO,
-		'AwarioBot'                 => self::CRAWLER_MONITORING,
-		'Screaming Frog SEO Spider' => self::CRAWLER_SEO,
+		'SSI-Nutch'                    => self::CRAWLER_AI_TRAINING,
+		'AhrefsBot'                    => self::CRAWLER_SEO,
+		'Barkrowler'                   => self::CRAWLER_SEO,
+		'SeznamBot'                    => self::CRAWLER_SEARCH,
+		'MojeekBot'                    => self::CRAWLER_SEARCH,
+		'SERankingBacklinksBot'        => self::CRAWLER_SEO,
+		'DuckDuckBot'                  => self::CRAWLER_SEARCH,
+		'PetalBot'                     => self::CRAWLER_SEARCH,
+		'ExaSearchBot'                 => self::CRAWLER_AI_SEARCH,
+		'ShapBot'                      => self::CRAWLER_AI_SEARCH,
+		'SofyaBot'                     => self::CRAWLER_AI_SEARCH,
+		'SemrushBot'                   => self::CRAWLER_SEO,
+		'MJ12bot'                      => self::CRAWLER_SEO,
+		'AwarioBot'                    => self::CRAWLER_MONITORING,
+		'Screaming Frog SEO Spider'    => self::CRAWLER_SEO,
 		// Indexes source code rather than general content.
-		'PublicWWWBot'              => self::CRAWLER_SEARCH,
-		'mwmbl'                     => self::CRAWLER_SEARCH,
+		'PublicWWWBot'                 => self::CRAWLER_SEARCH,
+		'mwmbl'                        => self::CRAWLER_SEARCH,
 		// Also does general search-engine crawling.
-		'trendictionbot'            => self::CRAWLER_MONITORING,
-		'Pandalytics'               => self::CRAWLER_OTHER,
+		'trendictionbot'               => self::CRAWLER_MONITORING,
+		'Pandalytics'                  => self::CRAWLER_OTHER,
 		// On-demand, customer-triggered Vertex AI Agent fetches.
-		'Google-CloudVertexBot'     => self::CRAWLER_OTHER,
-		'OraBot'                    => self::CRAWLER_SCANNER,
-		'EtherdeckBot'              => self::CRAWLER_SEARCH,
-		'LyonlBot'                  => self::CRAWLER_SEARCH,
-		'Miniflux'                  => self::CRAWLER_OTHER,
-		'FeedBurner'                => self::CRAWLER_OTHER,
-		'Feedbin'                   => self::CRAWLER_OTHER,
-		'Twitterbot'                => self::CRAWLER_OTHER,
-		'facebookexternalhit'       => self::CRAWLER_OTHER,
-		'Slackbot-LinkExpanding'    => self::CRAWLER_OTHER,
-		'Googlebot'                 => self::CRAWLER_SEARCH,
-		'Applebot'                  => self::CRAWLER_SEARCH,
-		'bingbot'                   => self::CRAWLER_SEARCH,
+		'Google-CloudVertexBot'        => self::CRAWLER_OTHER,
+		'OraBot'                       => self::CRAWLER_SCANNER,
+		'EtherdeckBot'                 => self::CRAWLER_SEARCH,
+		'LyonlBot'                     => self::CRAWLER_SEARCH,
+		'Miniflux'                     => self::CRAWLER_OTHER,
+		'FeedBurner'                   => self::CRAWLER_OTHER,
+		'Feedbin'                      => self::CRAWLER_OTHER,
+		'Twitterbot'                   => self::CRAWLER_OTHER,
+		'facebookexternalhit'          => self::CRAWLER_OTHER,
+		'Slackbot-LinkExpanding'       => self::CRAWLER_OTHER,
+		'Googlebot'                    => self::CRAWLER_SEARCH,
+		'Applebot'                     => self::CRAWLER_SEARCH,
+		'bingbot'                      => self::CRAWLER_SEARCH,
 		// Added 1.46.0; confirmed per name by Miriam on 2026-09-22.
-		'CensysInspect'             => self::CRAWLER_SCANNER,
-		'Palo Alto Networks'        => self::CRAWLER_SCANNER,
-		'l9scan'                    => self::CRAWLER_SCANNER,
+		'CensysInspect'                => self::CRAWLER_SCANNER,
+		'Palo Alto Networks'           => self::CRAWLER_SCANNER,
+		'l9scan'                       => self::CRAWLER_SCANNER,
 		// Archival rather than AI, search or SEO.
-		'archive.org_bot'           => self::CRAWLER_OTHER,
-		'YandexBot'                 => self::CRAWLER_SEARCH,
+		'archive.org_bot'              => self::CRAWLER_OTHER,
+		'YandexBot'                    => self::CRAWLER_SEARCH,
 		// Probes for agent cards rather than collecting content; the overlap with `ai-search` is
 		// real but it is discovery behaviour.
-		'AgentTrustBot'             => self::CRAWLER_SCANNER,
-		'fyndbot'                   => self::CRAWLER_SEARCH,
-		'TheWebReport'              => self::CRAWLER_OTHER,
-		'ntu-sa-crawler'            => self::CRAWLER_OTHER,
+		'AgentTrustBot'                => self::CRAWLER_SCANNER,
+		'fyndbot'                      => self::CRAWLER_SEARCH,
+		'TheWebReport'                 => self::CRAWLER_OTHER,
+		'ntu-sa-crawler'               => self::CRAWLER_OTHER,
 		// Both from the operator's business and third-party descriptions; neither operator
 		// documents the bot itself.
-		'YaK'                       => self::CRAWLER_MONITORING,
-		'um-LN'                     => self::CRAWLER_MONITORING,
+		'YaK'                          => self::CRAWLER_MONITORING,
+		'um-LN'                        => self::CRAWLER_MONITORING,
 		// Added 1.50.0.
-		'Qwantbot'                  => self::CRAWLER_SEARCH,
-		'DataForSeoBot'             => self::CRAWLER_SEO,
-		'LohiSoftBot'               => self::CRAWLER_SEARCH,
+		'Qwantbot'                     => self::CRAWLER_SEARCH,
+		'DataForSeoBot'                => self::CRAWLER_SEO,
+		'LohiSoftBot'                  => self::CRAWLER_SEARCH,
 		// A technology profiler (which software a site runs), sold as marketing intelligence by an
 		// SEO-tool company.
-		'PoweredByBot'              => self::CRAWLER_SEO,
-		'DomainStatsBot'            => self::CRAWLER_SEO,
-		'QlyzeBot'                  => self::CRAWLER_SEO,
+		'PoweredByBot'                 => self::CRAWLER_SEO,
+		'DomainStatsBot'               => self::CRAWLER_SEO,
+		'QlyzeBot'                     => self::CRAWLER_SEO,
 		// Overlaps with the backlink indexes; see the note in AGENTS.
-		'MapTheNetBot'              => self::CRAWLER_OTHER,
+		'MapTheNetBot'                 => self::CRAWLER_OTHER,
 		// Fetches because a customer configured it, but ingests several levels deep and resyncs.
-		'amazon-Quick-on-behalf-of' => self::CRAWLER_AI_ASSISTANT,
+		'amazon-Quick-on-behalf-of'    => self::CRAWLER_AI_ASSISTANT,
 		// Unconfirmed: the operator documents no crawler.
-		'Micro.blog'                => self::CRAWLER_OTHER,
+		'Micro.blog'                   => self::CRAWLER_OTHER,
 		// Added 1.54.0; confirmed per name by Miriam on 2026-09-29.
 		// Checks whether an agent can read and use a site: the same job as OraBot.
-		'KnownGood-Verifier'        => self::CRAWLER_SCANNER,
+		'KnownGood-Verifier'           => self::CRAWLER_SCANNER,
 		// Feed reader, with Feedbin.
-		'Inoreader'                 => self::CRAWLER_OTHER,
-		'CaelLabSearchSpider'       => self::CRAWLER_SEARCH,
-		'SEOJuice-SearchBot'        => self::CRAWLER_SEO,
+		'Inoreader'                    => self::CRAWLER_OTHER,
+		'CaelLabSearchSpider'          => self::CRAWLER_SEARCH,
+		'SEOJuice-SearchBot'           => self::CRAWLER_SEO,
 		// Overlaps with the SEO tools, but the operator describes a business-data index, not SEO
 		// analysis.
-		'Dataprovider.com'          => self::CRAWLER_OTHER,
-		'Feedly'                    => self::CRAWLER_OTHER,
+		'Dataprovider.com'             => self::CRAWLER_OTHER,
+		'Feedly'                       => self::CRAWLER_OTHER,
 		// Feed reader. Unconfirmed: the operator documents no crawler.
-		'Miniroll'                  => self::CRAWLER_OTHER,
+		'Miniroll'                     => self::CRAWLER_OTHER,
 		// Archiving and search indexing, from an unnamed operator.
-		'Quest'                     => self::CRAWLER_OTHER,
+		'Quest'                        => self::CRAWLER_OTHER,
+		// Added 1.58.0; confirmed per name by Miriam on 2026-10-05.
+		'IbouBot'                      => self::CRAWLER_SEARCH,
+		'Baiduspider'                  => self::CRAWLER_SEARCH,
+		'coccocbot'                    => self::CRAWLER_SEARCH,
+		// Searches downloadable files; also scans them for malware and NSFW images.
+		'FindFiles'                    => self::CRAWLER_SEARCH,
+		// Link previews, like Slackbot-LinkExpanding.
+		'Iframely'                     => self::CRAWLER_OTHER,
+		'crawl-engine'                 => self::CRAWLER_SEARCH,
+		// Amazon has no classic web search engine, so the index feeds assistant answers.
+		'Amzn-SearchBot'               => self::CRAWLER_AI_SEARCH,
+		'IsonSearchBot'                => self::CRAWLER_SEARCH,
+		'Website-Toolkit'              => self::CRAWLER_SEO,
+		'LivelapBot'                   => self::CRAWLER_OTHER,
+		'RankMath Link Checker'        => self::CRAWLER_SEO,
+		'WPMU DEV Broken Link Checker' => self::CRAWLER_SEO,
+		'AgentReadyScanner'            => self::CRAWLER_SCANNER,
 	);
 
 	/**
@@ -505,22 +567,30 @@ class MMSAR_Agent_Log {
 	 * the trimmed user-agent, reads as an unrecognised self-declared crawler, and is never accused.
 	 */
 	const AGENT_DISCLOSURES = array(
-		'LinkupBot'    => 'linkup.so',
-		'SSI-Nutch'    => 'ssi.inc',
+		'LinkupBot'         => 'linkup.so',
+		'SSI-Nutch'         => 'ssi.inc',
 		// Short tokens, guarded against accidental substrings rather than a known collision. Both
 		// domains sit inside the first 80 characters of the user-agent in either stored shape — the
 		// pre-1.45.1 cut that kept `Mozilla/5.0 ` and the current one that drops it — so rows logged
 		// before recognition still satisfy the guard. CrawlerCategoryTest asserts it for um-LN,
 		// whose user-agent is the long one.
-		'YaK'          => 'linkfluence.com',
-		'um-LN'        => 'ubermetrics-technologies.com',
+		'YaK'               => 'linkfluence.com',
+		'um-LN'             => 'ubermetrics-technologies.com',
 		// A generic word rather than a short token, guarded for the same reason. The domain sits
 		// well inside the first 80 characters of the only form seen.
-		'PoweredByBot' => 'keywordseverywhere.com',
+		'PoweredByBot'      => 'keywordseverywhere.com',
 		// A common word, and already a real collision: Friendica sends `Request/ContentTypeChecker`
 		// and `python-requests` contains it too. The domain sits inside the first 80 characters of
 		// the only form seen.
-		'Quest'        => 'qwertious.org',
+		'Quest'             => 'qwertious.org',
+		// Close to a plain phrase. The domain is in the only form seen, and is the bot's own host.
+		'FindFiles'         => 'findfiles.net',
+		// A generic name anyone could pick. The operator's domain is in the only form seen.
+		'crawl-engine'      => 'creasource.dev',
+		// Required by Miriam (2026-10-05): only the form carrying Elementor's repository link is
+		// recognised. It sits inside the first 80 characters of the user-agent, so the stored raw
+		// rows satisfy it too.
+		'AgentReadyScanner' => 'github.com/elementor',
 	);
 
 	/**
@@ -743,14 +813,16 @@ class MMSAR_Agent_Log {
 				array_merge( self::client_types(), array( 'unrecorded' ) )
 			)
 		);
-		// The default excludes browser rows, which are mostly people reading pages. WebMCP calls are
-		// the exception: they are agent tool calls that happen to come from a browser (1.57.0), so the
-		// default view lets that one surface through whatever its client type. Any explicit client
+		// The default excludes browser rows, which are mostly people reading pages. Two WebMCP
+		// surfaces are the exception, let through whatever their client type: tool calls, which are
+		// agent calls that happen to come from a browser (1.57.0), and requests for webmcp.json, which
+		// on the site this was built for came from a browser tool checking pages for WebMCP (1.58.0).
+		// A comma-separated list for FIND_IN_SET; neither name contains a comma. Any explicit client
 		// choice is taken literally.
 		$also_surface = '';
 		if ( ! $clients && ! $signals ) {
 			$clients      = array( self::CLIENT_CRAWLER, self::CLIENT_HTTP, 'unrecorded' );
-			$also_surface = self::SURFACE_WEBMCP;
+			$also_surface = implode( ',', self::default_view_browser_surfaces() );
 		} elseif ( ! $clients ) {
 			$clients = array_merge( self::client_types(), array( 'unrecorded' ) );
 		}
@@ -898,10 +970,11 @@ class MMSAR_Agent_Log {
 				"SELECT logged_at, surface, detail, arguments, agent, ip, verified, verified_at, client_type, signature_agent, same_site
 				FROM %i
 				WHERE ( %s = '' OR FIND_IN_SET( IF( verified = '', 'pending', verified ), %s ) > 0 )
-				  AND ( %s = '' OR FIND_IN_SET( IF( client_type = '', 'unrecorded', client_type ), %s ) > 0 OR ( %s <> '' AND surface = %s ) )
+				  AND ( %s = '' OR FIND_IN_SET( IF( client_type = '', 'unrecorded', client_type ), %s ) > 0 OR ( %s <> '' AND FIND_IN_SET( surface, %s ) > 0 ) )
 				  AND ( %s = '' OR FIND_IN_SET(
 				        CASE WHEN surface = %s OR ( surface LIKE %s AND ( detail = %s OR detail LIKE %s ) ) THEN 'robots'
 				             WHEN surface = %s THEN 'feed'
+				             WHEN surface = %s THEN 'webmcp'
 				             WHEN surface LIKE %s THEN 'html'
 				             WHEN surface LIKE %s THEN 'markdown'
 				             WHEN surface LIKE %s THEN 'notfound'
@@ -925,6 +998,7 @@ class MMSAR_Agent_Log {
 				$cat['robots_legacy'],
 				$cat['robots_query'],
 				$cat['feed'],
+				$cat['webmcp'],
 				$cat['html'],
 				$cat['markdown'],
 				$cat['notfound'],
@@ -959,10 +1033,11 @@ class MMSAR_Agent_Log {
 			$wpdb->prepare(
 				"SELECT COUNT(*) FROM %i
 				WHERE ( %s = '' OR FIND_IN_SET( IF( verified = '', 'pending', verified ), %s ) > 0 )
-				  AND ( %s = '' OR FIND_IN_SET( IF( client_type = '', 'unrecorded', client_type ), %s ) > 0 OR ( %s <> '' AND surface = %s ) )
+				  AND ( %s = '' OR FIND_IN_SET( IF( client_type = '', 'unrecorded', client_type ), %s ) > 0 OR ( %s <> '' AND FIND_IN_SET( surface, %s ) > 0 ) )
 				  AND ( %s = '' OR FIND_IN_SET(
 				        CASE WHEN surface = %s OR ( surface LIKE %s AND ( detail = %s OR detail LIKE %s ) ) THEN 'robots'
 				             WHEN surface = %s THEN 'feed'
+				             WHEN surface = %s THEN 'webmcp'
 				             WHEN surface LIKE %s THEN 'html'
 				             WHEN surface LIKE %s THEN 'markdown'
 				             WHEN surface LIKE %s THEN 'notfound'
@@ -985,6 +1060,7 @@ class MMSAR_Agent_Log {
 				$cat['robots_legacy'],
 				$cat['robots_query'],
 				$cat['feed'],
+				$cat['webmcp'],
 				$cat['html'],
 				$cat['markdown'],
 				$cat['notfound'],
@@ -1255,10 +1331,11 @@ class MMSAR_Agent_Log {
 				FROM %i
 				WHERE ( %s = '' OR ip = %s OR ip LIKE %s )
 				  AND ( %s = '' OR FIND_IN_SET( IF( verified = '', 'pending', verified ), %s ) > 0 )
-				  AND ( %s = '' OR FIND_IN_SET( IF( client_type = '', 'unrecorded', client_type ), %s ) > 0 OR ( %s <> '' AND surface = %s ) )
+				  AND ( %s = '' OR FIND_IN_SET( IF( client_type = '', 'unrecorded', client_type ), %s ) > 0 OR ( %s <> '' AND FIND_IN_SET( surface, %s ) > 0 ) )
 				  AND ( %s = '' OR FIND_IN_SET(
 				        CASE WHEN surface = %s OR ( surface LIKE %s AND ( detail = %s OR detail LIKE %s ) ) THEN 'robots'
 				             WHEN surface = %s THEN 'feed'
+				             WHEN surface = %s THEN 'webmcp'
 				             WHEN surface LIKE %s THEN 'html'
 				             WHEN surface LIKE %s THEN 'markdown'
 				             WHEN surface LIKE %s THEN 'notfound'
@@ -1285,6 +1362,7 @@ class MMSAR_Agent_Log {
 				$cat['robots_legacy'],
 				$cat['robots_query'],
 				$cat['feed'],
+				$cat['webmcp'],
 				$cat['html'],
 				$cat['markdown'],
 				$cat['notfound'],
@@ -1463,6 +1541,7 @@ class MMSAR_Agent_Log {
 				FROM %i
 				WHERE CASE WHEN surface = %s OR ( surface LIKE %s AND ( detail = %s OR detail LIKE %s ) ) THEN 'robots'
 				           WHEN surface = %s THEN 'feed'
+				           WHEN surface = %s THEN 'webmcp'
 				           WHEN surface LIKE %s THEN 'html'
 				           WHEN surface LIKE %s THEN 'markdown'
 				           WHEN surface LIKE %s THEN 'notfound'
@@ -1476,6 +1555,7 @@ class MMSAR_Agent_Log {
 				$cat['robots_legacy'],
 				$cat['robots_query'],
 				$cat['feed'],
+				$cat['webmcp'],
 				$cat['html'],
 				$cat['markdown'],
 				$cat['notfound'],
@@ -2027,10 +2107,11 @@ class MMSAR_Agent_Log {
 				FROM %i
 				WHERE id < %d
 				  AND ( %s = '' OR FIND_IN_SET( IF( verified = '', 'pending', verified ), %s ) > 0 )
-				  AND ( %s = '' OR FIND_IN_SET( IF( client_type = '', 'unrecorded', client_type ), %s ) > 0 OR ( %s <> '' AND surface = %s ) )
+				  AND ( %s = '' OR FIND_IN_SET( IF( client_type = '', 'unrecorded', client_type ), %s ) > 0 OR ( %s <> '' AND FIND_IN_SET( surface, %s ) > 0 ) )
 				  AND ( %s = '' OR FIND_IN_SET(
 				        CASE WHEN surface = %s OR ( surface LIKE %s AND ( detail = %s OR detail LIKE %s ) ) THEN 'robots'
 				             WHEN surface = %s THEN 'feed'
+				             WHEN surface = %s THEN 'webmcp'
 				             WHEN surface LIKE %s THEN 'html'
 				             WHEN surface LIKE %s THEN 'markdown'
 				             WHEN surface LIKE %s THEN 'notfound'
@@ -2055,6 +2136,7 @@ class MMSAR_Agent_Log {
 				$cat['robots_legacy'],
 				$cat['robots_query'],
 				$cat['feed'],
+				$cat['webmcp'],
 				$cat['html'],
 				$cat['markdown'],
 				$cat['notfound'],
@@ -2261,6 +2343,7 @@ class MMSAR_Agent_Log {
 	const CAT_NOTFOUND = 'notfound';
 	const CAT_ROBOTS   = 'robots';
 	const CAT_FEED     = 'feed';
+	const CAT_WEBMCP   = 'webmcp';
 
 	/**
 	 * The stored surface names for the two machine-readable files that are not agent documents.
@@ -2272,6 +2355,21 @@ class MMSAR_Agent_Log {
 	 * The surface WebMCP tool calls are recorded under (1.57.0).
 	 */
 	const SURFACE_WEBMCP = 'WebMCP JSON-RPC';
+
+	/**
+	 * The surface /.well-known/webmcp.json is recorded under (1.58.0). An agent document like the
+	 * server card, so it falls in the docs category with no pattern of its own.
+	 */
+	const SURFACE_WEBMCP_MANIFEST = 'webmcp.json';
+
+	/**
+	 * Browser-made surfaces the default view shows anyway (see normalize_filters()).
+	 *
+	 * @return string[]
+	 */
+	public static function default_view_browser_surfaces() {
+		return array( self::SURFACE_WEBMCP, self::SURFACE_WEBMCP_MANIFEST );
+	}
 
 	/**
 	 * Feed readers that are software a person installs, not a service one operator runs.
@@ -2288,7 +2386,7 @@ class MMSAR_Agent_Log {
 	 * @return string[]
 	 */
 	public static function categories() {
-		return array( self::CAT_DOCS, self::CAT_MARKDOWN, self::CAT_HTML, self::CAT_NOTFOUND, self::CAT_ROBOTS, self::CAT_FEED );
+		return array( self::CAT_DOCS, self::CAT_MARKDOWN, self::CAT_HTML, self::CAT_NOTFOUND, self::CAT_ROBOTS, self::CAT_FEED, self::CAT_WEBMCP );
 	}
 
 	/**
@@ -2297,7 +2395,10 @@ class MMSAR_Agent_Log {
 	 * The CASE itself has to be a literal in every query that uses it — the statement must be a
 	 * fixed string — so it is written out five times and a test asserts the five are identical.
 	 * What it compares against is defined once, here. The order the values are passed in is:
-	 * robots, html, robots_legacy, robots_query, feed, html, markdown, notfound.
+	 * robots, html, robots_legacy, robots_query, feed, webmcp, html, markdown, notfound.
+	 *
+	 * `webmcp` (1.58.0) is WebMCP tool calls only, so they can be filtered on their own. The other
+	 * WebMCP surface, webmcp.json, stays an agent document, like the MCP server card it mirrors.
 	 *
 	 * `robots_legacy` and `robots_query` are how a pre-1.49.0 row is recognised: it was stored as an
 	 * HTML page view whose detail is the requested URL, so `/robots.txt`, with or without a query.
@@ -2312,6 +2413,7 @@ class MMSAR_Agent_Log {
 			'robots_legacy' => '/robots.txt',
 			'robots_query'  => $wpdb->esc_like( '/robots.txt?' ) . '%',
 			'feed'          => self::SURFACE_FEED,
+			'webmcp'        => self::SURFACE_WEBMCP,
 			'markdown'      => $wpdb->esc_like( 'Markdown' ) . '%',
 			'notfound'      => $wpdb->esc_like( '404' ) . '%',
 		);
@@ -2337,6 +2439,8 @@ class MMSAR_Agent_Log {
 				return __( 'robots.txt', 'make-my-site-agent-ready' );
 			case self::CAT_FEED:
 				return __( 'Feeds', 'make-my-site-agent-ready' );
+			case self::CAT_WEBMCP:
+				return __( 'WebMCP calls', 'make-my-site-agent-ready' );
 			default:
 				return __( 'All surfaces', 'make-my-site-agent-ready' );
 		}

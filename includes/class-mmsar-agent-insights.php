@@ -65,6 +65,7 @@ class MMSAR_Agent_Insights {
 	const MIN_UPTAKE_READS    = 50;
 	const MIN_TRAINING_READS  = 20;
 	const MIN_ASSISTANT_READS = 3;
+	const MIN_WEBMCP_CALLS    = 3;
 	const MIN_STANDARD_HITS   = 2;
 	const COVERAGE_BELOW      = 0.8;
 	const MIN_COVERAGE_POSTS  = 10;
@@ -91,6 +92,14 @@ class MMSAR_Agent_Insights {
 			'paths'    => array( '/.well-known/mcp.json', '/.well-known/mcp', '/.well-known/mcp/server-card.json', '/mcp' ),
 			'prefixes' => array(),
 			'feature'  => 'mcp_server',
+			'note'     => '',
+		),
+		'webmcp'      => array(
+			'label'    => 'WebMCP tool list',
+			'paths'    => array( '/.well-known/webmcp.json', '/.well-known/webmcp' ),
+			'prefixes' => array(),
+			// Served only while the bridge is on as well; load_context() reports it that way.
+			'feature'  => 'webmcp_manifest',
 			'note'     => '',
 		),
 		'openapi'     => array(
@@ -217,7 +226,9 @@ class MMSAR_Agent_Insights {
 	 *                        `declined` (bool), `declined_since` (timestamp or 0), `training_tokens`
 	 *                        (lowercase names), `referrals` (MMSAR_Referrals::get_summary() shape plus
 	 *                        `enabled`), `forged` (count), `forged_names` (string[]),
-	 *                        `unmatched_missing` (count of 404s matching no standard).
+	 *                        `unmatched_missing` (count of 404s matching no standard), `webmcp`
+	 *                        (load_webmcp() shape: `calls` rows of `detail`, `arguments`, `n`;
+	 *                        `networks`; `manifest`).
 	 * @return array{questions: array<string, array[]>, info: array[]}
 	 */
 	public static function compute( array $reads, array $missing, array $posts, array $ctx ) {
@@ -250,6 +261,10 @@ class MMSAR_Agent_Insights {
 		$coverage = self::finding_coverage( $confirmed, $posts );
 		if ( $coverage ) {
 			$out['questions']['read'][] = $coverage;
+		}
+		$webmcp = self::finding_webmcp( $ctx, $posts );
+		if ( $webmcp ) {
+			$out['questions']['read'][] = $webmcp;
 		}
 
 		$assistant = self::finding_assistants( $confirmed, $unconfirmed, $posts );
@@ -554,6 +569,129 @@ class MMSAR_Agent_Insights {
 				'url'   => '',
 			),
 		);
+	}
+
+	/**
+	 * Agents in the browser using the site's WebMCP tools (1.58.0).
+	 *
+	 * Counts `tools/call` rows on the WebMCP surface. These come from a visitor's browser and claim
+	 * no crawler, so there is no identity to confirm and none to forge; the rule that keeps forged
+	 * identities out of every other finding has nothing to act on here. Silent below
+	 * MIN_WEBMCP_CALLS, which also keeps a single test call by the site owner out of it. Each count
+	 * is a floor: the log throttles one caller asking the same thing within five minutes.
+	 *
+	 * @param array $ctx   Context; reads `webmcp`.
+	 * @param array $posts Listed content, keyed by page key.
+	 * @return array|null
+	 */
+	private static function finding_webmcp( array $ctx, array $posts ) {
+		$data    = isset( $ctx['webmcp'] ) && is_array( $ctx['webmcp'] ) ? $ctx['webmcp'] : array();
+		$by_tool = array();
+		$pages   = array();
+		$asked   = array();
+		$total   = 0;
+		foreach ( isset( $data['calls'] ) ? (array) $data['calls'] : array() as $row ) {
+			$detail = (string) ( $row['detail'] ?? '' );
+			if ( 0 !== strpos( $detail, 'tools/call: ' ) ) {
+				continue;
+			}
+			$n                = (int) ( $row['n'] ?? 0 );
+			$tool             = substr( $detail, strlen( 'tools/call: ' ) );
+			$by_tool[ $tool ] = ( $by_tool[ $tool ] ?? 0 ) + $n;
+			$total           += $n;
+			$args             = self::parse_arguments( (string) ( $row['arguments'] ?? '' ) );
+			if ( isset( $args['url'] ) ) {
+				$key           = self::page_key( $args['url'] );
+				$pages[ $key ] = ( $pages[ $key ] ?? 0 ) + $n;
+			}
+			foreach ( array( 'query', 'topic' ) as $field ) {
+				if ( isset( $args[ $field ] ) && '' !== $args[ $field ] ) {
+					$asked[ $args[ $field ] ] = ( $asked[ $args[ $field ] ] ?? 0 ) + $n;
+				}
+			}
+		}
+		if ( $total < self::MIN_WEBMCP_CALLS ) {
+			return null;
+		}
+		arsort( $by_tool );
+		arsort( $pages );
+		arsort( $asked );
+
+		$tools = array();
+		foreach ( $by_tool as $tool => $n ) {
+			$tools[] = $tool . ' ' . number_format_i18n( $n );
+		}
+		$networks = (int) ( $data['networks'] ?? 0 );
+		$text     = sprintf(
+			/* translators: 1: number of calls, 2: number of networks, 3: per-tool counts */
+			_n( 'An AI agent working in a visitor\'s browser called this site\'s WebMCP tools %1$s time, from %2$s network (%3$s), instead of reading the page.', 'AI agents working in visitors\' browsers called this site\'s WebMCP tools %1$s times, from %2$s networks (%3$s), instead of reading the page.', $total, 'make-my-site-agent-ready' ),
+			number_format_i18n( $total ),
+			number_format_i18n( max( 1, $networks ) ),
+			implode( ', ', $tools )
+		);
+		if ( $asked ) {
+			$quoted = array();
+			foreach ( array_slice( array_keys( $asked ), 0, 3 ) as $term ) {
+				$quoted[] = '"' . $term . '"';
+			}
+			$text .= ' ' . sprintf(
+				/* translators: %s: comma-separated search terms or topics */
+				__( 'They asked about %s.', 'make-my-site-agent-ready' ),
+				implode( ', ', $quoted )
+			);
+		}
+		if ( ! empty( $data['manifest'] ) ) {
+			$text .= ' ' . sprintf(
+				/* translators: %s: number of requests */
+				_n( '/.well-known/webmcp.json, the list of these tools, was fetched %s time.', '/.well-known/webmcp.json, the list of these tools, was fetched %s times.', (int) $data['manifest'], 'make-my-site-agent-ready' ),
+				number_format_i18n( (int) $data['manifest'] )
+			);
+		}
+
+		$items = array();
+		foreach ( array_slice( $pages, 0, 5, true ) as $key => $n ) {
+			$items[] = array(
+				'label' => isset( $posts[ $key ] ) ? $posts[ $key ]['title'] : $key,
+				/* translators: %s: number of reads */
+				'value' => sprintf( _n( 'read %s time through get_content', 'read %s times through get_content', $n, 'make-my-site-agent-ready' ), number_format_i18n( $n ) ),
+				'path'  => $key,
+			);
+		}
+
+		return array(
+			'id'       => 'webmcp',
+			'kind'     => 'meaning',
+			'title'    => __( 'Agents in the browser used WebMCP', 'make-my-site-agent-ready' ),
+			'text'     => $text,
+			'items'    => $items,
+			'evidence' => array(
+				'surface' => array( MMSAR_Agent_Log::CAT_WEBMCP ),
+			),
+		);
+	}
+
+	/**
+	 * A stored `arguments` line, as key => value.
+	 *
+	 * The line is space-separated `key=value` pairs (MMSAR_MCP_Arguments), where only `query` can
+	 * hold spaces and is written JSON-quoted.
+	 *
+	 * @param string $line Stored arguments.
+	 * @return array<string, string>
+	 */
+	public static function parse_arguments( $line ) {
+		$out = array();
+		if ( preg_match_all( '/(\w+)=("(?:[^"\\\\]|\\\\.)*"|\S*)/', (string) $line, $m, PREG_SET_ORDER ) ) {
+			foreach ( $m as $pair ) {
+				$value = $pair[2];
+				if ( '' !== $value && '"' === $value[0] ) {
+					$decoded = json_decode( $value );
+					$value   = is_string( $decoded ) ? $decoded : trim( $value, '"' );
+				}
+				$out[ $pair[1] ] = $value;
+			}
+		}
+		return $out;
 	}
 
 	/**
@@ -991,6 +1129,59 @@ class MMSAR_Agent_Insights {
 	}
 
 	/**
+	 * WebMCP tool calls and webmcp.json fetches in the window.
+	 *
+	 * @return array{calls: array[], networks: int, manifest: int}
+	 */
+	private static function load_webmcp() {
+		$out = array(
+			'calls'    => array(),
+			'networks' => 0,
+			'manifest' => 0,
+		);
+		if ( ! MMSAR_Agent_Log::table_exists() ) {
+			return $out;
+		}
+		global $wpdb;
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Reading this plugin's own table; cached for an hour.
+		$rows = $wpdb->get_results(
+			$wpdb->prepare(
+				'SELECT detail, arguments, COUNT(*) AS n FROM %i WHERE logged_at >= %s AND surface = %s GROUP BY detail, arguments',
+				MMSAR_Agent_Log::table(),
+				self::since(),
+				MMSAR_Agent_Log::SURFACE_WEBMCP
+			),
+			ARRAY_A
+		);
+		foreach ( (array) $rows as $r ) {
+			$out['calls'][] = array(
+				'detail'    => (string) $r['detail'],
+				'arguments' => (string) $r['arguments'],
+				'n'         => (int) $r['n'],
+			);
+		}
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Reading this plugin's own table; cached for an hour.
+		$out['networks'] = (int) $wpdb->get_var(
+			$wpdb->prepare(
+				'SELECT COUNT(DISTINCT ip) FROM %i WHERE logged_at >= %s AND surface = %s',
+				MMSAR_Agent_Log::table(),
+				self::since(),
+				MMSAR_Agent_Log::SURFACE_WEBMCP
+			)
+		);
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Reading this plugin's own table; cached for an hour.
+		$out['manifest'] = (int) $wpdb->get_var(
+			$wpdb->prepare(
+				'SELECT COUNT(*) FROM %i WHERE logged_at >= %s AND surface = %s',
+				MMSAR_Agent_Log::table(),
+				self::since(),
+				MMSAR_Agent_Log::SURFACE_WEBMCP_MANIFEST
+			)
+		);
+		return $out;
+	}
+
+	/**
 	 * Everything this site lists for agents, keyed by page key.
 	 *
 	 * @return array
@@ -1038,7 +1229,9 @@ class MMSAR_Agent_Insights {
 		foreach ( array_keys( mmsar_get_feature_keys() ) as $key ) {
 			$features[ $key ] = mmsar_feature_enabled( $key );
 		}
-		$signals = get_option( 'mmsar_content_signals', array() );
+		// The file needs the bridge too, so "on" means "served".
+		$features['webmcp_manifest'] = MMSAR_WebMCP::manifest_enabled();
+		$signals                     = get_option( 'mmsar_content_signals', array() );
 
 		$forged = 0;
 		$names  = array();
@@ -1068,6 +1261,7 @@ class MMSAR_Agent_Insights {
 		return array(
 			'now'               => time(),
 			'features'          => $features,
+			'webmcp'            => self::load_webmcp(),
 			'ai_train'          => is_array( $signals ) && isset( $signals['ai_train'] ) && 'yes' === $signals['ai_train'] ? 'yes' : 'no',
 			'declined'          => mmsar_declines_training(),
 			'declined_since'    => (int) get_option( 'mmsar_decline_training_since', 0 ),

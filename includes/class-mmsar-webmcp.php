@@ -70,6 +70,23 @@ class MMSAR_WebMCP {
 	const QUERY_VAR = 'mmsar_webmcp_js';
 
 	/**
+	 * Query var for /.well-known/webmcp.json (1.58.0).
+	 */
+	const MANIFEST_QUERY_VAR = 'mmsar_webmcp_manifest';
+
+	/**
+	 * What the bridge adds to get_content's description in the browser. assets/webmcp.js carries the
+	 * same text; a test holds the two equal, because browser_tools() must describe what the page
+	 * actually registers.
+	 */
+	const GET_CONTENT_NOTE = ' Omit url to read the page the user is on.';
+
+	/**
+	 * The WebMCP specification the tools follow.
+	 */
+	const SPEC_URL = 'https://webmachinelearning.github.io/webmcp/';
+
+	/**
 	 * Init. Tokens are printed whenever saved; the bridge only when switched on.
 	 *
 	 * @return void
@@ -85,6 +102,9 @@ class MMSAR_WebMCP {
 		add_filter( 'query_vars', array( __CLASS__, 'add_query_vars' ) );
 		add_action( 'template_redirect', array( __CLASS__, 'serve_script' ), 0 );
 		add_action( 'wp_footer', array( __CLASS__, 'print_loader' ), 99 );
+		if ( self::manifest_enabled() ) {
+			add_action( 'template_redirect', array( __CLASS__, 'serve_manifest' ), 0 );
+		}
 	}
 
 	/**
@@ -94,6 +114,29 @@ class MMSAR_WebMCP {
 	 */
 	public static function bridge_enabled() {
 		return mmsar_feature_enabled( 'webmcp' ) && mmsar_feature_enabled( 'mcp_server' );
+	}
+
+	/**
+	 * Whether /.well-known/webmcp.json is served: the bridge is on and the owner has not switched the
+	 * file off. It describes what the bridge registers, so without the bridge there is nothing to
+	 * describe, and the address answers exactly the 404 it always did.
+	 *
+	 * @return bool
+	 */
+	public static function manifest_enabled() {
+		return self::manifest_served( mmsar_feature_enabled( 'webmcp' ), mmsar_feature_enabled( 'mcp_server' ), mmsar_feature_enabled( 'webmcp_manifest' ) );
+	}
+
+	/**
+	 * The rule behind manifest_enabled(), on its inputs, so it can be tested.
+	 *
+	 * @param bool $webmcp     The WebMCP feature.
+	 * @param bool $mcp_server The MCP server feature.
+	 * @param bool $manifest   The webmcp.json feature.
+	 * @return bool
+	 */
+	public static function manifest_served( $webmcp, $mcp_server, $manifest ) {
+		return (bool) $webmcp && (bool) $mcp_server && (bool) $manifest;
 	}
 
 	// -------------------------------------------------------------------------
@@ -344,6 +387,12 @@ class MMSAR_WebMCP {
 	 */
 	public static function add_rewrite_rules() {
 		add_rewrite_rule( '^mmsar-webmcp/[^/]+/bridge$', 'index.php?' . self::QUERY_VAR . '=1', 'top' );
+		if ( self::manifest_enabled() ) {
+			// Two addresses, one document: the .json name is the one seen requested on a live site,
+			// and the bare one is what Elementor core's own (not yet active) manifest also answers.
+			add_rewrite_rule( '^\.well-known/webmcp\.json$', 'index.php?' . self::MANIFEST_QUERY_VAR . '=1', 'top' );
+			add_rewrite_rule( '^\.well-known/webmcp$', 'index.php?' . self::MANIFEST_QUERY_VAR . '=1', 'top' );
+		}
 	}
 
 	/**
@@ -354,6 +403,9 @@ class MMSAR_WebMCP {
 	 */
 	public static function add_query_vars( $vars ) {
 		$vars[] = self::QUERY_VAR;
+		if ( self::manifest_enabled() ) {
+			$vars[] = self::MANIFEST_QUERY_VAR;
+		}
 		return $vars;
 	}
 
@@ -403,25 +455,132 @@ class MMSAR_WebMCP {
 	}
 
 	/**
-	 * The tools the bridge registers: every read-only tool the MCP server lists.
+	 * The tools the bridge registers, each exactly as the page registers it.
 	 *
-	 * The bridge reads the same thing from the server card at run time; this is for the settings
-	 * screen, so it shows what a browser will actually get, filter-added tools included.
+	 * Read from the server card, which is what the bridge itself reads at run time, and shaped the
+	 * way assets/webmcp.js shapes it: only read-only tools, both hints set, and get_content's url made
+	 * optional because the browser fills in the current page. Used by the settings screen and by
+	 * /.well-known/webmcp.json, so neither can list a tool a page would not register.
 	 *
-	 * @return array[] Each with 'name' and 'title'.
+	 * @return array[] Each with name, title, description, inputSchema and annotations.
 	 */
 	public static function browser_tools() {
+		return self::tools_from_card( MMSAR_MCP::server_card() );
+	}
+
+	/**
+	 * The browser tools for a given server card. Pure, so it can be tested against a card.
+	 *
+	 * @param array $card Server card.
+	 * @return array[]
+	 */
+	public static function tools_from_card( $card ) {
 		$tools = array();
-		foreach ( MMSAR_MCP::tools() as $tool ) {
-			if ( empty( $tool['annotations']['readOnlyHint'] ) || empty( $tool['name'] ) ) {
+		foreach ( isset( $card['tools'] ) && is_array( $card['tools'] ) ? $card['tools'] : array() as $tool ) {
+			if ( ! is_array( $tool ) || empty( $tool['name'] ) || empty( $tool['annotations']['readOnlyHint'] ) || true !== $tool['annotations']['readOnlyHint'] ) {
 				continue;
 			}
+			$schema      = isset( $tool['inputSchema'] ) && is_array( $tool['inputSchema'] ) ? $tool['inputSchema'] : array(
+				'type'       => 'object',
+				'properties' => new stdClass(),
+			);
+			$description = isset( $tool['description'] ) ? (string) $tool['description'] : '';
+			if ( 'get_content' === $tool['name'] ) {
+				// The bridge always writes `required`, as a filtered copy or an empty list.
+				$required           = isset( $schema['required'] ) && is_array( $schema['required'] ) ? $schema['required'] : array();
+				$schema['required'] = array_values( array_diff( $required, array( 'url' ) ) );
+				$description       .= self::GET_CONTENT_NOTE;
+			}
 			$tools[] = array(
-				'name'  => (string) $tool['name'],
-				'title' => isset( $tool['title'] ) ? (string) $tool['title'] : (string) $tool['name'],
+				'name'        => (string) $tool['name'],
+				'title'       => ! empty( $tool['title'] ) ? (string) $tool['title'] : (string) $tool['name'],
+				'description' => $description,
+				'inputSchema' => $schema,
+				'annotations' => array(
+					'readOnlyHint'         => true,
+					'untrustedContentHint' => true,
+				),
 			);
 		}
 		return $tools;
+	}
+
+	// -------------------------------------------------------------------------
+	// /.well-known/webmcp.json
+	// -------------------------------------------------------------------------
+
+	/**
+	 * The webmcp.json document.
+	 *
+	 * **No specification defines this file.** The WebMCP draft registers tools in the page through
+	 * `document.modelContext` and lists discovery as a non-goal; the files seen at this address in
+	 * the wild disagree with each other. So the shape borrows from the nearest real vocabulary
+	 * rather than inventing one: the top level mirrors this site's own MCP server card (name, title,
+	 * description, version, websiteUrl), and each tool is the object `registerTool()` receives,
+	 * which is also an MCP Tool. Everything in it is a fact about what pages register, with the
+	 * script that registers them and a pointer to the server-side equivalent. There is no version
+	 * field for the format itself, because there is no format to version. See the decisions log,
+	 * 1.58.0.
+	 *
+	 * @return array
+	 */
+	public static function manifest() {
+		$site_name = html_entity_decode( get_bloginfo( 'name' ), ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+		return self::build_manifest( self::browser_tools(), $site_name, 'mmsar-' . sanitize_title( $site_name ) );
+	}
+
+	/**
+	 * Builds the document from its inputs, then applies the filter.
+	 *
+	 * @param array[] $tools     browser_tools().
+	 * @param string  $site_name Site name.
+	 * @param string  $name      Machine name, the same one the server card uses.
+	 * @return array
+	 */
+	public static function build_manifest( $tools, $site_name, $name ) {
+		$manifest = array(
+			'name'          => $name,
+			'title'         => $site_name,
+			'description'   => 'Tools that pages on ' . $site_name . ' register for AI agents in the browser through WebMCP. Listed here so an agent can see them before it loads a page. This file is not part of the WebMCP specification, which registers tools in the page only; the page is the source of truth.',
+			'version'       => MMSAR_VERSION,
+			'websiteUrl'    => home_url( '/' ),
+			'webmcp'        => array(
+				'api'           => 'document.modelContext',
+				'script'        => self::script_url(),
+				'pages'         => 'all',
+				'specification' => self::SPEC_URL,
+			),
+			'mcpServerCard' => home_url( '/.well-known/mcp/server-card.json' ),
+			'tools'         => array_values( $tools ),
+		);
+
+		/**
+		 * Filters /.well-known/webmcp.json before it is served.
+		 *
+		 * @param array $manifest The document, as a PHP array.
+		 */
+		$filtered = apply_filters( 'mmsar_webmcp_manifest', $manifest );
+		return is_array( $filtered ) ? $filtered : $manifest;
+	}
+
+	/**
+	 * Serves /.well-known/webmcp.json and /.well-known/webmcp.
+	 *
+	 * @return void
+	 */
+	public static function serve_manifest() {
+		if ( ! get_query_var( self::MANIFEST_QUERY_VAR ) ) {
+			return;
+		}
+		$manifest = self::manifest();
+
+		mmsar_send_cache_headers();
+		header( 'Content-Type: application/json; charset=UTF-8' );
+		MMSAR_Agent_Log::record( MMSAR_Agent_Log::SURFACE_WEBMCP_MANIFEST );
+		header( 'Access-Control-Allow-Origin: *' );
+		status_header( 200 );
+		echo wp_json_encode( $manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE );
+		exit;
 	}
 
 	// -------------------------------------------------------------------------
@@ -455,7 +614,8 @@ class MMSAR_WebMCP {
 				'label' => __( 'Agent-Ready', 'make-my-site-agent-ready' ),
 				'color' => 'blue',
 			),
-			'description' => '<p>' . esc_html__( 'Browsers that support WebMCP can see this site\'s tools.', 'make-my-site-agent-ready' ) . '</p>',
+			'description' => '<p>' . esc_html__( 'Browsers that support WebMCP can see this site\'s tools.', 'make-my-site-agent-ready' ) . '</p>'
+				. ( self::manifest_enabled() ? '<p>' . esc_html__( 'The same tools are listed at /.well-known/webmcp.json.', 'make-my-site-agent-ready' ) . '</p>' : '' ),
 			'actions'     => '<p><a href="' . esc_url( admin_url( 'options-general.php?page=make-my-site-agent-ready#mmsar-section-webmcp' ) ) . '">' . esc_html__( 'WebMCP settings', 'make-my-site-agent-ready' ) . '</a></p>',
 			'test'        => 'mmsar_webmcp',
 		);

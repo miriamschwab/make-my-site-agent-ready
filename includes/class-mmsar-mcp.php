@@ -1627,6 +1627,27 @@ class MMSAR_MCP {
 	 * @return void
 	 */
 	private static function serve_server_card() {
+		$card = self::server_card();
+
+		mmsar_send_cache_headers();
+		header( 'Content-Type: application/json; charset=UTF-8' );
+		MMSAR_Agent_Log::record( 'mcp server-card.json' );
+		header( 'Access-Control-Allow-Origin: *' );
+		status_header( 200 );
+		echo wp_json_encode( $card, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE );
+		exit;
+	}
+
+	/**
+	 * The server card, filtered, exactly as /.well-known/mcp/server-card.json serves it.
+	 *
+	 * Public since 1.58.0, because the WebMCP bridge registers its tools from this card at run time
+	 * and MMSAR_WebMCP::browser_tools() must describe the same tools: reading the card here rather
+	 * than the raw tool list means a `mmsar_mcp_server_card` filter reaches both.
+	 *
+	 * @return array
+	 */
+	public static function server_card() {
 		$site_name = html_entity_decode( get_bloginfo( 'name' ), ENT_QUOTES | ENT_HTML5, 'UTF-8' );
 
 		$tools = array();
@@ -1678,17 +1699,7 @@ class MMSAR_MCP {
 		 * @param array $card The server card, as a PHP array.
 		 */
 		$filtered = apply_filters( 'mmsar_mcp_server_card', $card );
-		if ( is_array( $filtered ) ) {
-			$card = $filtered;
-		}
-
-		mmsar_send_cache_headers();
-		header( 'Content-Type: application/json; charset=UTF-8' );
-		MMSAR_Agent_Log::record( 'mcp server-card.json' );
-		header( 'Access-Control-Allow-Origin: *' );
-		status_header( 200 );
-		echo wp_json_encode( $card, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE );
-		exit;
+		return is_array( $filtered ) ? $filtered : $card;
 	}
 
 	// -------------------------------------------------------------------------

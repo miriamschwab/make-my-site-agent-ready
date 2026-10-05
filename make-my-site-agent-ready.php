@@ -3,7 +3,7 @@
  * Plugin Name:       Make My Site Agent-Ready
  * Plugin URI:        https://miriamschwab.me/plugins/make-my-site-agent-ready
  * Description:       Makes your WordPress site ready for AI agents: .md URLs, llms.txt, llms-full.txt, an OpenAPI spec, a read-only MCP server, agent-recoverable 404s, security.txt, api-catalog, Agent Skills discovery, an OKF bundle, Link response headers, Content Signals, a TDMRep reservation header, optional JSON-LD structured data (merges into Yoast's own schema when active), and AI crawler rules in robots.txt.
- * Version:           1.57.0
+ * Version:           1.58.1
  * Author:            Miriam Schwab
  * Author URI:        https://miriamschwab.me
  * License:           GPL-2.0-or-later
@@ -19,7 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'MMSAR_VERSION', '1.57.0' );
+define( 'MMSAR_VERSION', '1.58.1' );
 define( 'MMSAR_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'MMSAR_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'MMSAR_PLUGIN_FILE', __FILE__ );
@@ -129,6 +129,11 @@ function mmsar_get_feature_keys() {
 		// Off by default: it adds an inline script to every page (a feature check that stops at once
 		// in browsers without WebMCP) and needs the MCP server, which is itself off by default.
 		'webmcp'               => false,
+		// On by default, but it only takes effect while the WebMCP bridge is on: it publishes a list
+		// of what the bridge registers and changes no existing response. A setting of its own because
+		// another plugin may publish this address too (Elementor core has one, not yet active), and
+		// the owner chooses which answers.
+		'webmcp_manifest'      => true,
 	);
 }
 
@@ -442,6 +447,8 @@ function mmsar_prevent_canonical_redirect( $redirect_url ) {
 		'/.well-known/ai-catalog.json',
 		'/.well-known/ard.json',
 		'/.well-known/mcp/server-card.json',
+		'/.well-known/webmcp.json',
+		'/.well-known/webmcp',
 		'/.well-known/openapi.json',
 		'/.well-known/mcp.json',
 		'/.well-known/security.txt',

@@ -319,6 +319,14 @@ class MMSAR_Endpoints {
 				'type' => 'application/json',
 			);
 		}
+		// The in-browser tools, described the same way (1.58.0). Same relation as the MCP manifest:
+		// a machine-readable description of a service this site offers.
+		if ( MMSAR_WebMCP::manifest_enabled() ) {
+			$service_desc[] = array(
+				'href' => home_url( '/.well-known/webmcp.json' ),
+				'type' => 'application/json',
+			);
+		}
 		if ( $service_desc ) {
 			$entry['service-desc'] = $service_desc;
 		}

@@ -291,4 +291,139 @@ final class InsightsTest extends TestCase {
 			'index.md'          => array( '/index.md', '/' ),
 		);
 	}
+
+	// -------------------------------------------------------------------------
+	// WebMCP use (1.58.0)
+	// -------------------------------------------------------------------------
+
+	/**
+	 * WebMCP context: rows shaped like the live log's (detail, arguments, n).
+	 *
+	 * @param array[] $calls    Rows.
+	 * @param int     $networks Distinct networks.
+	 * @param int     $manifest webmcp.json fetches.
+	 */
+	private static function webmcp( array $calls, $networks = 1, $manifest = 0 ) {
+		return self::ctx(
+			array(
+				'webmcp' => array(
+					'calls'    => $calls,
+					'networks' => $networks,
+					'manifest' => $manifest,
+				),
+			)
+		);
+	}
+
+	/**
+	 * The one row live held on 2026-10-05: Claude's test call from HeadlessChrome. One call is
+	 * below the threshold, so the owner's own check never shows up as use.
+	 */
+	public function test_webmcp_silent_on_a_single_test_call(): void {
+		$ctx = self::webmcp(
+			array(
+				array(
+					'detail'    => 'tools/call: get_content',
+					'arguments' => 'url=/contact/',
+					'n'         => 1,
+				),
+			),
+			1,
+			1
+		);
+		$this->assertNull( self::find( MMSAR_Agent_Insights::compute( array(), array(), array(), $ctx ), 'webmcp' ) );
+	}
+
+	public function test_webmcp_silent_with_no_data(): void {
+		$this->assertNull( self::find( MMSAR_Agent_Insights::compute( array(), array(), array(), self::ctx() ), 'webmcp' ) );
+	}
+
+	/**
+	 * Methods other than tools/call are not use: a client listing tools has not used one.
+	 */
+	public function test_webmcp_counts_tool_calls_only(): void {
+		$ctx = self::webmcp(
+			array(
+				array(
+					'detail'    => 'tools/list',
+					'arguments' => '',
+					'n'         => 9,
+				),
+				array(
+					'detail'    => 'tools/call: search_content',
+					'arguments' => 'query="ai"',
+					'n'         => 2,
+				),
+			)
+		);
+		$this->assertNull( self::find( MMSAR_Agent_Insights::compute( array(), array(), array(), $ctx ), 'webmcp' ) );
+	}
+
+	public function test_webmcp_names_tools_pages_and_questions(): void {
+		$posts = array(
+			'/contact' => array(
+				'id'       => 1,
+				'title'    => 'Contact',
+				'modified' => '2026-09-01 00:00:00',
+			),
+		);
+		$ctx   = self::webmcp(
+			array(
+				array(
+					'detail'    => 'tools/call: search_content',
+					'arguments' => 'topic=ai query="wordpress mcp"',
+					'n'         => 4,
+				),
+				array(
+					'detail'    => 'tools/call: get_content',
+					'arguments' => 'url=/contact/',
+					'n'         => 2,
+				),
+				array(
+					'detail'    => 'tools/call: get_content',
+					'arguments' => 'url=/about/',
+					'n'         => 1,
+				),
+			),
+			3,
+			5
+		);
+		$f     = self::find( MMSAR_Agent_Insights::compute( array(), array(), $posts, $ctx ), 'webmcp' );
+		$this->assertNotNull( $f );
+		$this->assertSame( 'meaning', $f['kind'] );
+		$this->assertStringContainsString( '7 times, from 3 networks (search_content 4, get_content 3)', $f['text'] );
+		$this->assertStringContainsString( '"wordpress mcp"', $f['text'] );
+		$this->assertStringContainsString( '"ai"', $f['text'] );
+		$this->assertStringContainsString( 'webmcp.json, the list of these tools, was fetched 5 times', $f['text'] );
+		$this->assertSame( 'Contact', $f['items'][0]['label'] );
+		$this->assertSame( '/contact', $f['items'][0]['path'] );
+		$this->assertSame( '/about', $f['items'][1]['label'] );
+		$this->assertSame( array( 'surface' => array( 'webmcp' ) ), $f['evidence'] );
+		$this->assertContains( 'webmcp', self::ids( MMSAR_Agent_Insights::compute( array(), array(), $posts, $ctx ) )['read'] );
+	}
+
+	/**
+	 * @param string $line     Stored arguments.
+	 * @param array  $expected Parsed.
+	 */
+	#[DataProvider( 'argumentLines' )]
+	public function test_parse_arguments( string $line, array $expected ): void {
+		$this->assertSame( $expected, MMSAR_Agent_Insights::parse_arguments( $line ) );
+	}
+
+	/**
+	 * Shapes MMSAR_MCP_Arguments writes.
+	 *
+	 * @return array<string, array{0:string,1:array}>
+	 */
+	public static function argumentLines(): array {
+		return array(
+			'empty'               => array( '', array() ),
+			'url'                 => array( 'url=/contact/', array( 'url' => '/contact/' ) ),
+			'several'             => array( 'post_type=post topic=ai', array( 'post_type' => 'post', 'topic' => 'ai' ) ),
+			'quoted query'        => array( 'topic=ai query="a b=c"', array( 'topic' => 'ai', 'query' => 'a b=c' ) ),
+			'escaped quote'       => array( 'query="say \"hi\""', array( 'query' => 'say "hi"' ) ),
+			'unicode'             => array( 'query="וורדפרס"', array( 'query' => 'וורדפרס' ) ),
+		);
+	}
 }

@@ -594,6 +594,9 @@ class MMSAR_LLMs_Txt {
 		if ( mmsar_feature_enabled( 'mcp_server' ) ) {
 			$entries[] = '- MCP server (read-only, no auth): `' . MMSAR_MCP::endpoint_url() . '` — connect directly if your client speaks MCP. Described at [/.well-known/mcp.json](' . home_url( '/.well-known/mcp.json' ) . ').';
 		}
+		if ( MMSAR_WebMCP::manifest_enabled() ) {
+			$entries[] = '- [webmcp.json](' . home_url( '/.well-known/webmcp.json' ) . '): the same tools, as pages on this site register them for an agent in the browser through WebMCP.';
+		}
 		if ( mmsar_feature_enabled( 'api_catalog' ) ) {
 			$entries[] = '- [api-catalog](' . home_url( '/.well-known/api-catalog' ) . '): every machine-readable endpoint on this site.';
 		}

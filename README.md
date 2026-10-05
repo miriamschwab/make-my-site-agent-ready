@@ -1,6 +1,6 @@
 # Make My Site Agent-Ready — WordPress Plugin
 
-A WordPress plugin that makes your site ready for AI agents and language models. Serves clean markdown at `.md` URLs, an Open Knowledge Format bundle at `/okf/`, `/llms.txt` and `/llms-full.txt` site indexes, an `/openapi.json` API description, a read-only MCP server and the same tools in the browser through WebMCP, `/auth.md`, an Agentic Resource Discovery catalog, an `?mode=agent` view, an NLWeb `/ask` endpoint with a Schemamap, `/.well-known/security.txt`, and a machine-readable `/.well-known/api-catalog`, exposes Agent Skills discovery, sends `Link` response headers advertising all of it, declares AI usage preferences via Content Signals in `robots.txt` and a TDMRep reservation header, adds AI crawler rules, agent-recoverable 404s and `Deprecation`/`Sunset` headers for retiring endpoints, optionally points agents at the markdown alternate via JSON-LD structured data (merging into Yoast SEO's own schema when active, so nothing is duplicated), can submit changed pages to IndexNow, keeps an optional agent request log that opens on a Summary of what the traffic means, and exposes WordPress Abilities API endpoints for AI agent management.
+A WordPress plugin that makes your site ready for AI agents and language models. Serves clean markdown at `.md` URLs, an Open Knowledge Format bundle at `/okf/`, `/llms.txt` and `/llms-full.txt` site indexes, an `/openapi.json` API description, a read-only MCP server and the same tools in the browser through WebMCP (listed at `/.well-known/webmcp.json`), `/auth.md`, an Agentic Resource Discovery catalog, an `?mode=agent` view, an NLWeb `/ask` endpoint with a Schemamap, `/.well-known/security.txt`, and a machine-readable `/.well-known/api-catalog`, exposes Agent Skills discovery, sends `Link` response headers advertising all of it, declares AI usage preferences via Content Signals in `robots.txt` and a TDMRep reservation header, adds AI crawler rules, agent-recoverable 404s and `Deprecation`/`Sunset` headers for retiring endpoints, optionally points agents at the markdown alternate via JSON-LD structured data (merging into Yoast SEO's own schema when active, so nothing is duplicated), can submit changed pages to IndexNow, keeps an optional agent request log that opens on a Summary of what the traffic means, and exposes WordPress Abilities API endpoints for AI agent management.
 
 ## Why
 
@@ -28,10 +28,10 @@ Every feature below can be switched off individually under **Settings > Agent-Re
 ### Discovery
 - **`/openapi.json`** — an OpenAPI 3.1 description of every public endpoint this plugin serves, generated from the site's actual registered REST routes rather than hand-maintained, so it can't drift out of sync with what's really there. Includes a typed error schema for the MCP endpoint below and an `info.x-lifecycle` block describing the retirement policy (see Lifecycle below). Skipped automatically if a real `openapi.json` already sits in your site root.
 - **MCP server** (read-only, off by default) — a [Model Context Protocol](https://modelcontextprotocol.io/) endpoint at `/wp-json/mmsar/v1/mcp` that AI clients can connect to directly over Streamable HTTP, with tools to search the site, list content, read a page as Markdown, and get an overview. `search_content` and `list_content` take an optional `topic` (a category, tag or other public taxonomy slug; an unknown one returns an error naming the site's topics), and the overview's `topics` section lists the 40 most used. Exposes nothing that `llms-full.txt` doesn't already publish, and is rate-limited to 60 calls/minute/IP. Publishes a discovery manifest at `/.well-known/mcp.json` and a server card at `/.well-known/mcp/server-card.json`. Off by default because, unlike everything else here, it answers by running a query rather than serving a file.
-- **WebMCP** (off by default, needs the MCP server) — registers the MCP server's read-only tools with an AI agent working inside the visitor's browser, through `document.modelContext`. A ~475-byte inline loader checks for the API and stops at once where it is missing; where it exists, it loads the bridge from `/mmsar-webmcp/<version>/bridge` (a versioned path without a `.js` extension, because some hosts redirect missing `.js` files and some CDNs ignore `?ver=`). The bridge reads tool definitions from the server card, registers the ones annotated read-only, and sends every call to the MCP endpoint, so search, the noindex and password rules and the rate limit stay on the server. `get_content` defaults to the page the visitor is on. Errors come back as the tool's text rather than thrown, because Chrome replaces a thrown error with a generic message. Calls are logged as `WebMCP JSON-RPC` with the address reduced to its network. Browser support is a Chrome and Edge origin trial: the WebMCP settings section takes the site's tokens, checks each one on save (origin, feature, expiry, no third-party tokens) and prints the working ones as `origin-trial` meta tags on every page, whether or not the bridge is on, since a token serves any WebMCP tools on the site. Site Health warns when the token is missing or expires within 14 days.
+- **WebMCP** (off by default, needs the MCP server) — registers the MCP server's read-only tools with an AI agent working inside the visitor's browser, through `document.modelContext`. A ~475-byte inline loader checks for the API and stops at once where it is missing; where it exists, it loads the bridge from `/mmsar-webmcp/<version>/bridge` (a versioned path without a `.js` extension, because some hosts redirect missing `.js` files and some CDNs ignore `?ver=`). The bridge reads tool definitions from the server card, registers the ones annotated read-only, and sends every call to the MCP endpoint, so search, the noindex and password rules and the rate limit stay on the server. `get_content` defaults to the page the visitor is on. Errors come back as the tool's text rather than thrown, because Chrome replaces a thrown error with a generic message. Calls are logged as `WebMCP JSON-RPC` with the address reduced to its network. Browser support is a Chrome and Edge origin trial: the WebMCP settings section takes the site's tokens, checks each one on save (origin, feature, expiry, no third-party tokens) and prints the working ones as `origin-trial` meta tags on every page, whether or not the bridge is on, since a token serves any WebMCP tools on the site. Site Health warns when the token is missing or expires within 14 days. While the bridge is on, `/.well-known/webmcp.json` (and `/.well-known/webmcp`) lists the same tools as the page registers them, built from the server card with the bridge's own shaping, plus the bridge script's URL and a link to the server card. **No specification defines that file**: WebMCP registers tools in the page, and the draft lists discovery as a non-goal. Its own toggle, on by default, so an owner can let another plugin answer that address instead. Requests for it are logged as `webmcp.json` and, like `WebMCP JSON-RPC`, shown in the default Agent Log view even from a browser (`MMSAR_Agent_Log::default_view_browser_surfaces()`).
 - **`/auth.md`** — a plain-language explanation of how an agent gets access to the site. For most sites the honest answer is "you don't need credentials," and saying so out loud stops an agent from assuming it needs a key it can't get and either giving up or probing for login endpoints.
-- **Agentic Resource Discovery (ARD) catalog** — `/.well-known/ai-catalog.json` (also served at `/.well-known/ard.json`), a typed inventory of the site's agentic resources (MCP server, API, content index) with stable identifiers, per the [ARD spec](https://agenticresourcediscovery.org/). Complements `/.well-known/api-catalog` below, which is a list of links rather than a typed inventory.
-- **`/.well-known/api-catalog`** (RFC 9727) — a Linkset (RFC 9264) JSON document indexing `llms.txt`, `llms-full.txt`, `security.txt`, the Agent Skills index, the sitemap, and the feed in one machine-readable file
+- **Agentic Resource Discovery (ARD) catalog** — `/.well-known/ai-catalog.json` (also served at `/.well-known/ard.json`), a typed inventory of the site's agentic resources (MCP server, its WebMCP tools, API, skills, content index) with stable identifiers, per the [ARD spec](https://agenticresourcediscovery.org/). Complements `/.well-known/api-catalog` below, which is a list of links rather than a typed inventory.
+- **`/.well-known/api-catalog`** (RFC 9727) — a Linkset (RFC 9264) JSON document indexing `llms.txt`, `llms-full.txt`, `security.txt`, the Agent Skills index, `openapi.json`, the MCP manifest, `webmcp.json`, the sitemap, and the feed in one machine-readable file, each listed only while it is served
 - **Agent Skills discovery** — `/.well-known/agent-skills/index.json` plus a bundled skill (`fetch-content-as-markdown`) teaching an agent how to use this plugin's markdown endpoints instead of parsing HTML. The served skill file and its index digest are computed from the same source at request time, so they can never drift out of sync.
 - **NLWeb `/ask` endpoint** (off by default) — answers questions about the site in [NLWeb](https://github.com/nlweb-ai/NLWeb)'s shape, with optional SSE streaming, advertised via `rel="nlweb"`. Retrieval only — it returns ranked pages, not a generated answer, and says so in every response. Ships with a Schemamap: `/schema-map.xml` plus a `Schemamap:` robots.txt directive indexing one JSON-LD endpoint per resource, a convention this plugin proposes since no external standard exists yet for it.
 - **MCP Apps UI** (experimental, off by default) — lets an MCP client render the search/list tools' results as a card list instead of plain text. Marked experimental because no MCP Apps host was available to verify it against; a client that ignores the metadata still gets the normal text result.
@@ -337,7 +337,7 @@ and did not. In practice this is where the interesting answer lives — on the a
 best-known AI crawlers turned out to fetch HTML and ignore every agent-facing file, while the
 clients that actually walked the discovery chain were unbranded ones.
 
-Three properties decide what the counts can honestly be read to mean, and all three are reported by
+Four properties decide what the counts can honestly be read to mean, and all three are reported by
 the ability alongside the data:
 
 - **The log is throttled.** The same agent, surface and IP is recorded at most once per five minutes,
@@ -354,11 +354,13 @@ the ability alongside the data:
 
 ### robots.txt and feeds
 
-Every entry falls into one of six surface categories, filterable on the screen and in the ability:
-**Agent documents** (llms.txt, the catalogs, MCP, Agent Skills and everything else this plugin
-publishes for agents), **Markdown**, **HTML pages**, **Not found**, **robots.txt** and **Feeds**. The
-headline the log exists to produce is agent documents and Markdown against HTML pages, and the last
-two are kept out of both sides of it on purpose (1.49.0).
+Every entry falls into one of seven surface categories, filterable on the screen and in the ability:
+**Agent documents** (llms.txt, the catalogs, MCP, Agent Skills, webmcp.json and everything else this
+plugin publishes for agents), **Markdown**, **HTML pages**, **Not found**, **robots.txt**, **Feeds**
+and **WebMCP calls**. The headline the log exists to produce is agent documents and Markdown against
+HTML pages, and robots.txt and feeds are kept out of both sides of it on purpose (1.49.0). WebMCP
+calls were agent documents until 1.58.0, when they got a category so they can be read on their own;
+like every category, it is worked out when the log is read, so older rows move with it.
 
 - **robots.txt** is a crawler reading the rules before deciding what to fetch — neither a document nor
   a page. WordPress serves its robots.txt through the ordinary request cycle, so before 1.49.0 every
@@ -399,8 +401,8 @@ Two methods, chosen per operator, because the operators are split on which they 
 
 - **Published IP ranges** for Anthropic, OpenAI, Perplexity, DuckDuckGo (DuckAssistBot and
   DuckDuckBot), Common Crawl (CCBot), Linkup, Seznam, Mojeek, SE Ranking, Parallel (ShapBot),
-  Sofya, You.com (YouBot), Palo Alto Networks (Cortex Xpanse), Known Good (KnownGood-Verifier) and
-  Inoreader. Most of them
+  Sofya, You.com (YouBot), Palo Alto Networks (Cortex Xpanse), Known Good (KnownGood-Verifier),
+  Inoreader and Amazon's search crawler (Amzn-SearchBot). Most of them
   publish no reverse-DNS records for their crawlers, so this is the only method their documentation
   describes. The ranges are bundled with the plugin rather than fetched, so nothing calls a
   third-party service and verification works on a host with no outbound HTTP. The trade-off is that
@@ -408,11 +410,15 @@ Two methods, chosen per operator, because the operators are split on which they 
   lets you add a prefix without waiting for a release.
 - **Forward-confirmed reverse DNS** for Google, Apple, Amazon, Microsoft, Ahrefs, Babbar
   (Barkrowler), Common Crawl, Huawei (PetalBot), You.com (YouBot), Yandex, Censys, LeakIX (l9scan),
-  the Internet Archive (archive.org_bot), Qwant, DataForSEO, LohiSoft and Keywords Everywhere
-  (PoweredByBot). The address is reversed to a hostname, that hostname is resolved
+  the Internet Archive (archive.org_bot), Qwant, DataForSEO, LohiSoft, Keywords Everywhere
+  (PoweredByBot), Ibou (IbouBot), Baidu (Baiduspider), Cốc Cốc (coccocbot), FindFiles, Iframely and
+  creasource.dev (crawl-engine). The address is reversed to a hostname, that hostname is resolved
   forward and must come back to the same address, and it must sit under a domain the claimed
   operator owns. Anyone
-  can put any string in a `User-Agent`; nobody can put a record in someone else's DNS zone.
+  can put any string in a `User-Agent`; nobody can put a record in someone else's DNS zone. A
+  hostname under the operator's domain that resolves to nothing reads **No DNS**, not Spoofed, since
+  that is what a resolver timeout looks like (1.58.0); before, it was an accusation Re-check never
+  reopened.
 
 A few operators publish both, and there both are used: the range is checked first, and a miss falls
 through to reverse DNS rather than deciding — so a prefix added after the bundled ranges were
@@ -437,7 +443,9 @@ list and does not resolve under that domain, so following the documentation woul
 genuine crawler. DomainStatsBot is the same case (1.50.0): all three of its addresses reverse to the
 documented `bot.domainstats.com`, but that name resolves forward to only one of them.
 Dataprovider.com documents reverse DNS under `dataproviderbot.com`, but the one full address on file
-had no reverse record at all, so it stays unverifiable until a real address confirms it (1.54.0).
+had no reverse record at all, so it stays unverifiable until a real address confirms it (1.54.0). Amazon's search crawler is the one bundled list expected to go stale fastest: Amazon publishes it
+as single cloud addresses, so a new one used before the plugin is updated reads as Spoofed until then
+(1.58.0).
 
 **Unverifiable** also covers a second case that says nothing about the operator: a row whose address
 was reduced to its network at storage time cannot be tested against a published range, so the
@@ -475,12 +483,12 @@ category:
 | Category | Meaning |
 |---|---|
 | **AI training** | Collects content to train models (GPTBot, ClaudeBot, CCBot…) |
-| **AI search** | Builds or queries an index used to answer questions (OAI-SearchBot, PerplexityBot, LinkupBot…) |
+| **AI search** | Builds or queries an index used to answer questions (OAI-SearchBot, PerplexityBot, LinkupBot, Amzn-SearchBot…) |
 | **AI assistant** | Fetches a page because a person asked an assistant right then (ChatGPT-User, Claude-User, Amazon Quick…) |
-| **Search engine** | Conventional web search (SeznamBot, DuckDuckBot, YandexBot, MojeekBot, Qwantbot…) |
+| **Search engine** | Conventional web search (SeznamBot, DuckDuckBot, YandexBot, Baiduspider, Qwantbot…) |
 | **SEO tool** | SEO and backlink platforms (AhrefsBot, SemrushBot, Barkrowler, DataForSeoBot…) |
 | **Monitoring** | Brand and media monitoring (AwarioBot, trendictionbot, YaK, um-LN) |
-| **Scanner** | Readiness, security and attack-surface scanners (OraBot, KnownGood-Verifier, CensysInspect, Cortex Xpanse, l9scan, AgentTrustBot) |
+| **Scanner** | Readiness, security and attack-surface scanners (OraBot, KnownGood-Verifier, AgentReadyScanner, CensysInspect, Cortex Xpanse, l9scan, AgentTrustBot) |
 | **Other** | Link previews, feed readers, archiving and everything else named (Twitterbot, facebookexternalhit, Feedly, Inoreader, archive.org_bot…) |
 
 A category goes by what the operator documents *that specific bot* doing, not by the operator's
@@ -557,8 +565,8 @@ The log is off by default. When it is on, this is what it keeps about people:
   nothing about a reader.
 
 - **WebMCP calls come from a visitor's own browser** (1.57.0), so they are stored at network level,
-  like a page view. They are the one kind of browser row the default view shows, because they are
-  agent tool calls rather than people reading pages.
+  like a page view. They and requests for `webmcp.json` (1.58.0) are the browser rows the default
+  view shows, because they are agent activity rather than people reading pages.
 - **MCP tool arguments are stored only when they match the site** (1.56.0): an enabled content
   type, an existing topic slug, the path of the post `get_content` served (never the URL as typed),
   known overview sections. A search query is free text an agent may have copied from a person, so
@@ -577,11 +585,11 @@ drops the table, and the Agent Log screen can clear it at any time.
 
 The Agent Log opens on a Summary: what the last 30 days mean, not the rows themselves. Findings sit under three questions, and each one is a sentence, the numbers behind it, a link to the matching log rows, and a badge saying which kind it is: **Worth doing** when there is an action, **FYI** when it is context only:
 
-- **Am I being read?** Who takes the Markdown version (by crawler and category), edited pages no AI search crawler has re-read (links to IndexNow), and coverage, but only when it is below 80%.
+- **Am I being read?** Who takes the Markdown version (by crawler and category), edited pages no AI search crawler has re-read (links to IndexNow), and coverage, but only when it is below 80%. And, from 1.58.0, whether agents in a visitor's browser used the WebMCP tools: calls per tool, the pages they read, what they asked about, and how often webmcp.json was fetched. Silent below three calls, so a site owner's own test does not count as use.
 - **Am I being cited?** The pages AI assistants (ChatGPT-User, Claude-User and similar) fetched while answering someone, and the visitors they sent.
 - **What's broken or being ignored?** Training crawlers reading despite `ai-train=no`, or despite the decline above once two days have passed, and 404s for known agent standards with what to do about each. Paths that match no standard, mostly security probes, are counted in one line rather than listed.
 
-Every finding has a threshold and stays silent below it. A row whose identity check failed is never counted. Verified rows and user-run clients such as Claude Code count, and the copy says the latter may be the owner. Unconfirmed rows are reported alongside. Computed on read and cached for an hour. The same findings are on the dashboard widget (the top one) and in the `get-agent-insights` ability.
+Every finding has a threshold and stays silent below it. A row whose identity check failed is never counted. WebMCP calls claim no crawler identity, so the WebMCP finding counts them as they are. Verified rows and user-run clients such as Claude Code count, and the copy says the latter may be the owner. Unconfirmed rows are reported alongside. Computed on read and cached for an hour. The same findings are on the dashboard widget (the top one) and in the `get-agent-insights` ability.
 
 The thresholds and wording came from testing every candidate finding against 30 days of the author's own log. Two obvious ones were noise there: "pages no AI crawler read" (81 of 82 were read) and the raw 404 list (mostly probes).
 
@@ -617,7 +625,7 @@ people, and the log's surface categories and identity checks are built for agent
 
 The screen paginates at 50 entries. **Export CSV** writes the whole log — columns `logged_at_utc`,
 `agent`, `surface`, `detail`, `ip`, `verified`, `verified_at_utc`, `client_type`, `signature_agent`,
-`same_site`, `cloud_network` — streamed in batches so peak
+`same_site`, `cloud_network`, `arguments` — streamed in batches so peak
 memory does not grow with the log. Columns are only ever appended, never reordered. The
 timestamp column is named for its timezone on purpose: rows are stored in UTC and the screen renders
 them in the site's timezone. Cells whose value begins `=`, `+`, `-`, `@`, tab or CR are written with
@@ -660,7 +668,7 @@ This plugin exposes abilities for the [WordPress Abilities API](https://develope
 | `make-my-site-agent-ready/list-endpoints` | Always on | Lists every endpoint being published, flagging which are managed on the settings page and which a plugin or theme registered in code, plus where each is actually appearing right now. |
 | `make-my-site-agent-ready/set-endpoint` | Always on | Adds an endpoint, or updates one already managed on the settings page. Send only the fields you want changed when updating. |
 | `make-my-site-agent-ready/delete-endpoint` | Always on (destructive) | Removes an endpoint managed on the settings page. |
-| `make-my-site-agent-ready/get-agent-insights` | Always on (read-only) | The Agent Log Summary as data: findings about the last 30 days under read, cited and broken, each with a kind, a sentence, supporting items and usually an action. Counts only verified crawler identities and user-run clients, never forged ones. Cached hourly; pass `fresh` to recompute |
-| `make-my-site-agent-ready/get-agent-log` | Always on (read-only) | Reads the agent request log: counts by agent, by surface, by requested detail and by day across the whole log, a verification breakdown, plus a page of individual entries. Pass `summary_only` for the aggregates alone, which carry counts of distinct IPs but no addresses, or `verified` to list only entries with a given verdict — `failed` lists the requests that forged a crawler identity. Every entry and `by_agent` row carries a `crawler_category`, `by_crawler_category` breaks traffic down by kind of bot, and the `crawler_category` input filter (`ai` for all three AI categories) separates AI traffic from search and SEO traffic. A `signals` block, a per-entry `signals` object and a `signal` filter carry the browser signals (signed, cloud network, came from a link on the site), each with its limits stated in the schema. `surface_categories` counts every entry by surface category — `docs`, `markdown`, `html`, `notfound`, `robots` and `feed` — and the `surface` filter takes the same values. Each entry carries `arguments`: on an MCP tool call, what the caller asked for (1.56.0). |
+| `make-my-site-agent-ready/get-agent-insights` | Always on (read-only) | The Agent Log Summary as data: findings about the last 30 days under read, cited and broken, each with a kind, a sentence, supporting items and usually an action. Counts only verified crawler identities and user-run clients, never forged ones; WebMCP tool calls, which claim no identity, count as they are. Cached hourly; pass `fresh` to recompute |
+| `make-my-site-agent-ready/get-agent-log` | Always on (read-only) | Reads the agent request log: counts by agent, by surface, by requested detail and by day across the whole log, a verification breakdown, plus a page of individual entries. Pass `summary_only` for the aggregates alone, which carry counts of distinct IPs but no addresses, or `verified` to list only entries with a given verdict — `failed` lists the requests that forged a crawler identity. Every entry and `by_agent` row carries a `crawler_category`, `by_crawler_category` breaks traffic down by kind of bot, and the `crawler_category` input filter (`ai` for all three AI categories) separates AI traffic from search and SEO traffic. A `signals` block, a per-entry `signals` object and a `signal` filter carry the browser signals (signed, cloud network, came from a link on the site), each with its limits stated in the schema. `surface_categories` counts every entry by surface category — `docs`, `markdown`, `html`, `notfound`, `robots`, `feed` and `webmcp` (WebMCP tool calls, 1.58.0) — and the `surface` filter takes the same values. Each entry carries `arguments`: on an MCP tool call, what the caller asked for (1.56.0). |
 
 Endpoints a plugin or theme registered in code are read-only to `set-endpoint` and `delete-endpoint`: both return a `409` explaining that the owning plugin or theme has to be edited instead. Reporting success for a write that changed nothing would be worse than refusing it.

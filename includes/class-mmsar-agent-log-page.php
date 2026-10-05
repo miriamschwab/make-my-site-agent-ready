@@ -604,12 +604,13 @@ class MMSAR_Agent_Log_Page {
 			MMSAR_Agent_Log::CAT_HTML     => __( 'Ordinary page views. Recorded as a denominator so shares can be worked out honestly, not as agent traffic.', 'make-my-site-agent-ready' ),
 			MMSAR_Agent_Log::CAT_NOTFOUND => __( 'Requests for addresses that do not exist. What was asked for is listed under the table.', 'make-my-site-agent-ready' ),
 			MMSAR_Agent_Log::CAT_ROBOTS   => __( 'Crawlers reading robots.txt before deciding what to fetch — neither a page view nor an agent document. Before 1.49.0 these were stored as HTML page views; they are counted here all the same. A physical robots.txt file is served without WordPress and cannot be seen.', 'make-my-site-agent-ready' ),
+			MMSAR_Agent_Log::CAT_WEBMCP   => __( 'Tool calls from an AI agent working in a visitor\'s browser, through WebMCP. Shown even though a browser made them. Requests for webmcp.json are under Agent documents.', 'make-my-site-agent-ready' ),
 			MMSAR_Agent_Log::CAT_FEED     => __( 'RSS and Atom feeds — the main feed, comment feeds, and category, tag and author feeds — including polls that found nothing new. Recorded since 1.49.0.', 'make-my-site-agent-ready' ),
 		);
 
 		$surfaces = MMSAR_Agent_Log::get_surfaces_in_category( MMSAR_Agent_Log::CAT_DOCS );
 		if ( empty( $surfaces ) ) {
-			$hints[ MMSAR_Agent_Log::CAT_DOCS ] = __( 'The agent-facing documents this plugin serves — llms.txt, the catalogs, the MCP and Agent Skills files, and anything else that is not a page view, a markdown response, a 404, robots.txt or a feed. Nothing has been requested yet.', 'make-my-site-agent-ready' );
+			$hints[ MMSAR_Agent_Log::CAT_DOCS ] = __( 'The agent-facing documents this plugin serves — llms.txt, the catalogs, the MCP and Agent Skills files, and anything else that is not a page view, a markdown response, a 404, robots.txt, a feed or a WebMCP call. Nothing has been requested yet.', 'make-my-site-agent-ready' );
 			return $hints;
 		}
 
@@ -617,7 +618,7 @@ class MMSAR_Agent_Log_Page {
 		foreach ( $surfaces as $row ) {
 			$parts[] = $row['surface'] . ' (' . number_format_i18n( (int) $row['total'] ) . ')';
 		}
-		$hints[ MMSAR_Agent_Log::CAT_DOCS ] = __( 'Everything served to agents that is not a page view, a markdown response, a 404, robots.txt or a feed:', 'make-my-site-agent-ready' )
+		$hints[ MMSAR_Agent_Log::CAT_DOCS ] = __( 'Everything served to agents that is not a page view, a markdown response, a 404, robots.txt, a feed or a WebMCP call:', 'make-my-site-agent-ready' )
 			. "\n\n" . implode( " \xC2\xB7 ", $parts );
 
 		return $hints;

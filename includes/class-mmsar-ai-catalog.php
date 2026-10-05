@@ -91,6 +91,19 @@ class MMSAR_AI_Catalog {
 			);
 		}
 
+		if ( MMSAR_WebMCP::manifest_enabled() ) {
+			$entries[] = self::entry(
+				'server',
+				'webmcp',
+				$site_name . ' content (WebMCP)',
+				'application/json',
+				home_url( '/.well-known/webmcp.json' ),
+				'The MCP server\'s read-only tools, registered by every page for an agent in the browser through WebMCP. No authentication.',
+				array_column( MMSAR_WebMCP::browser_tools(), 'name' ),
+				array( 'search ' . $site_name . ' from the page I am on' )
+			);
+		}
+
 		if ( mmsar_feature_enabled( 'openapi' ) && MMSAR_OpenAPI::is_serving() ) {
 			$entries[] = self::entry(
 				'api',

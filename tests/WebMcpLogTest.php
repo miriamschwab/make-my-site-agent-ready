@@ -87,6 +87,10 @@ final class WebMcpLogTest extends TestCase {
 	const ROWS = array(
 		'browser page view' => array( 'browser', 'HTML page view (asked for HTML)' ),
 		'browser webmcp'    => array( 'browser', 'WebMCP JSON-RPC' ),
+		// 1.58.0: webmcp.json requests from a browser tool are let through too.
+		'browser manifest'  => array( 'browser', 'webmcp.json' ),
+		// Exact names only: FIND_IN_SET is not a substring test.
+		'browser lookalike' => array( 'browser', 'webmcp.json.bak' ),
 		'http mcp'          => array( 'http', 'MCP JSON-RPC' ),
 		'crawler llms'      => array( 'crawler', 'llms.txt' ),
 		'unrecorded'        => array( '', 'llms.txt' ),
@@ -119,7 +123,7 @@ final class WebMcpLogTest extends TestCase {
 		$this->assertNotEmpty( $db->prepared );
 		list( $query, $args ) = $db->prepared[0];
 
-		$this->assertSame( 1, preg_match( "/\( %s = '' OR FIND_IN_SET\( IF\( client_type.*?surface = %s \) \)/s", $query, $m ), 'get_entries() should carry the client clause.' );
+		$this->assertSame( 1, preg_match( "/\( %s = '' OR FIND_IN_SET\( IF\( client_type.*?FIND_IN_SET\( surface, %s \) > 0 \) \)/s", $query, $m ), 'get_entries() should carry the client clause.' );
 		// Arguments in order: %i table, the two verdict values, then this clause's four.
 		$bound = array_slice( $args, 3, 4 );
 
@@ -150,8 +154,8 @@ final class WebMcpLogTest extends TestCase {
 	 */
 	public static function views(): array {
 		return array(
-			'default view shows webmcp, hides page views' => array( array(), array( 'browser webmcp', 'http mcp', 'crawler llms', 'unrecorded' ) ),
-			'browsers ticked shows both browser rows'     => array( array( 'clients' => array( 'browser' ) ), array( 'browser page view', 'browser webmcp' ) ),
+			'default view shows webmcp, hides page views' => array( array(), array( 'browser webmcp', 'browser manifest', 'http mcp', 'crawler llms', 'unrecorded' ) ),
+			'browsers ticked shows every browser row'     => array( array( 'clients' => array( 'browser' ) ), array( 'browser page view', 'browser webmcp', 'browser manifest', 'browser lookalike' ) ),
 			'http ticked is taken literally'              => array( array( 'clients' => array( 'http' ) ), array( 'http mcp' ) ),
 			'crawlers ticked is taken literally'          => array( array( 'clients' => array( 'crawler' ) ), array( 'crawler llms' ) ),
 		);
@@ -172,5 +176,14 @@ final class WebMcpLogTest extends TestCase {
 	public function test_mcp_uses_the_same_surface_name(): void {
 		$source = (string) file_get_contents( dirname( __DIR__ ) . '/includes/class-mmsar-mcp.php' );
 		$this->assertStringContainsString( 'MMSAR_Agent_Log::SURFACE_WEBMCP', $source );
+	}
+
+	/**
+	 * webmcp.json is recorded under the surface the filter lets through.
+	 */
+	public function test_manifest_uses_the_same_surface_name(): void {
+		$source = (string) file_get_contents( dirname( __DIR__ ) . '/includes/class-mmsar-webmcp.php' ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Reading the plugin's own source in a test.
+		$this->assertStringContainsString( 'MMSAR_Agent_Log::record( MMSAR_Agent_Log::SURFACE_WEBMCP_MANIFEST )', $source );
+		$this->assertContains( MMSAR_Agent_Log::SURFACE_WEBMCP_MANIFEST, MMSAR_Agent_Log::default_view_browser_surfaces() );
 	}
 }

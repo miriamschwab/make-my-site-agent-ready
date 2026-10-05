@@ -257,6 +257,29 @@ final class CrawlerCategoryTest extends TestCase {
 			// Unrelated user-agents that contain "quest", both stored on the live site.
 			'Friendica is not Quest'           => array( 'Friendica/2026.05 DatabaseVersion/1595 Request/ContentTypeChecker/1 +https://fri', '' ),
 			'python-requests is not Quest'     => array( 'python-requests/2.32.3', '' ),
+
+			// Added 1.58.0. Raw shapes are the values stored on the live site before recognition,
+			// already cut to 80 characters where the user-agent is longer.
+			'IbouBot, raw'                     => array( '(compatible; IbouBot/1.0; +bot@ibou.io; +https://ibou.io/iboubot.html)', 'search-engine' ),
+			'Baiduspider, raw'                 => array( '(compatible; Baiduspider/2.0; +http://www.baidu.com/search/spider.html)', 'search-engine' ),
+			'coccocbot-image, raw'             => array( '(compatible; coccocbot-image/1.0; +http://help.coccoc.com/searchengine)', 'search-engine' ),
+			'coccocbot-web, raw'               => array( '(compatible; coccocbot-web/1.0; +http://help.coccoc.com/searchengine)', 'search-engine' ),
+			'FindFiles, raw'                   => array( 'FindFiles.net/1.0 (compatible; +https://findfiles.net/bot)', 'search-engine' ),
+			'FindFiles without its domain'     => array( 'FindFiles/1.0 (+https://example.com/bot)', '' ),
+			'Iframely, raw with customer'      => array( 'Iframely/1.3.1 (+https://iframely.com/docs/about) Atlassian', 'other' ),
+			'crawl-engine, raw'                => array( 'crawl-engine/0.1 (+https://abuse.creasource.dev/; abuse-report@creasource.dev)', 'search-engine' ),
+			'crawl-engine without its domain'  => array( 'crawl-engine/2.0', '' ),
+			'Amzn-SearchBot, raw'              => array( 'AppleWebKit/537.36 (KHTML, like Gecko; compatible; Amzn-SearchBot/0.1) Chrome/11', 'ai-search' ),
+			'IsonSearchBot, raw'               => array( 'IsonSearchBot/1.0 (+https://search.isonai.com/bot)', 'search-engine' ),
+			'Website-Toolkit, no slash'        => array( '(compatible; Website-Toolkit2.0; +https://website-toolkit.co.uk/crawler)', 'seo-tool' ),
+			'LivelapBot, raw'                  => array( 'LivelapBot/0.2 (http://site.livelap.com/crawler)', 'other' ),
+			'RankMath Link Checker, raw'       => array( 'RankMath Link Checker/1.0 (+https://rankmath.com)', 'seo-tool' ),
+			'WPMU DEV checker, raw'            => array( 'WPMU DEV Broken Link Checker Local Engine', 'seo-tool' ),
+			'AgentReadyScanner, with its repo' => array( 'AgentReadyScanner/0.1 (+https://github.com/elementor/apps-is-agent-ready-cf-work', 'scanner' ),
+			// Miriam's choice (2026-10-05): the form without the repository link is not recognised.
+			'AgentReadyScanner/1.0 is not'     => array( 'AgentReadyScanner/1.0', '' ),
+			// Cloudflare's scanner, a different product with a similar name, stays on hold.
+			'AgentReadinessScanner is not'     => array( 'AgentReadinessScanner/1.0', '' ),
 		);
 	}
 
@@ -419,6 +442,56 @@ final class CrawlerCategoryTest extends TestCase {
 			'Quest is recognise-only'                  => array( 'Quest', '207.90.194.227', '', array(), 'unverifiable' ),
 			'Friendica claims nothing'                 => array( 'Friendica/2026.05 DatabaseVersion/1595 Request/ContentTypeChecker/1 +https://fri', '95.217.234.75', '', array(), 'unclaimed' ),
 			'python-requests claims nothing'           => array( 'python-requests/2.32.3', self::ELSEWHERE, '', array(), 'unclaimed' ),
+
+			// Added 1.58.0. Addresses and hostnames are the real ones from the live log, resolved
+			// and forward-confirmed on 2026-10-05. The raw shapes are the rows the re-check reopens.
+			'IbouBot, raw user-agent'                  => array( '(compatible; IbouBot/1.0; +bot@ibou.io; +https://ibou.io/iboubot.html)', '217.113.196.108', 'c108.ibou.io', array( '217.113.196.108' ), 'verified' ),
+			'IbouBot, stored label'                    => array( 'IbouBot', '217.113.196.88', 'c088.ibou.io', array( '217.113.196.88' ), 'verified' ),
+			'IbouBot, lookalike host'                  => array( 'IbouBot', self::ELSEWHERE, 'ibou.io.attacker.example', array( self::ELSEWHERE ), 'failed' ),
+			'IbouBot, no reverse record'               => array( 'IbouBot', '217.113.196.108', '', array(), 'nodns' ),
+			// 1.58.0: a name under the operator's domain that resolves to nothing is what a resolver
+			// timeout looks like. It was `failed` before; on the clone that accused 217.113.196.75,
+			// which forward-confirms when the resolver answers.
+			'IbouBot, forward lookup empty'            => array( 'IbouBot', '217.113.196.75', 'c075.ibou.io', array(), 'nodns' ),
+			'IbouBot, forward to another address'      => array( 'IbouBot', '217.113.196.75', 'c075.ibou.io', array( '217.113.196.76' ), 'failed' ),
+			// Outside the domain is decided without a forward answer.
+			'IbouBot, foreign host, forward empty'     => array( 'IbouBot', self::ELSEWHERE, 'host.attacker.example', array(), 'failed' ),
+			'Iframely, forward lookup empty'           => array( 'Iframely', '52.54.180.101', 'web-52-54-180-101.iframely.com', array(), 'nodns' ),
+			// An operator with a range list too has already missed its range, which decides it.
+			'CCBot, range miss, forward empty'         => array( 'CCBot', self::ELSEWHERE, 'x.crawl.commoncrawl.org', array(), 'failed' ),
+			// Range refresh, 2026-10-05: a prefix Anthropic added, and one OpenAI withdrew (no live
+			// row had ever come from the three withdrawn /24s).
+			'ClaudeBot, a 2026-10 Anthropic prefix'    => array( 'ClaudeBot', '160.79.106.20', '', array(), 'verified' ),
+			'GPTBot, a 2026-09 OpenAI prefix'          => array( 'GPTBot', '134.138.52.130', '', array(), 'verified' ),
+			'GPTBot, a withdrawn OpenAI /24'           => array( 'GPTBot', '172.182.204.10', '', array(), 'failed' ),
+			'Baiduspider, raw user-agent'              => array( '(compatible; Baiduspider/2.0; +http://www.baidu.com/search/spider.html)', '116.179.32.145', 'baiduspider-116-179-32-145.crawl.baidu.com', array( '116.179.32.145' ), 'verified' ),
+			'Baiduspider, documented baidu.jp'         => array( 'Baiduspider', self::ELSEWHERE, 'crawl.baidu.jp', array( self::ELSEWHERE ), 'verified' ),
+			'Baiduspider, reverse without forward'     => array( 'Baiduspider', '116.179.32.145', 'baiduspider-116-179-32-145.crawl.baidu.com', array( '203.0.113.9' ), 'failed' ),
+			'coccocbot-image, raw user-agent'          => array( '(compatible; coccocbot-image/1.0; +http://help.coccoc.com/searchengine)', '103.131.71.188', 'bot-103-131-71-188.coccoc.com', array( '103.131.71.188' ), 'verified' ),
+			'FindFiles, raw user-agent'                => array( 'FindFiles.net/1.0 (compatible; +https://findfiles.net/bot)', '65.21.31.180', 'bot.findfiles.net', array( '65.21.31.180' ), 'verified' ),
+			// The suffix is the bot's own host, not the bare domain.
+			'FindFiles, another findfiles.net host'    => array( 'FindFiles', '65.21.31.180', 'www.findfiles.net', array( '65.21.31.180' ), 'failed' ),
+			'Iframely, raw user-agent'                 => array( 'Iframely/1.3.1 (+https://iframely.com/docs/about) Atlassian', '34.224.178.127', 'web-34-224-178-127.iframely.com', array( '34.224.178.127' ), 'verified' ),
+			'Iframely, reduced to its network'         => array( 'Iframely', '18.210.2.0', '', array(), 'unverifiable' ),
+			'crawl-engine, raw user-agent'             => array( 'crawl-engine/0.1 (+https://abuse.creasource.dev/; abuse-report@creasource.dev)', '146.59.197.253', 'crawler.creasource.dev', array( '146.59.197.253' ), 'verified' ),
+			'crawl-engine, another creasource host'    => array( 'crawl-engine', '146.59.197.253', 'www.creasource.dev', array( '146.59.197.253' ), 'failed' ),
+			// Without the disclosure nothing is claimed, so nothing can be accused.
+			'crawl-engine without its domain'          => array( 'crawl-engine/2.0', self::ELSEWHERE, 'host.attacker.example', array( self::ELSEWHERE ), 'unclaimed' ),
+			'Amzn-SearchBot, a listed address'         => array( 'Amzn-SearchBot', '100.25.30.152', '', array(), 'verified' ),
+			'Amzn-SearchBot, raw user-agent'           => array( 'AppleWebKit/537.36 (KHTML, like Gecko; compatible; Amzn-SearchBot/0.1) Chrome/11', '98.95.56.98', '', array(), 'verified' ),
+			'Amzn-SearchBot, one address over'         => array( 'Amzn-SearchBot', '100.25.30.153', '', array(), 'failed' ),
+			// Range-only. Amazonbot's suffix must never vouch for it, and must not be what it is
+			// judged against: a genuine Amazonbot host is still a range miss for this name.
+			'Amzn-SearchBot is not judged as Amazonbot' => array( 'Amzn-SearchBot', '3.82.67.225', 'crawl-3-82-67-225.crawl.amazonbot.amazon', array( '3.82.67.225' ), 'failed' ),
+			'Amazonbot is still judged by its suffix'  => array( 'Amazonbot', '3.82.67.225', 'crawl-3-82-67-225.crawl.amazonbot.amazon', array( '3.82.67.225' ), 'verified' ),
+			'Amzn-SearchBot, reduced to its network'   => array( 'Amzn-SearchBot', '52.6.231.0', '', array(), 'unverifiable' ),
+			'IsonSearchBot is recognise-only'          => array( 'IsonSearchBot', '103.121.17.220', '', array(), 'unverifiable' ),
+			'Website-Toolkit is recognise-only'        => array( 'Website-Toolkit', '167.233.53.60', '', array(), 'unverifiable' ),
+			'LivelapBot is recognise-only'             => array( 'LivelapBot', '188.165.235.184', '', array(), 'unverifiable' ),
+			'RankMath Link Checker is recognise-only'  => array( 'RankMath Link Checker', '82.197.83.229', '', array(), 'unverifiable' ),
+			'WPMU DEV checker is recognise-only'       => array( 'WPMU DEV Broken Link Checker', self::ELSEWHERE, '', array(), 'unverifiable' ),
+			'AgentReadyScanner is recognise-only'      => array( 'AgentReadyScanner/0.1 (+https://github.com/elementor/apps-is-agent-ready-cf-work', '2a06:98c0:3600::103', '', array(), 'unverifiable' ),
+			'AgentReadyScanner/1.0 claims nothing'     => array( 'AgentReadyScanner/1.0', '2a06:98c0:3600::103', '', array(), 'unclaimed' ),
 		);
 	}
 
@@ -479,6 +552,25 @@ final class CrawlerCategoryTest extends TestCase {
 			// cut at 80 characters, the ordinary rule for an unrecognised user-agent.
 			'Friendica falls through' => array( 'Friendica/2026.05 DatabaseVersion/1595 Request/ContentTypeChecker/1 +https://friendica.example', 'Friendica/2026.05 DatabaseVersion/1595 Request/ContentTypeChecker/1 +https://fri' ),
 			'python-requests falls through' => array( 'python-requests/2.32.3', 'python-requests/2.32.3' ),
+			// Added 1.58.0. Full user-agents, as each bot sends them before the 80-character cut.
+			'IbouBot'            => array( 'Mozilla/5.0 (compatible; IbouBot/1.0; +bot@ibou.io; +https://ibou.io/iboubot.html)', 'IbouBot' ),
+			'Baiduspider'        => array( 'Mozilla/5.0 (compatible; Baiduspider/2.0; +http://www.baidu.com/search/spider.html)', 'Baiduspider' ),
+			'Baiduspider-image'  => array( 'Baiduspider-image+(+http://www.baidu.com/search/spider.htm)', 'Baiduspider' ),
+			'coccocbot-web'      => array( 'Mozilla/5.0 (compatible; coccocbot-web/1.0; +http://help.coccoc.com/searchengine)', 'coccocbot' ),
+			'FindFiles'          => array( 'FindFiles.net/1.0 (compatible; +https://findfiles.net/bot)', 'FindFiles' ),
+			'FindFiles, unguarded falls through' => array( 'FindFiles/1.0', 'FindFiles/1.0' ),
+			// The customer's name is dropped with the rest of the user-agent.
+			'Iframely'           => array( 'Iframely/1.3.1 (+https://iframely.com/docs/about) Atlassian', 'Iframely' ),
+			'crawl-engine'       => array( 'crawl-engine/0.1 (+https://abuse.creasource.dev/; abuse-report@creasource.dev)', 'crawl-engine' ),
+			'crawl-engine, unguarded falls through' => array( 'crawl-engine/2.0', 'crawl-engine/2.0' ),
+			'Amzn-SearchBot'     => array( 'Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; Amzn-SearchBot/0.1) Chrome/119.0.6045.214 Safari/537.36', 'Amzn-SearchBot' ),
+			'IsonSearchBot'      => array( 'IsonSearchBot/1.0 (+https://search.isonai.com/bot)', 'IsonSearchBot' ),
+			'Website-Toolkit'    => array( 'Mozilla/5.0 (compatible; Website-Toolkit2.0; +https://website-toolkit.co.uk/crawler)', 'Website-Toolkit' ),
+			'LivelapBot'         => array( 'LivelapBot/0.2 (http://site.livelap.com/crawler)', 'LivelapBot' ),
+			'RankMath Link Checker' => array( 'RankMath Link Checker/1.0 (+https://rankmath.com)', 'RankMath Link Checker' ),
+			'WPMU DEV checker'   => array( 'WPMU DEV Broken Link Checker Local Engine', 'WPMU DEV Broken Link Checker' ),
+			'AgentReadyScanner'  => array( 'AgentReadyScanner/0.1 (+https://github.com/elementor/apps-is-agent-ready-cf-worker)', 'AgentReadyScanner' ),
+			'AgentReadyScanner/1.0 falls through' => array( 'AgentReadyScanner/1.0', 'AgentReadyScanner/1.0' ),
 			'empty is unknown'    => array( '', 'unknown' ),
 		);
 	}

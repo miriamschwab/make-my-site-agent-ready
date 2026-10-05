@@ -235,6 +235,33 @@ class MMSAR_Agent_Log_Verify {
 		// crawl4 and crawl5. Confirmed on 172.235.150.244: crawl5.poweredby.keywordseverywhere.com,
 		// forward-confirmed.
 		'PoweredByBot'      => array( 'poweredby.keywordseverywhere.com' ),
+		// Added 1.58.0. Each confirmed the two ways this map requires on 2026-10-05, against every
+		// full address the live log held for the name, not a sample. Through public resolvers: the
+		// local one timed out on almost everything that day, which reads like missing records.
+		//
+		// Ibou — https://ibou.io/iboubot.html. 46 of 46 addresses, c###.ibou.io, all
+		// forward-confirmed. Its range file (one /24, dated 2025-07-25) is not used, for the Ahrefs
+		// reason above.
+		'IbouBot'           => array( 'ibou.io' ),
+		// Baidu — http://help.baidu.com/question?prod_id=99&class=0&id=3001, which names both
+		// suffixes. 9 of 9 addresses, *.crawl.baidu.com, forward-confirmed. baidu.jp is unexercised
+		// here and rests on the documentation, like bingbot above.
+		'Baiduspider'       => array( 'baidu.com', 'baidu.jp' ),
+		// Cốc Cốc — https://coccoc.com/search/console/coc-coc-robots ("hostname must end with
+		// '.coccoc.com'"). 9 of 9 addresses, bot-*.coccoc.com, forward-confirmed.
+		'coccocbot'         => array( 'coccoc.com' ),
+		// FindFiles — https://findfiles.net/en/bot. The one address, 65.21.31.180, reverses to
+		// bot.findfiles.net and forward-confirms. The full host, not the bare domain, as with
+		// LohiSoftBot.
+		'FindFiles'         => array( 'bot.findfiles.net' ),
+		// Iframely — https://iframely.com/docs/allowlisting, which documents this, IP lists and
+		// Web Bot Auth. 2 of 2 full addresses, web-*.iframely.com, forward-confirmed; the third row
+		// is stored at network precision. The IP lists are not bundled, since rDNS is proven.
+		'Iframely'          => array( 'iframely.com' ),
+		// creasource.dev — https://abuse.creasource.dev/, which documents FCrDNS for one dedicated
+		// address. 146.59.197.253 reverses to crawler.creasource.dev and forward-confirms; the other
+		// row is stored at network precision. The full host, not the bare domain.
+		'crawl-engine'      => array( 'crawler.creasource.dev' ),
 	);
 
 	/**
@@ -277,6 +304,12 @@ class MMSAR_Agent_Log_Verify {
 		// none.
 		'KnownGood-Verifier'    => 'knowngood',
 		'Inoreader'             => 'inoreader',
+		// Added 1.58.0. Range-only: the addresses reverse to Amazon's generic compute-1 names, and
+		// Amazonbot's crawl.amazonbot.amazon suffix belongs to a different bot. All 35 full
+		// addresses the live log held were on Amazon's list on 2026-10-05. The list is single EC2
+		// addresses and will churn, so a stale bundle reads a new real address as `failed`; Miriam
+		// accepted that (2026-10-05). Refresh it at release time like the others.
+		'Amzn-SearchBot'        => 'amazon-searchbot',
 	);
 
 	/**
@@ -672,11 +705,24 @@ class MMSAR_Agent_Log_Verify {
 				return $has_range ? self::FAILED : self::NODNS;
 			}
 
-			if ( ! self::forward_confirms( $host, $ip ) ) {
+			// A hostname outside the operator's domains is decided without a forward lookup: no
+			// answer to that lookup could make it the operator's.
+			if ( ! self::host_matches( $host, $suffixes ) ) {
 				return self::FAILED;
 			}
 
-			return self::host_matches( $host, $suffixes ) ? self::VERIFIED : self::FAILED;
+			// The name is under the operator's domain but resolves to nothing. That is what a
+			// resolver timeout looks like, and before 1.58.0 it read `failed`, which Re-check never
+			// reopens: four genuine Ibou and Iframely addresses were accused that way in testing.
+			// It is now the same absence of evidence as a missing reverse record. The cost is the
+			// same known gap as that case: a forger who sets a PTR to a non-existent name under the
+			// operator's domain reads `nodns` rather than `failed`.
+			$addresses = self::forward_lookup( $host, self::is_ipv6( $ip ) );
+			if ( ! $addresses ) {
+				return $has_range ? self::FAILED : self::NODNS;
+			}
+
+			return self::address_listed( $ip, $addresses ) ? self::VERIFIED : self::FAILED;
 		}
 
 		// Range-only operator that missed its range: the list exists so that absence from it means
@@ -844,23 +890,18 @@ class MMSAR_Agent_Log_Verify {
 	}
 
 	/**
-	 * Whether a hostname forward-resolves back to the given IP.
+	 * Whether a forward lookup's answer contains the given IP.
 	 *
 	 * This is the half that makes the check worth anything. A reverse record is set by whoever
 	 * controls the address block, so on its own it proves only that they typed a name; requiring
 	 * the name to resolve back means the claim also has to be true in the operator's own zone,
 	 * which an impersonator does not control.
 	 *
-	 * @param string $host Hostname to confirm.
-	 * @param string $ip   IP it must resolve back to.
+	 * @param string   $ip        IP the hostname must resolve back to.
+	 * @param string[] $addresses What the hostname resolved to.
 	 * @return bool
 	 */
-	private static function forward_confirms( $host, $ip ) {
-		$addresses = self::forward_lookup( $host, self::is_ipv6( $ip ) );
-		if ( ! $addresses ) {
-			return false;
-		}
-
+	private static function address_listed( $ip, $addresses ) {
 		$target = self::normalize_ip( $ip );
 		foreach ( $addresses as $address ) {
 			if ( '' !== $target && self::normalize_ip( $address ) === $target ) {
