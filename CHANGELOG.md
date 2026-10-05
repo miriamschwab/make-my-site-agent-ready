@@ -2,6 +2,13 @@
 
 All notable changes to Make My Site Agent-Ready.
 
+## 1.60.0 — 2026-10-05
+
+- Fixed: the Schema Map at `/schema-map.xml` now follows NLWeb's Schema Feeds spec. It used a format of its own that a reader following the spec could not read, and it listed `llms-full.txt` and `/ask`, which are not schema feeds. It now lists your RSS feed, with its type written both as the spec's `sf:contentType` element and as the `contentType` attribute NLWeb's own crawler reads, so either can use it. llms.txt already points agents to llms-full.txt, and `/ask` is now listed with your other endpoints in llms.txt and the API catalog. Before this, the Schema Map was the only place that pointed to it.
+- New: when Yoast SEO's schema aggregation endpoint is on, robots.txt gets a second `Schemamap:` line for Yoast's map at `/schemamap.xml`, which lists its schema.org feeds per post type. Yoast stopped adding that line itself in version 27.5, so crawlers starting from robots.txt couldn't find those feeds.
+- New: a "List the Schema Maps in robots.txt" checkbox under the NLWeb toggle, on by default. Google Search Console reports the `Schemamap:` line as "Syntax not understood". Google ignores the line, so crawling isn't affected, but you can switch it off if you'd rather not see the warning. The maps stay available either way.
+- Changed: a `Schemamap:` line another plugin already added no longer stops this plugin from adding its own. Developers: `mmsar_schema_map_feeds` entries now take a `content_type` (old RSS entries still work), and the new `mmsar_schemamap_urls` filter adds maps to robots.txt.
+
 ## 1.59.0 — 2026-10-05
 
 - New: calls to the MCP server have their own Surface filter on the Agent Log screen, "MCP calls", and their own `mcp` category in the `get-agent-log` ability, so you can see whether anything uses the tools and not just finds them. They used to be counted under Agent documents, where one MCP session wrote several rows against one row per document, so the Agent documents count now reads lower, for earlier dates too. The MCP description files (mcp.json and the server card) stay under Agent documents.

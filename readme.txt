@@ -4,7 +4,7 @@ Tags: markdown, llm, ai, llms-txt, agents
 Requires at least: 6.2
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.59.0
+Stable tag: 1.60.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -33,7 +33,7 @@ Every feature below can be switched off individually under Settings > Agent-Read
 * **security.txt** — Serves `/.well-known/security.txt` (RFC 9116). Enter your security contact as a full URL, a path like `/contact`, or an email address, and the plugin formats it correctly
 * **api-catalog** — Serves `/.well-known/api-catalog` (RFC 9727), a machine-readable index linking llms.txt, llms-full.txt, security.txt, the Agent Skills index, openapi.json, the MCP manifest, webmcp.json, sitemap, and feed, each only while it is served
 * **Agent Skills discovery** — Serves `/.well-known/agent-skills/index.json` plus a bundled skill teaching agents how to use this plugin's markdown endpoints
-* **NLWeb `/ask` endpoint** — Optional (off by default). Answers questions about the site in NLWeb's shape, retrieval only. Ships with a Schemamap at `/schema-map.xml` plus a `Schemamap:` robots.txt directive
+* **NLWeb `/ask` endpoint** — Optional (off by default). Answers questions about the site in NLWeb's shape, retrieval only. Ships with a Schema Map at `/schema-map.xml` in NLWeb's Schema Feeds format, listing your RSS feed, plus a `Schemamap:` robots.txt directive. When Yoast SEO's schema aggregation endpoint is on, robots.txt points to Yoast's map too. Google Search Console reports the `Schemamap:` line as "Syntax not understood", so a checkbox can switch the robots.txt lines off
 * **MCP Apps UI** — Experimental, off by default. Lets an MCP client render search/list results as a card list instead of plain text
 * **Agent-recoverable 404s** — A 404 adds Link headers and a short Markdown list pointing at the sitemap, llms.txt and endpoint catalog, instead of leaving an agent with nothing but a dead end. Looks identical to visitors
 * **Link response headers** — Every front-end response carries `Link` headers (RFC 8288) pointing to whichever of the resources above are switched on; singular posts/pages add one more pointing to their markdown alternate — so agents that only read headers, not HTML, can still find these resources
@@ -234,6 +234,12 @@ Each token is checked when you save: one for another site, another trial, or pas
 They are a floor. Many AI apps open links without telling the site where the visitor came from, and only ChatGPT reliably tags its links with `utm_source`. Those visits look like direct visits and cannot be counted. Pages already in your cache pick up the counting script when the cache next refreshes, and a security plugin that blocks the REST API for visitors stops the count entirely.
 
 == Changelog ==
+
+= 1.60.0 - 2026-10-05 =
+* Fixed: the Schema Map at `/schema-map.xml` now follows NLWeb's Schema Feeds spec. It used a format of its own that a reader following the spec could not read, and it listed `llms-full.txt` and `/ask`, which are not schema feeds. It now lists your RSS feed, with its type written both as the spec's `sf:contentType` element and as the `contentType` attribute NLWeb's own crawler reads, so either can use it. llms.txt already points agents to llms-full.txt, and `/ask` is now listed with your other endpoints in llms.txt and the API catalog. Before this, the Schema Map was the only place that pointed to it.
+* New: when Yoast SEO's schema aggregation endpoint is on, robots.txt gets a second `Schemamap:` line for Yoast's map at `/schemamap.xml`, which lists its schema.org feeds per post type. Yoast stopped adding that line itself in version 27.5, so crawlers starting from robots.txt couldn't find those feeds.
+* New: a "List the Schema Maps in robots.txt" checkbox under the NLWeb toggle, on by default. Google Search Console reports the `Schemamap:` line as "Syntax not understood". Google ignores the line, so crawling isn't affected, but you can switch it off if you'd rather not see the warning. The maps stay available either way.
+* Changed: a `Schemamap:` line another plugin already added no longer stops this plugin from adding its own. Developers: `mmsar_schema_map_feeds` entries now take a `content_type` (old RSS entries still work), and the new `mmsar_schemamap_urls` filter adds maps to robots.txt.
 
 = 1.59.0 - 2026-10-05 =
 * New: calls to the MCP server have their own Surface filter on the Agent Log screen, "MCP calls", and their own `mcp` category in the `get-agent-log` ability, so you can see whether anything uses the tools and not just finds them. They used to be counted under Agent documents, where one MCP session wrote several rows against one row per document, so the Agent documents count now reads lower, for earlier dates too. The MCP description files (mcp.json and the server card) stay under Agent documents.

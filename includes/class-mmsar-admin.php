@@ -187,7 +187,7 @@ class MMSAR_Admin {
 			),
 			'nlweb'                => array(
 				__( 'NLWeb /ask endpoint', 'make-my-site-agent-ready' ),
-				__( 'Answers questions about your site at /ask, in Microsoft\'s NLWeb shape, with optional SSE streaming — plus a Schema Map at /schema-map.xml and a Schemamap directive in robots.txt. Retrieval only: it returns ranked pages from your site, not a generated answer, and says so in every response. Off by default, because unlike the documents above it runs a query on each call.', 'make-my-site-agent-ready' ),
+				__( 'Answers questions about your site at /ask, in Microsoft\'s NLWeb shape, with optional SSE streaming — plus a Schema Map at /schema-map.xml listing your RSS feed, and a Schemamap directive in robots.txt (for Yoast SEO\'s map too, when its schema aggregation endpoint is on). Retrieval only: it returns ranked pages from your site, not a generated answer, and says so in every response. Off by default, because unlike the documents above it runs a query on each call.', 'make-my-site-agent-ready' ),
 			),
 			'mcp_ui'               => array(
 				__( 'MCP Apps UI (experimental)', 'make-my-site-agent-ready' ),
@@ -360,6 +360,9 @@ class MMSAR_Admin {
 			if ( 'indexnow' === $key && mmsar_feature_enabled( 'indexnow' ) ) {
 				self::render_indexnow_status();
 			}
+			if ( 'nlweb' === $key && mmsar_feature_enabled( 'nlweb' ) ) {
+				self::render_schemamap_robots_field();
+			}
 
 			// Action links under the description: a live "View" link to the served file (only when the
 			// feature is on, so we never link to a 404), and a jump link to its settings section below.
@@ -387,6 +390,25 @@ class MMSAR_Admin {
 
 			echo '</div>';
 		}
+	}
+
+	/**
+	 * The robots.txt Schemamap checkbox, under the NLWeb toggle.
+	 *
+	 * Saved into llmmd_settings with its own form marker, so an unticked box saves as off. Only
+	 * rendered while NLWeb is on; with no marker in the request, the stored value is kept.
+	 *
+	 * @return void
+	 */
+	private static function render_schemamap_robots_field() {
+		echo '<div style="margin-left:24px;">';
+		echo '<label>';
+		echo '<input type="checkbox" name="llmmd_settings[' . esc_attr( MMSAR_NLWeb::ROBOTS_SETTING ) . ']" value="1" ' . checked( MMSAR_NLWeb::robots_enabled(), true, false ) . '> ';
+		echo esc_html__( 'List the Schema Maps in robots.txt', 'make-my-site-agent-ready' );
+		echo '</label>';
+		echo '<input type="hidden" name="llmmd_settings[schemamap_robots_form]" value="1">';
+		echo '<p class="description">' . esc_html__( 'This is how NLWeb crawlers find your Schema Map. Google Search Console reports the line as "Syntax not understood". Google ignores it, so crawling is not affected, but you can switch it off if you would rather not see the warning. The maps stay available either way.', 'make-my-site-agent-ready' ) . '</p>';
+		echo '</div>';
 	}
 
 	/**
@@ -1384,6 +1406,15 @@ class MMSAR_Admin {
 		// Same absent-means-on rule as the summary boxes, with its own form marker.
 		$key = MMSAR_Noindex::SETTING;
 		if ( ! empty( $input['noindex_form'] ) || isset( $input[ $key ] ) ) {
+			$sanitized[ $key ] = empty( $input[ $key ] ) ? '0' : '1';
+		} elseif ( is_array( $current ) && isset( $current[ $key ] ) ) {
+			$sanitized[ $key ] = '0' === (string) $current[ $key ] ? '0' : '1';
+		}
+
+		// The robots.txt Schemamap lines (1.60.0), same rule, its own marker. The marker is only in
+		// the form while NLWeb is on, so switching NLWeb off keeps the stored choice.
+		$key = MMSAR_NLWeb::ROBOTS_SETTING;
+		if ( ! empty( $input['schemamap_robots_form'] ) || isset( $input[ $key ] ) ) {
 			$sanitized[ $key ] = empty( $input[ $key ] ) ? '0' : '1';
 		} elseif ( is_array( $current ) && isset( $current[ $key ] ) ) {
 			$sanitized[ $key ] = '0' === (string) $current[ $key ] ? '0' : '1';

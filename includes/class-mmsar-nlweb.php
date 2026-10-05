@@ -14,6 +14,7 @@
  * which belong in a plugin that otherwise only ever serves files.
  *
  * Spec: https://github.com/microsoft/NLWeb
+ * Schema Map: https://github.com/nlweb-ai/website/blob/main/SCHEMA_SPEC.md
  *
  * @package Make_My_Site_Agent_Ready
  */
@@ -47,6 +48,32 @@ class MMSAR_NLWeb {
 		add_filter( 'query_vars', array( __CLASS__, 'add_query_vars' ) );
 		add_action( 'template_redirect', array( __CLASS__, 'serve' ) );
 		add_filter( 'robots_txt', array( __CLASS__, 'add_schemamap_directive' ), PHP_INT_MAX );
+		add_action( 'init', array( __CLASS__, 'register_ask_endpoint' ), 20 );
+	}
+
+	/**
+	 * List /ask with the site's other endpoints, in llms.txt and the api-catalog.
+	 *
+	 * Until 1.60.0 the Schema Map was the only document that pointed to /ask. It was never a schema
+	 * feed, so it came out of the map when the map moved to the spec format, and is listed here.
+	 *
+	 * @return void
+	 */
+	public static function register_ask_endpoint() {
+		if ( ! self::is_serving() || ! function_exists( 'mmsar_register_endpoint' ) ) {
+			return;
+		}
+		mmsar_register_endpoint(
+			array(
+				'id'          => 'nlweb-ask',
+				'title'       => 'Ask this site (NLWeb)',
+				'href'        => self::ask_url(),
+				'description' => 'Search this site with a question in plain language. Send `query` as a query-string parameter, a form field or a JSON body field. Returns a ranked list of pages to read, not a generated answer.',
+				'type'        => 'application/json',
+				'methods'     => array( 'GET', 'POST' ),
+				'auth'        => 'none',
+			)
+		);
 	}
 
 	/**
@@ -404,17 +431,212 @@ class MMSAR_NLWeb {
 	// Schema Map
 	// -------------------------------------------------------------------------
 
+	/*
+	 * Format: NLWeb's Schema Feeds specification, v0.1 draft (January 2026),
+	 * https://github.com/nlweb-ai/website/blob/main/SCHEMA_SPEC.md. A Schema Map is a sitemap
+	 * `<urlset>` whose entries each carry an `<sf:contentType>`; the spec defines two values, below.
+	 * Before 1.60.0 this file used a `<schemamap>` root and namespace the spec does not have, and
+	 * listed llms-full.txt and /ask, which are not schema feeds, so a conforming reader found nothing.
+	 */
+
 	/**
-	 * Add the `schemamap:` directive to robots.txt.
+	 * Namespace of the `sf:` elements in a Schema Map.
+	 */
+	const SCHEMAFEED_NS = 'http://schema.org/schemas/schemafeed/0.1';
+
+	/**
+	 * Content type of a JSON Lines feed of schema.org JSON-LD objects.
+	 */
+	const CONTENT_TYPE_SCHEMA_ORG = 'structuredData/schema.org';
+
+	/**
+	 * Content type of an RSS 2.0 feed.
+	 */
+	const CONTENT_TYPE_RSS = 'structuredData/rss';
+
+	/**
+	 * Key in `llmmd_settings` for the robots.txt directives. Absent means on.
+	 */
+	const ROBOTS_SETTING = 'schemamap_robots';
+
+	/**
+	 * Whether the `Schemamap:` lines go into robots.txt, given the settings array.
+	 *
+	 * On by default because the spec makes robots.txt the way a crawler finds a Schema Map. It is a
+	 * setting because Google Search Console reports the line as "Syntax not understood" (Yoast removed
+	 * its own for that reason in 27.5, Yoast/wordpress-seo#23139). Google ignores the line, so the cost
+	 * is a warning in a report, and an owner who would rather not see it can turn the lines off. The
+	 * maps themselves are served either way.
+	 *
+	 * @param mixed $settings The `llmmd_settings` option.
+	 * @return bool
+	 */
+	public static function robots_enabled_in( $settings ) {
+		if ( ! is_array( $settings ) || ! isset( $settings[ self::ROBOTS_SETTING ] ) ) {
+			return true;
+		}
+		return '0' !== (string) $settings[ self::ROBOTS_SETTING ];
+	}
+
+	/**
+	 * Whether the `Schemamap:` lines go into robots.txt, read from the stored setting.
+	 *
+	 * @return bool
+	 */
+	public static function robots_enabled() {
+		return self::robots_enabled_in( get_option( 'llmmd_settings', array() ) );
+	}
+
+	/**
+	 * Add a `schemamap:` directive to robots.txt for every Schema Map on this site.
+	 *
+	 * The spec allows several. Each URL is added once, and one already present (from another plugin
+	 * or a static robots.txt) is left alone rather than repeated.
 	 *
 	 * @param string $output The robots.txt content.
 	 * @return string The robots.txt content.
 	 */
 	public static function add_schemamap_directive( $output ) {
-		if ( false !== stripos( $output, 'schemamap:' ) ) {
+		if ( ! self::robots_enabled() ) {
 			return $output;
 		}
-		return rtrim( $output, "\n" ) . "\n\nSchemamap: " . self::schema_map_url() . "\n";
+		$lines = array();
+		foreach ( self::schemamap_urls() as $url ) {
+			if ( preg_match( '/^\s*schemamap:\s*' . preg_quote( $url, '/' ) . '\s*$/mi', $output ) ) {
+				continue;
+			}
+			$lines[] = 'Schemamap: ' . $url;
+		}
+		if ( ! $lines ) {
+			return $output;
+		}
+		return rtrim( $output, "\n" ) . "\n\n" . implode( "\n", $lines ) . "\n";
+	}
+
+	/**
+	 * The Schema Maps robots.txt should point to: this plugin's own, then any other on the site.
+	 *
+	 * @return string[] Absolute URLs.
+	 */
+	public static function schemamap_urls() {
+		$urls  = array( self::schema_map_url() );
+		$yoast = self::yoast_schemamap_url();
+		if ( '' !== $yoast ) {
+			$urls[] = $yoast;
+		}
+
+		/**
+		 * Filters the Schema Maps advertised in robots.txt.
+		 *
+		 * @param string[] $urls Absolute URLs. This plugin's own map comes first.
+		 */
+		$urls = apply_filters( 'mmsar_schemamap_urls', $urls );
+
+		$clean = array();
+		foreach ( (array) $urls as $url ) {
+			if ( is_string( $url ) && preg_match( '#^https?://\S+$#i', $url ) && ! in_array( $url, $clean, true ) ) {
+				$clean[] = $url;
+			}
+		}
+		return $clean;
+	}
+
+	/**
+	 * The URL of Yoast SEO's Schema Map, when its schema aggregation endpoint is switched on.
+	 *
+	 * Yoast serves the map at /schemamap.xml (no hyphen) and listed it in robots.txt itself until
+	 * Yoast SEO 27.5, which dropped the directive. Without one, a crawler that starts from robots.txt
+	 * never finds Yoast's per-type schema.org feeds. Both checks are needed: a switched-on option
+	 * left behind by a Yoast that no longer serves the route must not be advertised.
+	 *
+	 * Read from the stored `wpseo` option, as MMSAR_Noindex reads Yoast's, rather than through
+	 * Yoast's classes.
+	 *
+	 * @return string Absolute URL, or '' when Yoast's map is not being served.
+	 */
+	public static function yoast_schemamap_url() {
+		if ( ! class_exists( 'Yoast\WP\SEO\Schema_Aggregator\User_Interface\Schemamap_Xml_Rewrite_Integration' ) ) {
+			return '';
+		}
+		$options = get_option( 'wpseo', array() );
+		if ( ! is_array( $options ) || true !== ( $options['enable_schema_aggregation_endpoint'] ?? false ) ) {
+			return '';
+		}
+		return home_url( '/schemamap.xml' );
+	}
+
+	/**
+	 * The feeds listed in this plugin's Schema Map.
+	 *
+	 * @return array[] Each with 'loc', 'content_type' and 'lastmod'.
+	 */
+	public static function schema_map_entries() {
+		$entries = array(
+			array(
+				'loc'          => home_url( '/feed/' ),
+				'content_type' => self::CONTENT_TYPE_RSS,
+				'lastmod'      => self::last_modified(),
+			),
+		);
+
+		/**
+		 * Filters the feeds listed in the Schema Map.
+		 *
+		 * Each entry needs an absolute 'loc' and a 'content_type' (`structuredData/schema.org` for
+		 * a JSON Lines feed, `structuredData/rss` for RSS 2.0); 'lastmod' is optional. An entry
+		 * from before 1.60.0 that gives 'type' => 'application/rss+xml' instead is still read as
+		 * RSS; any other entry without a content type is dropped.
+		 *
+		 * @param array[] $entries Feeds.
+		 */
+		$entries = apply_filters( 'mmsar_schema_map_feeds', $entries );
+
+		$clean = array();
+		foreach ( (array) $entries as $entry ) {
+			if ( ! is_array( $entry ) || ! isset( $entry['loc'] ) || ! is_string( $entry['loc'] ) || ! preg_match( '#^https?://\S+$#i', $entry['loc'] ) ) {
+				continue;
+			}
+			$content_type = '';
+			if ( isset( $entry['content_type'] ) && is_string( $entry['content_type'] ) ) {
+				$content_type = trim( $entry['content_type'] );
+			} elseif ( isset( $entry['type'] ) && 'application/rss+xml' === $entry['type'] ) {
+				$content_type = self::CONTENT_TYPE_RSS;
+			}
+			if ( '' === $content_type ) {
+				continue;
+			}
+			$clean[] = array(
+				'loc'          => $entry['loc'],
+				'content_type' => $content_type,
+				'lastmod'      => isset( $entry['lastmod'] ) && is_string( $entry['lastmod'] ) ? $entry['lastmod'] : '',
+			);
+		}
+		return $clean;
+	}
+
+	/**
+	 * Render a Schema Map.
+	 *
+	 * @param array[] $entries Output of schema_map_entries().
+	 * @return string XML, every value escaped.
+	 */
+	public static function render_schema_map( array $entries ) {
+		$xml  = '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
+		$xml .= '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:sf="' . self::SCHEMAFEED_NS . '">' . "\n";
+		foreach ( $entries as $entry ) {
+			// The type is written twice on purpose. The spec reads the `sf:contentType` element below;
+			// NLWeb's own crawler (nlweb-ai/crawler, code/core/master.py) reads a `contentType`
+			// attribute on `<url>` and never looks for the element. Each reader ignores the other form.
+			$xml .= '  <url contentType="' . esc_xml( $entry['content_type'] ) . '">' . "\n";
+			$xml .= '    <loc>' . esc_xml( $entry['loc'] ) . "</loc>\n";
+			if ( '' !== $entry['lastmod'] ) {
+				$xml .= '    <lastmod>' . esc_xml( $entry['lastmod'] ) . "</lastmod>\n";
+			}
+			$xml .= '    <sf:contentType>' . esc_xml( $entry['content_type'] ) . "</sf:contentType>\n";
+			$xml .= "  </url>\n";
+		}
+		$xml .= '</urlset>' . "\n";
+		return $xml;
 	}
 
 	/**
@@ -426,34 +648,7 @@ class MMSAR_NLWeb {
 	 * @return void
 	 */
 	private static function serve_schema_map() {
-		$feeds = array(
-			array(
-				'loc'     => home_url( '/feed/' ),
-				'type'    => 'application/rss+xml',
-				'lastmod' => self::last_modified(),
-			),
-		);
-		if ( mmsar_feature_enabled( 'llms_full_txt' ) ) {
-			$feeds[] = array(
-				'loc'     => home_url( '/llms-full.txt' ),
-				'type'    => 'text/plain',
-				'lastmod' => self::last_modified(),
-			);
-		}
-		if ( self::is_serving() ) {
-			$feeds[] = array(
-				'loc'     => self::ask_url(),
-				'type'    => 'application/json',
-				'lastmod' => self::last_modified(),
-			);
-		}
-
-		/**
-		 * Filters the feeds listed in the Schema Map.
-		 *
-		 * @param array[] $feeds Each with 'loc', 'type' and 'lastmod'.
-		 */
-		$feeds = apply_filters( 'mmsar_schema_map_feeds', $feeds );
+		$xml = self::render_schema_map( self::schema_map_entries() );
 
 		mmsar_send_cache_headers();
 		header( 'Content-Type: application/xml; charset=UTF-8' );
@@ -461,16 +656,7 @@ class MMSAR_NLWeb {
 		header( 'Access-Control-Allow-Origin: *' );
 		status_header( 200 );
 
-		echo '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
-		echo '<schemamap xmlns="http://www.nlweb.ai/schemas/schemamap/1.0">' . "\n";
-		foreach ( $feeds as $feed ) {
-			echo "  <feed>\n";
-			echo '    <loc>' . esc_url( $feed['loc'] ) . "</loc>\n";
-			echo '    <type>' . esc_html( $feed['type'] ) . "</type>\n";
-			echo '    <lastmod>' . esc_html( $feed['lastmod'] ) . "</lastmod>\n";
-			echo "  </feed>\n";
-		}
-		echo '</schemamap>' . "\n";
+		echo $xml; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- XML; render_schema_map() escapes every value with esc_xml().
 		exit;
 	}
 
