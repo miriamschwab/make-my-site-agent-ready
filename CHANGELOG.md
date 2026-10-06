@@ -2,6 +2,10 @@
 
 All notable changes to Make My Site Agent-Ready.
 
+## 1.61.1 — 2026-10-06
+
+- Fixed: the NLWeb `/ask` endpoint now understands NLWeb protocol v0.54, the format NLWeb's own server uses, where the question is sent as `{"query": {"text": "..."}}`. Those requests got a "missing query" error before. They now get a v0.54 answer: an `Answer` with the matching pages as schema.org objects, a `Failure` for errors, and v0.54-style events when they ask for streaming. Requests that send `query` as text keep getting the same response as before. `/openapi.json` now documents both request formats, the question parameter, and that `/ask` can answer as an event stream.
+
 ## 1.61.0 — 2026-10-06
 
 - New: llms.txt stays under 30,000 characters. When the root index would be longer, sections that already have their own scoped index (like `/media/llms.txt`) are shortened to one line linking to that index, largest first, until it fits. Nothing is dropped. The `mmsar_llms_txt_budget` filter changes the limit, or turns it off with 0.

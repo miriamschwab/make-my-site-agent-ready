@@ -49,6 +49,122 @@ class MMSAR_NLWeb {
 		add_action( 'template_redirect', array( __CLASS__, 'serve' ) );
 		add_filter( 'robots_txt', array( __CLASS__, 'add_schemamap_directive' ), PHP_INT_MAX );
 		add_action( 'init', array( __CLASS__, 'register_ask_endpoint' ), 20 );
+		add_filter( 'mmsar_openapi_document', array( __CLASS__, 'describe_ask_in_openapi' ) );
+	}
+
+	/**
+	 * Describes /ask in the OpenAPI document in more detail than its registry entry can carry.
+	 *
+	 * The registry records a path, methods and one media type, so the generated operation said
+	 * nothing about the question parameter, the two request shapes, or that the endpoint can answer
+	 * as an event stream. A checker reading the spec concluded /ask could not stream.
+	 *
+	 * @param array $document The OpenAPI document.
+	 * @return array The document, with /ask's operations filled in where it lists them.
+	 */
+	public static function describe_ask_in_openapi( $document ) {
+		$path = (string) wp_parse_url( self::ask_url(), PHP_URL_PATH );
+		if ( ! is_array( $document ) || empty( $document['paths'][ $path ] ) || ! is_array( $document['paths'][ $path ] ) ) {
+			return $document;
+		}
+
+		$ok = array(
+			'description' => 'Ranked pages from this site. A v0.54 request gets a v0.54 `Answer` (`_meta` and `results`); any other request gets `query_id`, `query`, `results` and `_meta`.',
+			'content'     => array(
+				'application/json'  => array( 'schema' => array( 'type' => 'object' ) ),
+				'text/event-stream' => array(
+					'schema' => array(
+						'type'        => 'string',
+						'description' => 'Server-sent events, sent when the request asks for streaming. A v0.54 request gets unnamed `data:` events: `{"_meta": ...}` first, then one `{"results": [...]}` per page. Any other request gets `start`, `result` and `complete` events.',
+					),
+				),
+			),
+		);
+
+		foreach ( $document['paths'][ $path ] as $method => $operation ) {
+			if ( ! is_array( $operation ) ) {
+				continue;
+			}
+			$operation['responses']['200'] = $ok;
+			if ( 'get' === $method ) {
+				$operation['parameters'] = array(
+					array(
+						'name'        => 'query',
+						'in'          => 'query',
+						'required'    => true,
+						'description' => 'The question, in plain language. `q` and `question` are accepted too.',
+						'schema'      => array( 'type' => 'string' ),
+					),
+					array(
+						'name'        => 'streaming',
+						'in'          => 'query',
+						'required'    => false,
+						'description' => 'Set to `true` for server-sent events instead of one JSON response.',
+						'schema'      => array( 'type' => 'boolean' ),
+					),
+				);
+			}
+			if ( 'post' === $method ) {
+				$operation['requestBody'] = array(
+					'required' => true,
+					'content'  => array(
+						'application/json' => array(
+							'schema' => array(
+								'oneOf' => array(
+									array(
+										'title'      => 'NLWeb v0.54 request',
+										'type'       => 'object',
+										'required'   => array( 'query' ),
+										'properties' => array(
+											'query'  => array(
+												'type'     => 'object',
+												'required' => array( 'text' ),
+												'properties' => array(
+													'text' => array(
+														'type' => 'string',
+														'description' => 'The question.',
+													),
+												),
+											),
+											'prefer' => array(
+												'type' => 'object',
+												'properties' => array(
+													'streaming' => array( 'type' => 'boolean' ),
+												),
+											),
+											'meta'   => array(
+												'type' => 'object',
+												'properties' => array(
+													'api_version' => array(
+														'type'    => 'string',
+														'example' => '0.54',
+													),
+												),
+											),
+										),
+									),
+									array(
+										'title'      => 'Flat request',
+										'type'       => 'object',
+										'required'   => array( 'query' ),
+										'properties' => array(
+											'query'     => array(
+												'type' => 'string',
+												'description' => 'The question.',
+											),
+											'streaming' => array( 'type' => 'boolean' ),
+										),
+									),
+								),
+							),
+						),
+					),
+				);
+			}
+			$document['paths'][ $path ][ $method ] = $operation;
+		}
+
+		return $document;
 	}
 
 	/**
@@ -68,7 +184,7 @@ class MMSAR_NLWeb {
 				'id'          => 'nlweb-ask',
 				'title'       => 'Ask this site (NLWeb)',
 				'href'        => self::ask_url(),
-				'description' => 'Search this site with a question in plain language. Send `query` as a query-string parameter, a form field or a JSON body field. Returns a ranked list of pages to read, not a generated answer.',
+				'description' => 'Search this site with a question in plain language. Send `query` as a query-string parameter, a form field or a JSON body field; NLWeb v0.54 requests (`{"query": {"text": ...}}`) get a v0.54 response. Add `prefer.streaming`, `?streaming=true` or `Accept: text/event-stream` for server-sent events. Returns a ranked list of pages to read, not a generated answer.',
 				'type'        => 'application/json',
 				'methods'     => array( 'GET', 'POST' ),
 				'auth'        => 'none',
@@ -166,6 +282,10 @@ class MMSAR_NLWeb {
 		$query     = self::read_query();
 		$streaming = self::wants_streaming();
 
+		if ( self::is_v054() ) {
+			self::serve_ask_v054( $query, $streaming );
+		}
+
 		if ( '' === $query ) {
 			header( 'Content-Type: application/json; charset=UTF-8' );
 			header( 'Access-Control-Allow-Origin: *' );
@@ -203,6 +323,112 @@ class MMSAR_NLWeb {
 			JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE
 		);
 		exit;
+	}
+
+	/**
+	 * Answer a request in NLWeb protocol v0.54's shape. Does not return.
+	 *
+	 * Mirrors NLWeb_Core's reference server: a JSON `Answer` is `{_meta, results}`, an error is a
+	 * `Failure` with `{_meta, error: {code, message}}`, and a stream sends `{_meta}` first and then
+	 * `{results}` objects as unnamed SSE `data:` events. Each result is the page's schema.org object
+	 * with `grounding.source_urls`, plus this plugin's `score`, `site` and `markdown_url`.
+	 *
+	 * @param string $query     The question, or '' when none was sent.
+	 * @param bool   $streaming Whether the caller asked for a stream.
+	 * @return void
+	 */
+	private static function serve_ask_v054( $query, $streaming ) {
+		header( 'Access-Control-Allow-Origin: *' );
+		header( 'Cache-Control: private, no-store, max-age=0' );
+
+		if ( '' === $query ) {
+			$meta  = self::meta_v054( 'Failure' );
+			$error = array(
+				'code'    => 'INVALID_REQUEST',
+				'message' => 'Provide a question in `query.text`.',
+			);
+			if ( $streaming ) {
+				self::start_stream( 400 );
+				self::send_data( array( '_meta' => $meta ) );
+				self::send_data( array( 'error' => $error ) );
+				exit;
+			}
+			header( 'Content-Type: application/json; charset=UTF-8' );
+			status_header( 400 );
+			echo wp_json_encode(
+				array(
+					'_meta' => $meta,
+					'error' => $error,
+				),
+				JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES
+			);
+			exit;
+		}
+
+		$results = array_map( array( __CLASS__, 'result_v054' ), self::search( $query ) );
+		MMSAR_Agent_Log::record( 'nlweb /ask' );
+		$meta = self::meta_v054( 'Answer', $query );
+
+		if ( $streaming ) {
+			self::start_stream( 200 );
+			self::send_data( array( '_meta' => $meta ) );
+			foreach ( $results as $result ) {
+				self::send_data( array( 'results' => array( $result ) ) );
+			}
+			exit;
+		}
+
+		header( 'Content-Type: application/json; charset=UTF-8' );
+		status_header( 200 );
+		echo wp_json_encode(
+			array(
+				'_meta'   => $meta,
+				'results' => $results,
+			),
+			JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE
+		);
+		exit;
+	}
+
+	/**
+	 * The v0.54 `_meta` block.
+	 *
+	 * @param string $response_type `Answer` or `Failure`.
+	 * @param string $query         The question, for the request id. '' on a failure.
+	 * @return array Meta block.
+	 */
+	private static function meta_v054( $response_type, $query = '' ) {
+		$meta = array(
+			'response_type' => $response_type,
+			'version'       => '0.54',
+		);
+		if ( 'Answer' === $response_type ) {
+			$meta['response_format'] = 'conv_search';
+			$meta['request_id']      = self::query_id( $query );
+		}
+		$meta['site']         = wp_parse_url( home_url( '/' ), PHP_URL_HOST );
+		$meta['generated_by'] = 'make-my-site-agent-ready/' . MMSAR_VERSION;
+		if ( 'Answer' === $response_type ) {
+			$meta['note'] = 'Retrieval only. These are ranked pages from this site, not a generated answer — fetch the URLs to read them.';
+		}
+		return $meta;
+	}
+
+	/**
+	 * One result in v0.54's shape: the schema.org object, grounded in its own URL.
+	 *
+	 * @param array $result A result from search().
+	 * @return array v0.54 result object.
+	 */
+	public static function result_v054( $result ) {
+		$object              = $result['schema_object'];
+		$object['grounding'] = array( 'source_urls' => array( $result['url'] ) );
+		$object['score']     = $result['score'];
+		$object['site']      = $result['site'];
+		if ( ! empty( $result['markdown_url'] ) ) {
+			$object['markdown_url'] = $result['markdown_url'];
+		}
+		return $object;
 	}
 
 	/**
@@ -254,13 +480,21 @@ class MMSAR_NLWeb {
 		}
 		// phpcs:enable
 
-		$raw = file_get_contents( 'php://input' );
-		if ( ! $raw ) {
-			return '';
-		}
-		$body = json_decode( $raw, true );
-		if ( ! is_array( $body ) ) {
-			return '';
+		return self::query_from_body( self::json_body() );
+	}
+
+	/**
+	 * The question in a decoded JSON body.
+	 *
+	 * @param array $body Decoded body.
+	 * @return string The question, or ''.
+	 */
+	public static function query_from_body( $body ) {
+		// NLWeb protocol v0.54 nests the question: `{"query": {"text": "..."}}`.
+		if ( isset( $body['query'] ) && is_array( $body['query'] ) ) {
+			return isset( $body['query']['text'] ) && is_string( $body['query']['text'] )
+				? trim( sanitize_text_field( $body['query']['text'] ) )
+				: '';
 		}
 		foreach ( array( 'query', 'q', 'question' ) as $key ) {
 			if ( ! empty( $body[ $key ] ) && is_string( $body[ $key ] ) ) {
@@ -268,6 +502,49 @@ class MMSAR_NLWeb {
 			}
 		}
 		return '';
+	}
+
+	/**
+	 * The request's JSON body, decoded once.
+	 *
+	 * @return array The body, or an empty array when there is none or it is not a JSON object.
+	 */
+	private static function json_body() {
+		static $body = null;
+		if ( null === $body ) {
+			$raw  = file_get_contents( 'php://input' );
+			$body = $raw ? json_decode( $raw, true ) : null;
+			$body = is_array( $body ) ? $body : array();
+		}
+		return $body;
+	}
+
+	/**
+	 * Whether the request uses NLWeb protocol v0.54, and so expects a v0.54 response.
+	 *
+	 * Protocol v0.54 (NLWeb_Core, 2025) moved the request to nested `query` / `context` / `prefer` / `meta`
+	 * sections and the response to typed `Answer` / `Failure` envelopes. Its reference server rejects
+	 * the older flat request, so a v0.54 client will not understand the older response either. The
+	 * older shape is kept for every other caller, because changing it would break clients that
+	 * already work.
+	 *
+	 * @return bool
+	 */
+	private static function is_v054() {
+		return self::is_v054_body( self::json_body() );
+	}
+
+	/**
+	 * Whether a decoded JSON body is an NLWeb v0.54 request.
+	 *
+	 * @param array $body Decoded body.
+	 * @return bool
+	 */
+	public static function is_v054_body( $body ) {
+		if ( isset( $body['query'] ) && is_array( $body['query'] ) ) {
+			return true;
+		}
+		return isset( $body['meta'] ) && is_array( $body['meta'] ) && ( isset( $body['meta']['api_version'] ) || isset( $body['meta']['version'] ) );
 	}
 
 	/**
@@ -292,19 +569,11 @@ class MMSAR_NLWeb {
 			return true;
 		}
 
-		$raw = file_get_contents( 'php://input' );
-		if ( $raw ) {
-			$body = json_decode( $raw, true );
-			if ( is_array( $body ) ) {
-				if ( ! empty( $body['streaming'] ) ) {
-					return true;
-				}
-				if ( isset( $body['prefer'] ) && is_array( $body['prefer'] ) && ! empty( $body['prefer']['streaming'] ) ) {
-					return true;
-				}
-			}
+		$body = self::json_body();
+		if ( ! empty( $body['streaming'] ) ) {
+			return true;
 		}
-		return false;
+		return isset( $body['prefer'] ) && is_array( $body['prefer'] ) && ! empty( $body['prefer']['streaming'] );
 	}
 
 	/**
@@ -317,14 +586,7 @@ class MMSAR_NLWeb {
 	 * @return void
 	 */
 	private static function stream( $query, $results ) {
-		header( 'Content-Type: text/event-stream; charset=UTF-8' );
-		header( 'Cache-Control: no-cache, no-store, max-age=0' );
-		header( 'Connection: keep-alive' );
-		// Nginx buffers event streams by default, which turns an SSE response into one delivery at
-		// the end — technically the same bytes, but it defeats the point of streaming.
-		header( 'X-Accel-Buffering: no' );
-		header( 'Access-Control-Allow-Origin: *' );
-		status_header( 200 );
+		self::start_stream( 200 );
 
 		self::send_event(
 			'start',
@@ -346,6 +608,37 @@ class MMSAR_NLWeb {
 			)
 		);
 		exit;
+	}
+
+	/**
+	 * Send the headers that open an event stream.
+	 *
+	 * @param int $status HTTP status.
+	 * @return void
+	 */
+	private static function start_stream( $status ) {
+		header( 'Content-Type: text/event-stream; charset=UTF-8' );
+		header( 'Cache-Control: no-cache, no-store, max-age=0' );
+		header( 'Connection: keep-alive' );
+		// Nginx buffers event streams by default, which turns an SSE response into one delivery at
+		// the end — technically the same bytes, but it defeats the point of streaming.
+		header( 'X-Accel-Buffering: no' );
+		header( 'Access-Control-Allow-Origin: *' );
+		status_header( $status );
+	}
+
+	/**
+	 * Write one unnamed SSE event, v0.54's form, and push it out.
+	 *
+	 * @param array $data Payload.
+	 * @return void
+	 */
+	private static function send_data( $data ) {
+		echo 'data: ' . wp_json_encode( $data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE ) . "\n\n";
+		if ( ob_get_level() > 0 ) {
+			@ob_flush(); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- Harmless when no buffer is active; the alternative is a fatal on some SAPIs.
+		}
+		flush();
 	}
 
 	/**

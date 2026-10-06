@@ -4,7 +4,7 @@ Tags: markdown, llm, ai, llms-txt, agents
 Requires at least: 6.2
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.61.0
+Stable tag: 1.61.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -33,7 +33,7 @@ Every feature below can be switched off individually under Settings > Agent-Read
 * **security.txt** — Serves `/.well-known/security.txt` (RFC 9116). Enter your security contact as a full URL, a path like `/contact`, or an email address, and the plugin formats it correctly
 * **api-catalog** — Serves `/.well-known/api-catalog` (RFC 9727), a machine-readable index linking llms.txt, llms-full.txt, security.txt, the Agent Skills index, openapi.json, the MCP manifest, webmcp.json, sitemap, and feed, each only while it is served
 * **Agent Skills discovery** — Serves `/.well-known/agent-skills/index.json` plus a bundled skill teaching agents how to use this plugin's markdown endpoints
-* **NLWeb `/ask` endpoint** — Optional (off by default). Answers questions about the site in NLWeb's shape, retrieval only. Ships with a Schema Map at `/schema-map.xml` in NLWeb's Schema Feeds format, listing your RSS feed, plus a `Schemamap:` robots.txt directive. When Yoast SEO's schema aggregation endpoint is on, robots.txt points to Yoast's map too. Google Search Console reports the `Schemamap:` line as "Syntax not understood", so a checkbox can switch the robots.txt lines off
+* **NLWeb `/ask` endpoint** — Optional (off by default). Answers questions about the site in NLWeb's shape, retrieval only, including NLWeb protocol v0.54 requests, and can stream its results as server-sent events. Ships with a Schema Map at `/schema-map.xml` in NLWeb's Schema Feeds format, listing your RSS feed, plus a `Schemamap:` robots.txt directive. When Yoast SEO's schema aggregation endpoint is on, robots.txt points to Yoast's map too. Google Search Console reports the `Schemamap:` line as "Syntax not understood", so a checkbox can switch the robots.txt lines off
 * **MCP Apps UI** — Experimental, off by default. Lets an MCP client render search/list results as a card list instead of plain text
 * **Agent-recoverable 404s** — A 404 adds Link headers and a short Markdown list pointing at the sitemap, llms.txt and endpoint catalog, instead of leaving an agent with nothing but a dead end. Looks identical to visitors
 * **Link response headers** — Every front-end response carries `Link` headers (RFC 8288) pointing to whichever of the resources above are switched on; singular posts/pages add one more pointing to their markdown alternate — so agents that only read headers, not HTML, can still find these resources
@@ -234,6 +234,9 @@ Each token is checked when you save: one for another site, another trial, or pas
 They are a floor. Many AI apps open links without telling the site where the visitor came from, and only ChatGPT reliably tags its links with `utm_source`. Those visits look like direct visits and cannot be counted. Pages already in your cache pick up the counting script when the cache next refreshes, and a security plugin that blocks the REST API for visitors stops the count entirely.
 
 == Changelog ==
+
+= 1.61.1 - 2026-10-06 =
+* Fixed: the NLWeb `/ask` endpoint now understands NLWeb protocol v0.54, the format NLWeb's own server uses, where the question is sent as `{"query": {"text": "..."}}`. Those requests got a "missing query" error before. They now get a v0.54 answer: an `Answer` with the matching pages as schema.org objects, a `Failure` for errors, and v0.54-style events when they ask for streaming. Requests that send `query` as text keep getting the same response as before. `/openapi.json` now documents both request formats, the question parameter, and that `/ask` can answer as an event stream.
 
 = 1.61.0 - 2026-10-06 =
 * New: llms.txt stays under 30,000 characters. When the root index would be longer, sections that already have their own scoped index (like `/media/llms.txt`) are shortened to one line linking to that index, largest first, until it fits. Nothing is dropped. The `mmsar_llms_txt_budget` filter changes the limit, or turns it off with 0.
