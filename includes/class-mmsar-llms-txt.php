@@ -225,16 +225,21 @@ class MMSAR_LLMs_Txt {
 		$posts        = self::get_posts_by_type( 'post', $post_types );
 		$custom_posts = self::get_custom_type_posts( $post_types );
 
+		// Each content section is built as a block so the size budget below can shorten whole
+		// sections. A block's `scoped` is the index URL that lists the same entries, when one exists.
+		$scoped_urls = array();
+		foreach ( self::sections() as $slug => $section ) {
+			$scoped_urls[ $section['post_type'] ] = home_url( '/' . trim( (string) $slug, '/' ) . '/llms.txt' );
+		}
+		$blocks = array();
+
 		if ( ! empty( $pages ) ) {
-			$lines[] = '';
-			$lines[] = '## Pages';
-			foreach ( $pages as $page ) {
-				$lines[] = self::format_entry( $page );
-			}
+			$blocks[] = self::block( 'Pages', $pages, isset( $scoped_urls['page'] ) ? $scoped_urls['page'] : '' );
 		}
 
 		if ( ! empty( $posts ) ) {
-			$categories = get_categories( array( 'hide_empty' => true ) );
+			$categories  = get_categories( array( 'hide_empty' => true ) );
+			$posts_index = isset( $scoped_urls['post'] ) ? $scoped_urls['post'] : '';
 
 			if ( ! empty( $categories ) ) {
 				foreach ( $categories as $cat ) {
@@ -242,32 +247,132 @@ class MMSAR_LLMs_Txt {
 					if ( empty( $cat_posts ) ) {
 						continue;
 					}
-					$lines[] = '';
-					$lines[] = '## ' . self::decode( $cat->name );
-					foreach ( $cat_posts as $p ) {
-						$lines[] = self::format_entry( $p );
-					}
+					$blocks[] = self::block( self::decode( $cat->name ), $cat_posts, $posts_index );
 				}
 			} else {
-				$lines[] = '';
-				$lines[] = '## Posts';
-				foreach ( $posts as $p ) {
-					$lines[] = self::format_entry( $p );
-				}
+				$blocks[] = self::block( 'Posts', $posts, $posts_index );
 			}
 		}
 
 		foreach ( $custom_posts as $type_name => $type_posts ) {
 			$type_obj = get_post_type_object( $type_name );
 			$label    = $type_obj ? self::decode( $type_obj->labels->name ) : $type_name;
-			$lines[]  = '';
-			$lines[]  = '## ' . $label;
-			foreach ( $type_posts as $p ) {
-				$lines[] = self::format_entry( $p );
+			$blocks[] = self::block( $label, $type_posts, isset( $scoped_urls[ $type_name ] ) ? $scoped_urls[ $type_name ] : '' );
+		}
+
+		// The endpoint registry is appended after the cache (see serve_llms_txt()), but it is part of
+		// what an agent receives, so it counts against the budget.
+		$fixed  = strlen( implode( "\n", $lines ) . "\n" ) + strlen( MMSAR_Registry::llms_txt_section() );
+		$blocks = self::fit_to_budget( $blocks, $fixed );
+
+		foreach ( $blocks as $block ) {
+			$lines[] = '';
+			foreach ( $block['collapsed'] ? $block['short'] : $block['lines'] as $line ) {
+				$lines[] = $line;
 			}
 		}
 
 		return implode( "\n", $lines ) . "\n";
+	}
+
+	/**
+	 * Size budget for the root llms.txt, in bytes.
+	 *
+	 * The llms.txt proposal does not set a limit, but agent-readiness checkers do (30,000 characters
+	 * is the common one), and an agent that loads the index into its context pays for every line.
+	 *
+	 * @return int Budget in bytes. 0 or less turns the budget off.
+	 */
+	public static function budget() {
+		/**
+		 * Filters the root llms.txt size budget.
+		 *
+		 * When the index would be larger, sections that have their own scoped llms.txt are shortened
+		 * to a single line pointing at that index, largest first, until it fits. Return 0 to always
+		 * list every entry.
+		 *
+		 * @param int $budget Budget in bytes. Default 30000.
+		 */
+		return (int) apply_filters( 'mmsar_llms_txt_budget', 30000 );
+	}
+
+	/**
+	 * One content section of the root index, in full and in its shortened form.
+	 *
+	 * @param string    $label  Section heading.
+	 * @param WP_Post[] $posts  Entries.
+	 * @param string    $scoped URL of the scoped index listing the same entries, or ''.
+	 * @return array{lines: string[], short: string[], scoped: string, collapsed: bool, size: int}
+	 */
+	private static function block( $label, $posts, $scoped ) {
+		$lines = array( '## ' . $label );
+		foreach ( $posts as $p ) {
+			$lines[] = self::format_entry( $p );
+		}
+
+		$short = array();
+		if ( '' !== $scoped ) {
+			// Plain English like the rest of the index, which is written for agents, not translated.
+			$count = count( $posts );
+			$short = array(
+				'## ' . $label,
+				'- [' . $label . ' index](' . $scoped . '): the ' . $count . ' ' . ( 1 === $count ? 'entry in this section is' : 'entries in this section are' ) . ' listed there.',
+			);
+		}
+
+		return array(
+			'lines'     => $lines,
+			'short'     => $short,
+			'scoped'    => $scoped,
+			'collapsed' => false,
+			// Joined lines plus the blank line that precedes every section.
+			'size'      => strlen( implode( "\n", $lines ) ) + 2,
+		);
+	}
+
+	/**
+	 * Shortens sections that have their own index, largest first, until the index fits the budget.
+	 *
+	 * Only a section whose entries are all listed in a scoped llms.txt is shortened, so nothing
+	 * becomes unreachable: the short form links straight to that index. Sections without one are
+	 * never shortened, which means an index can still end up over budget, and is then served as is.
+	 *
+	 * @param array[] $blocks Blocks from block(), in display order.
+	 * @param int     $fixed  Bytes outside the content sections.
+	 * @return array[] The same blocks, with `collapsed` set on the ones shortened.
+	 */
+	private static function fit_to_budget( $blocks, $fixed ) {
+		$budget = self::budget();
+		if ( $budget <= 0 ) {
+			return $blocks;
+		}
+
+		$total = $fixed;
+		foreach ( $blocks as $block ) {
+			$total += $block['size'];
+		}
+
+		$candidates = array();
+		foreach ( $blocks as $i => $block ) {
+			if ( '' !== $block['scoped'] ) {
+				$candidates[ $i ] = $block['size'];
+			}
+		}
+		arsort( $candidates );
+
+		foreach ( array_keys( $candidates ) as $i ) {
+			if ( $total <= $budget ) {
+				break;
+			}
+			$saving = $blocks[ $i ]['size'] - ( strlen( implode( "\n", $blocks[ $i ]['short'] ) ) + 2 );
+			if ( $saving <= 0 ) {
+				continue;
+			}
+			$blocks[ $i ]['collapsed'] = true;
+			$total                    -= $saving;
+		}
+
+		return $blocks;
 	}
 
 	/**

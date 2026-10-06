@@ -2,6 +2,11 @@
 
 All notable changes to Make My Site Agent-Ready.
 
+## 1.61.0 — 2026-10-06
+
+- New: llms.txt stays under 30,000 characters. When the root index would be longer, sections that already have their own scoped index (like `/media/llms.txt`) are shortened to one line linking to that index, largest first, until it fits. Nothing is dropped. The `mmsar_llms_txt_budget` filter changes the limit, or turns it off with 0.
+- Fixed: Markdown versions of posts and pages now open with the title as a heading (`# Title`). WordPress renders the title outside the post content, so the body started straight in on the first paragraph, and readers that skip frontmatter saw a document with no title. Stored versions update when a post is saved, or all at once with Regenerate All. llms-full.txt, which already prints each title, does not repeat it.
+
 ## 1.60.0 — 2026-10-05
 
 - Fixed: the Schema Map at `/schema-map.xml` now follows NLWeb's Schema Feeds spec. It used a format of its own that a reader following the spec could not read, and it listed `llms-full.txt` and `/ask`, which are not schema feeds. It now lists your RSS feed, with its type written both as the spec's `sf:contentType` element and as the `contentType` attribute NLWeb's own crawler reads, so either can use it. llms.txt already points agents to llms-full.txt, and `/ask` is now listed with your other endpoints in llms.txt and the API catalog. Before this, the Schema Map was the only place that pointed to it.

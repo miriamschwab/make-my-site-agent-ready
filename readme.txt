@@ -4,7 +4,7 @@ Tags: markdown, llm, ai, llms-txt, agents
 Requires at least: 6.2
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.60.0
+Stable tag: 1.61.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -19,10 +19,10 @@ Every feature below can be switched off individually under Settings > Agent-Read
 **Features:**
 
 * **Individual feature toggles** — Turn off any output the plugin publishes. A disabled feature registers nothing at all — no rewrite rule, no filter, no header — so the site behaves as if that part of the plugin did not exist.
-* **`.md` URLs** — Append `.md` to any post or page URL to get a clean markdown version
+* **`.md` URLs** — Append `.md` to any post or page URL to get a clean markdown version, opening with the title as a heading
 * **Markdown from the normal page URL** — Optional (off by default). Answers a request for an ordinary page with its markdown when the request's `Accept` header names markdown at least as highly as HTML, which is how AI clients ask. Browsers never name markdown, so they always get the page. Comes with a self-check that requests one of your own pages as an agent and then as a browser, reports which version came back and what cache headers survived, and switches the feature off by itself if a browser-style request is ever answered with markdown. Leave it off if your site is behind a CDN that ignores `Vary: Accept` — Cloudflare does
 * **`?mode=agent`** — Appended to any URL, returns that page as Markdown; on the homepage, a summary of every machine-readable surface the site has
-* **llms.txt** — Auto-generated site index at `/llms.txt` listing all available markdown content, per v2 of the llms.txt proposal (scoped indexes per section, discoverable by link relation)
+* **llms.txt** — Auto-generated site index at `/llms.txt` listing all available markdown content, per v2 of the llms.txt proposal (scoped indexes per section, discoverable by link relation). Kept under 30,000 characters: on a large site, the biggest sections that have their own index are shortened to a link to it
 * **llms-full.txt** — Full site content in one file at `/llms-full.txt` for LLMs that want everything
 * **OKF bundle** — Serves `/okf/`, the same content as an Open Knowledge Format v0.2 tree: a root index, one index per post type, and one typed Markdown "concept" file per post/page (front matter: type, title, description, resource, tags, modified), plus a change log at `/okf/log.md`. Reuses the same generated markdown as the `.md` URLs
 * **OpenAPI specification** — Serves `/openapi.json`, an OpenAPI 3.1 description of every public endpoint this plugin serves, generated from the site's actual registered routes
@@ -59,7 +59,7 @@ Every feature below can be switched off individually under Settings > Agent-Read
 
 1. When you save a post, the plugin converts it to markdown and stores it in post meta
 2. When someone requests `your-post.md`, the pre-generated markdown is served instantly
-3. The `/llms.txt` file lists all available markdown URLs organized by category
+3. The `/llms.txt` file lists all available markdown URLs organized by category, pointing to a section's own index when listing everything would make it too long
 4. The `/llms-full.txt` file concatenates the full content of all posts and pages
 5. The OKF bundle at `/okf/` wraps the same markdown in typed front matter, addressable one concept at a time
 
@@ -96,7 +96,7 @@ Append `.md` to any post or page URL. For example: `example.com/my-post.md`. The
 
 = What is llms.txt? =
 
-It's an emerging convention (similar to robots.txt) that helps AI models discover available content on your site. The file at `/llms.txt` lists all your markdown-enabled content.
+It's an emerging convention (similar to robots.txt) that helps AI models discover available content on your site. The file at `/llms.txt` lists all your markdown-enabled content. If listing everything would take it past 30,000 characters, a common limit in agent-readiness checks, the biggest sections that have their own index (such as `/media/llms.txt`) are shortened to one line linking there, so every page is still one step away. Change the limit with the `mmsar_llms_txt_budget` filter, or return 0 to always list everything.
 
 = What is llms-full.txt? =
 
@@ -234,6 +234,10 @@ Each token is checked when you save: one for another site, another trial, or pas
 They are a floor. Many AI apps open links without telling the site where the visitor came from, and only ChatGPT reliably tags its links with `utm_source`. Those visits look like direct visits and cannot be counted. Pages already in your cache pick up the counting script when the cache next refreshes, and a security plugin that blocks the REST API for visitors stops the count entirely.
 
 == Changelog ==
+
+= 1.61.0 - 2026-10-06 =
+* New: llms.txt stays under 30,000 characters. When the root index would be longer, sections that already have their own scoped index (like `/media/llms.txt`) are shortened to one line linking to that index, largest first, until it fits. Nothing is dropped. The `mmsar_llms_txt_budget` filter changes the limit, or turns it off with 0.
+* Fixed: Markdown versions of posts and pages now open with the title as a heading (`# Title`). WordPress renders the title outside the post content, so the body started straight in on the first paragraph, and readers that skip frontmatter saw a document with no title. Stored versions update when a post is saved, or all at once with Regenerate All. llms-full.txt, which already prints each title, does not repeat it.
 
 = 1.60.0 - 2026-10-05 =
 * Fixed: the Schema Map at `/schema-map.xml` now follows NLWeb's Schema Feeds spec. It used a format of its own that a reader following the spec could not read, and it listed `llms-full.txt` and `/ask`, which are not schema feeds. It now lists your RSS feed, with its type written both as the spec's `sf:contentType` element and as the `contentType` attribute NLWeb's own crawler reads, so either can use it. llms.txt already points agents to llms-full.txt, and `/ask` is now listed with your other endpoints in llms.txt and the API catalog. Before this, the Schema Map was the only place that pointed to it.

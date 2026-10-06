@@ -37,9 +37,63 @@ class MMSAR_Converter {
 
 		$frontmatter = self::build_frontmatter( $post );
 		$content     = self::get_rendered_content( $post );
-		$markdown    = self::html_to_markdown( $content );
+		$markdown    = self::with_title_heading( self::html_to_markdown( $content ), $post );
 
 		return $frontmatter . $markdown;
+	}
+
+	/**
+	 * Opens the body with the post title as a level-one heading, unless it already has one.
+	 *
+	 * WordPress renders the title from the theme, outside post_content, so a converted body starts
+	 * mid-thought at its first paragraph. The title is in the frontmatter, but a reader that skips
+	 * frontmatter (most Markdown renderers, and agents that treat it as metadata) sees a document
+	 * with no title, and checkers that expect a Markdown file to open with `# ` flag it.
+	 *
+	 * @param string  $markdown Converted body.
+	 * @param WP_Post $post     The post.
+	 * @return string Body, with the heading when one was missing.
+	 */
+	private static function with_title_heading( $markdown, $post ) {
+		if ( '' === trim( $markdown ) || 0 === strpos( ltrim( $markdown ), '# ' ) ) {
+			return $markdown;
+		}
+		$title = self::title_heading( $post );
+		if ( '' === $title ) {
+			return $markdown;
+		}
+		return $title . "\n\n" . $markdown;
+	}
+
+	/**
+	 * The level-one heading the converter puts at the top of a post's body.
+	 *
+	 * @param WP_Post $post The post.
+	 * @return string `# Title`, or '' when the post has no title.
+	 */
+	public static function title_heading( $post ) {
+		$title = trim( html_entity_decode( wp_strip_all_tags( get_the_title( $post ) ), ENT_QUOTES | ENT_HTML5, 'UTF-8' ) );
+		return '' === $title ? '' : '# ' . $title;
+	}
+
+	/**
+	 * Removes the title heading from a stored document's body, for wrappers that print their own.
+	 *
+	 * Only the heading this converter adds is removed: the first line after the frontmatter, and only
+	 * when it is exactly that post's title heading. A heading the author wrote is left alone.
+	 *
+	 * @param string  $markdown Stored document, frontmatter included.
+	 * @param WP_Post $post     The post it belongs to.
+	 * @return string The document without its title heading.
+	 */
+	public static function without_title_heading( $markdown, $post ) {
+		$heading = self::title_heading( $post );
+		if ( '' === $heading ) {
+			return $markdown;
+		}
+		$pattern = '/^(---\n.*?\n---\n)' . preg_quote( $heading, '/' ) . '\n\n?/s';
+		$result  = preg_replace( $pattern, '$1', $markdown, 1 );
+		return is_string( $result ) ? $result : $markdown;
 	}
 
 	/**

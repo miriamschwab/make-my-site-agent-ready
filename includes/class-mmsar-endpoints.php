@@ -177,7 +177,9 @@ class MMSAR_Endpoints {
 			$lines[] = '';
 			$lines[] = 'URL: ' . $url;
 			$lines[] = '';
-			$lines[] = trim( $markdown );
+			// The entry already opens with the title, so the one the converter puts in the body
+			// would print it a second time a few lines down.
+			$lines[] = trim( MMSAR_Converter::without_title_heading( $markdown, $post ) );
 			$lines[] = '';
 		}
 

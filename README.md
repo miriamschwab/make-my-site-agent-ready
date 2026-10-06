@@ -13,11 +13,11 @@ Eight existing plugins were analyzed before building the original `.md`/llms.txt
 Every feature below can be switched off individually under **Settings > Agent-Ready**. Most default on — publishing a new file or header that changes no existing response is low-risk enough to ship active. A handful default off instead, each for its own stated reason: content negotiation and the footer llms.txt link change something visible to a human visitor; the MCP server, NLWeb and MCP Apps UI run a query per request rather than serving a static file; the agent log writes to a database table nobody asked for until they opt in; IndexNow is the only feature that sends anything to an outside service; and counting AI referrals adds the plugin's only visitor-side script. The settings page states the reason on each toggle. A disabled feature registers nothing at all — no rewrite rule, no filter, no `Link` header — so the site behaves as if that part of the plugin did not exist.
 
 ### Content access
-- **`.md` URL suffix** — any post or page is available at its URL with `.md` appended (e.g., `your-site.com/my-post.md`)
+- **`.md` URL suffix** — any post or page is available at its URL with `.md` appended (e.g., `your-site.com/my-post.md`). The body opens with the title as a level-one heading, since WordPress renders the title outside the post content; a body that already starts with one is left alone
 - **Front page** at `/index.md`
 - **YAML frontmatter** — title, date, modified date, author, URL, markdown URL, content type, excerpt, meta description (from Yoast SEO), categories, and tags. The excerpt and the description can each be switched off at Settings > Agent-Ready. Themes and plugins can add fields of their own with the [`mmsar_frontmatter` filter](#adding-frontmatter-fields)
 - **Pre-generated on save** — markdown is stored in post meta, so `.md` requests serve instantly with zero processing
-- **`/llms.txt` site index** (v2 of the [llms.txt](https://llmstxt.org/) proposal) — lists all available markdown URLs organized by category, cached with 24-hour transient. Large sites can also publish a scoped index per section (e.g. `/writing/llms.txt`) — each page advertises whichever index actually covers it via `rel="describedby"`, header or `<link>`, rather than always pointing at the site-wide one.
+- **`/llms.txt` site index** (v2 of the [llms.txt](https://llmstxt.org/) proposal) — lists all available markdown URLs organized by category, cached with 24-hour transient. Large sites can also publish a scoped index per section (e.g. `/writing/llms.txt`) — each page advertises whichever index actually covers it via `rel="describedby"`, header or `<link>`, rather than always pointing at the site-wide one. The root index has a 30,000-byte budget (`mmsar_llms_txt_budget`, 0 turns it off): when it would be larger, sections that have a scoped index are shortened to one line linking to it, largest first, until it fits. Sections without one are never shortened.
 - **`/llms-full.txt`** — full site content concatenated as markdown in a single file, for LLMs that want everything at once
 - **OKF bundle** at `/okf/` — the same content as an [Open Knowledge Format](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md) v0.2 tree: a root index, one index per post type, and one typed Markdown "concept" file per post/page (YAML front matter: `type`, `title`, `description`, `resource`, `tags`, `modified`), plus a `log.md` change log. Lets an agent fetch and address individual pieces of the corpus rather than either scraping HTML or downloading everything in `llms-full.txt`. Reuses the same generated markdown as the `.md` URLs — nothing is converted twice.
 - **Noindex respected** — a page your SEO plugin marks noindex is left out of `llms.txt`, `llms-full.txt`, the OKF indexes, MCP search and list, and NLWeb. Its own `.md` URL keeps working, as the HTML page does: noindex means "don't list this", and password protection is the tool for "don't serve this". Read from Yoast SEO and Rank Math (only while each is active); anything else can answer through the `mmsar_post_is_noindex` filter. On by default, switchable under Markdown Endpoints. "Discourage search engines" is deliberately not read, or every staging copy would publish empty indexes
@@ -64,7 +64,7 @@ Every feature below can be switched off individually under **Settings > Agent-Re
 1. When you save a post, the plugin converts its rendered HTML to markdown using [league/html-to-markdown](https://github.com/thephpleague/html-to-markdown) and stores it in post meta
 2. A single rewrite rule catches all `.md` requests (excluding `/.well-known/`, `/auth.md` and `/okf/`, which route to their own handlers — see Architecture Notes below)
 3. The plugin resolves the request to a post, reads the pre-generated markdown from meta, and serves it with proper headers
-4. The `/llms.txt` endpoint builds a categorized index of all available markdown URLs
+4. The `/llms.txt` endpoint builds a categorized index of all available markdown URLs, shortening sections that have their own scoped index if the whole would exceed its size budget
 5. The `/llms-full.txt` endpoint concatenates the full content of all posts and pages into a single file
 6. The OKF bundle at `/okf/` wraps the same pre-generated markdown in typed front matter, one concept file per post/page, addressed at the same path its `.md` URL already uses
 7. `/.well-known/api-catalog`, `/.well-known/ai-catalog.json`, `/openapi.json`, the Agent Skills endpoints, and `Content-Signal`/`tdm-reservation` are all generated the same way — computed from live site state at request time, not hand-maintained static files
@@ -99,6 +99,7 @@ description: "A first post, written with Yoast SEO's meta description."
 categories:
   - "Uncategorized"
 ---
+# Hello World
 
 Welcome to WordPress. This is your first post. Edit or delete it, then start writing!
 ```
@@ -293,6 +294,7 @@ For the rare change the registry can't express:
 
 - `mmsar_api_catalog_linkset` — the complete RFC 9264 linkset, as a PHP array.
 - `mmsar_llms_txt_content` — the complete `llms.txt` body. Runs on every request, after the cached content is assembled.
+- `mmsar_llms_txt_budget` — the root `llms.txt` size budget in bytes (default 30000; 0 lists every entry).
 - `mmsar_agent_skills_index` — the complete Agent Skills discovery index, as a PHP array.
 
 ## Architecture notes

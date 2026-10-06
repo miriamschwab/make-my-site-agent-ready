@@ -17,6 +17,7 @@ require_once dirname( __DIR__ ) . '/includes/class-mmsar-agent-log-verify.php';
 require_once dirname( __DIR__ ) . '/includes/class-mmsar-agent-log-attribution.php';
 require_once dirname( __DIR__ ) . '/includes/class-mmsar-agent-log-signals.php';
 require_once dirname( __DIR__ ) . '/includes/class-mmsar-converter.php';
+require_once dirname( __DIR__ ) . '/includes/class-mmsar-llms-txt.php';
 require_once dirname( __DIR__ ) . '/includes/class-mmsar-noindex.php';
 require_once dirname( __DIR__ ) . '/includes/class-mmsar-indexnow.php';
 require_once dirname( __DIR__ ) . '/includes/class-mmsar-referrals.php';
