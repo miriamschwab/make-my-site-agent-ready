@@ -2,6 +2,13 @@
 
 All notable changes to Make My Site Agent-Ready.
 
+## 1.62.0 — 2026-10-08
+
+- New: seven more recognised bots, each with a category. Verified by reverse DNS: Google-GeminiNotebook and Google-NotebookLM (AI assistant), Google-Read-Aloud (other). Recognise-only: meta-webindexer (AI search), meta-externalfetcher (AI assistant), meta-externalads (other), SiteAuditBot (SEO tool), VisionHeight (scanner).
+- Google-GeminiNotebook is listed above `Gemini`, which it contains, so it is stored under its own name rather than as `Gemini`.
+- Changed: an unrecognised bot that puts its name at the end of a browser-shaped user-agent keeps the name when the log cuts it to 80 characters. Its own `(compatible; …)` comment moves to the front, verbatim. Only rows filed as a crawler are affected; browsers and scripts are stored byte-identically. Not retroactive.
+- SiteAuditBot (`bot.semrush.com`, undocumented) and VisionHeight (`scan.visionheight.com`, not yet confirmed on a full logged address) stay unverifiable.
+
 ## 1.61.1 — 2026-10-06
 
 - Fixed: the NLWeb `/ask` endpoint now understands NLWeb protocol v0.54, the format NLWeb's own server uses, where the question is sent as `{"query": {"text": "..."}}`. Those requests got a "missing query" error before. They now get a v0.54 answer: an `Answer` with the matching pages as schema.org objects, a `Failure` for errors, and v0.54-style events when they ask for streaming. Requests that send `query` as text keep getting the same response as before. `/openapi.json` now documents both request formats, the question parameter, and that `/ask` can answer as an event stream.

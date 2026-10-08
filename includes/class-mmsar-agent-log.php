@@ -105,6 +105,14 @@ class MMSAR_Agent_Log {
 		'Perplexity-User',
 		'Google-Extended',
 		'GoogleOther',
+		// Added 1.62.0. Google's user-triggered fetchers for Gemini Notebook (and its former token)
+		// sit **above** `Gemini`, not at the end with the rest of that release: `Gemini` is a
+		// substring of `Google-GeminiNotebook` and the first match in this order wins, so appending
+		// would have stored every Gemini Notebook request as `Gemini`, which has no verification
+		// method. The other ordering rule (shorter names below the longer ones containing them) is
+		// the same rule seen from the other side. Google-Read-Aloud overlaps nothing and is appended.
+		'Google-GeminiNotebook',
+		'Google-NotebookLM',
 		'Gemini',
 		'Applebot-Extended',
 		'meta-externalagent',
@@ -357,6 +365,31 @@ class MMSAR_Agent_Log {
 		// 2026-10-05. Guarded in AGENT_DISCLOSURES by its repository link, so the bare
 		// `AgentReadyScanner/1.0` form is not recognised. Not Cloudflare's AgentReadinessScanner.
 		'AgentReadyScanner',
+		// Added 1.62.0 from the agent-log-bot-watch report of 2026-10-08.
+		//
+		// Google Read Aloud, a user-triggered fetcher (formerly `google-speakr`). Verified by
+		// reverse DNS like the two Gemini Notebook names above.
+		'Google-Read-Aloud',
+		// Meta's three remaining documented crawlers
+		// (https://developers.facebook.com/docs/sharing/webmasters/web-crawlers/), all
+		// recognise-only for the reason meta-externalagent is: Meta publishes no address list and no
+		// hostname for them, and its whole AS32934 is not a crawler range. What arrives here is a
+		// Chrome-shaped user-agent with `(compatible; meta-webindexer/1.1; …)` appended, so two of
+		// the four shapes in the log were cut before their token and could be any of the three.
+		'meta-webindexer',
+		// Fetches a link a person asked Meta AI about. Meta says it may bypass robots.txt.
+		'meta-externalfetcher',
+		'meta-externalads',
+		// Semrush's Site Audit (https://www.semrush.com/bot/). Recognise-only like SemrushBot:
+		// `bot.semrush.com` forward-confirms on its addresses, but Semrush does not document it,
+		// and an undocumented convention is not a verification method (decisions log, 1.44.0).
+		'SiteAuditBot',
+		// VisionHeight's internet scanner (https://visionheight.com/scan). The user-agent is
+		// `visionheight.com/scan Mozilla/5.0 (…)` with no product token, so the domain is the name.
+		// The page documents reverse DNS under scan.visionheight.com, but both addresses in the log
+		// were stored at network precision and could not confirm it. Recognising the name is what
+		// starts keeping the address; the suffix waits for one that forward-confirms.
+		'visionheight.com',
 	);
 
 	/**
@@ -375,6 +408,8 @@ class MMSAR_Agent_Log {
 		// The matched prefix names the integration rather than the product, and the full user-agent
 		// carries a per-customer identifier that has no place in a label.
 		'amazon-Quick-on-behalf-of' => 'Amazon Quick (amazon-Quick-on-behalf-of)',
+		// No product token, only the operator's domain at the front of a browser string.
+		'visionheight.com'          => 'VisionHeight (visionheight.com)',
 	);
 
 	/**
@@ -424,6 +459,9 @@ class MMSAR_Agent_Log {
 		'Google-Extended'              => self::CRAWLER_AI_TRAINING,
 		// General-purpose crawler for Google product and research teams.
 		'GoogleOther'                  => self::CRAWLER_OTHER,
+		// Added 1.62.0. Fetches a URL a person added as a source to a Gemini Notebook.
+		'Google-GeminiNotebook'        => self::CRAWLER_AI_ASSISTANT,
+		'Google-NotebookLM'            => self::CRAWLER_AI_ASSISTANT,
 		'Gemini'                       => self::CRAWLER_AI_ASSISTANT,
 		// Also a control token, like Google-Extended.
 		'Applebot-Extended'            => self::CRAWLER_AI_TRAINING,
@@ -539,6 +577,17 @@ class MMSAR_Agent_Log {
 		'RankMath Link Checker'        => self::CRAWLER_SEO,
 		'WPMU DEV Broken Link Checker' => self::CRAWLER_SEO,
 		'AgentReadyScanner'            => self::CRAWLER_SCANNER,
+		// Added 1.62.0; categories as proposed in the 2026-10-08 bot watch.
+		// Reads a page aloud to the person who asked; not an AI product.
+		'Google-Read-Aloud'            => self::CRAWLER_OTHER,
+		// Meta says it crawls to improve Meta AI search results and to cite pages in Meta AI's
+		// answers.
+		'meta-webindexer'              => self::CRAWLER_AI_SEARCH,
+		'meta-externalfetcher'         => self::CRAWLER_AI_ASSISTANT,
+		// Advertising and business products.
+		'meta-externalads'             => self::CRAWLER_OTHER,
+		'SiteAuditBot'                 => self::CRAWLER_SEO,
+		'visionheight.com'             => self::CRAWLER_SCANNER,
 	);
 
 	/**
@@ -570,10 +619,12 @@ class MMSAR_Agent_Log {
 		'LinkupBot'         => 'linkup.so',
 		'SSI-Nutch'         => 'ssi.inc',
 		// Short tokens, guarded against accidental substrings rather than a known collision. Both
-		// domains sit inside the first 80 characters of the user-agent in either stored shape — the
-		// pre-1.45.1 cut that kept `Mozilla/5.0 ` and the current one that drops it — so rows logged
-		// before recognition still satisfy the guard. CrawlerCategoryTest asserts it for um-LN,
-		// whose user-agent is the long one.
+		// domains sit inside the first 80 characters of the user-agent in every stored shape — the
+		// pre-1.45.1 cut that kept `Mozilla/5.0 `, the current one that drops it, and the 1.62.0
+		// crawler-first one, which leaves a user-agent that already leads with its comment exactly
+		// as it was — so rows logged before recognition still satisfy the guard. CrawlerCategoryTest
+		// asserts it for um-LN, whose user-agent is the long one; BotUserAgentShapeTest asserts that
+		// the crawler-first shape leaves every guarded user-agent here unchanged.
 		'YaK'               => 'linkfluence.com',
 		'um-LN'             => 'ubermetrics-technologies.com',
 		// A generic word rather than a short token, guarded for the same reason. The domain sits
@@ -3307,7 +3358,11 @@ class MMSAR_Agent_Log {
 	 * @return string
 	 */
 	private static function agent_label() {
-		return self::label_for( self::user_agent() );
+		// Only a request detect_client_type() files as a crawler may have its self-identification
+		// moved to the front. For an unrecognised name that means it announced itself as a bot and
+		// was not a browser navigation, so a person's browser is stored exactly as before however
+		// its user-agent happens to read. See trimmed_user_agent().
+		return self::label_for( self::user_agent(), self::CLIENT_CRAWLER === self::detect_client_type() );
 	}
 
 	/**
@@ -3317,10 +3372,13 @@ class MMSAR_Agent_Log {
 	 * verdict, category, journey — is derived from, so it is worth asserting directly with real
 	 * user-agents. Same reasoning as `trimmed_user_agent()`.
 	 *
-	 * @param string $ua Raw user-agent.
+	 * @param string $ua              Raw user-agent.
+	 * @param bool   $lead_with_claim Whether the request was filed as a crawler, which lets an
+	 *                                unrecognised bot's self-identification lead the stored value.
+	 *                                See trimmed_user_agent().
 	 * @return string The recognised name (or its AGENT_LABELS label), else a trimmed user-agent.
 	 */
-	public static function label_for( $ua ) {
+	public static function label_for( $ua, $lead_with_claim = false ) {
 		$ua = (string) $ua;
 		if ( '' === $ua ) {
 			return 'unknown';
@@ -3336,7 +3394,7 @@ class MMSAR_Agent_Log {
 				return isset( self::AGENT_LABELS[ $needle ] ) ? self::AGENT_LABELS[ $needle ] : $needle;
 			}
 		}
-		return self::trimmed_user_agent( $ua );
+		return self::trimmed_user_agent( $ua, $lead_with_claim );
 	}
 
 	/**
@@ -3391,13 +3449,35 @@ class MMSAR_Agent_Log {
 	 * **Not retroactive.** Rows already written keep the old truncation; there is no un-cutting a
 	 * string.
 	 *
+	 * **A crawler's self-identification leads (1.62.0).** "Never touched" was not enough. A bot that
+	 * sends a whole browser string and appends its name, as Meta, Google's user-triggered fetchers
+	 * and Semrush's mobile audit all do, has the name cut off at character 80:
+	 *
+	 *     (Windows NT 10.0; Win64; x64) Chrome/145.0.0.0 Safari/537.36 (compatible; meta-w|ebindexer/1.1; +https://…)
+	 *
+	 * So when `$lead_with_claim` is set, and the segment carrying the claim would not otherwise fit
+	 * whole inside the cap, that segment is moved to the front, verbatim:
+	 *
+	 *     (compatible; meta-webindexer/1.1; +https://developers.facebook.com/docs/sharing/
+	 *
+	 * The segment is the first parenthesised comment carrying the claim (a `bot`/`crawler`/
+	 * `spider`/`scraper` word or a `+https://` link) that says `compatible`, else the first comment
+	 * carrying it, else the first whitespace-separated token carrying it. Nothing is rewritten
+	 * and no separator is invented: the result is the user-agent's own pieces in a different
+	 * order, so every substring test that held on the user-agent holds on it. It is still 80
+	 * characters. The caller sets the flag only for a request filed as a crawler, so a browser or
+	 * a script is stored byte-identically to before. Decisions log, *A crawler's own name leads
+	 * its stored user-agent; a person's browser is still cut where it always was*.
+	 *
 	 * Public because it is a pure string function and the only part of this path worth asserting
 	 * directly — `agent_label()` reads `$_SERVER`. Same reasoning as `anonymize_ip()`.
 	 *
-	 * @param string $ua Raw user-agent.
+	 * @param string $ua              Raw user-agent.
+	 * @param bool   $lead_with_claim Whether the request was filed as a crawler. Only then may the
+	 *                                claim be moved to the front.
 	 * @return string Label of at most 80 characters.
 	 */
-	public static function trimmed_user_agent( $ua ) {
+	public static function trimmed_user_agent( $ua, $lead_with_claim = false ) {
 		$ua = (string) $ua;
 
 		$trimmed = preg_replace(
@@ -3427,7 +3507,76 @@ class MMSAR_Agent_Log {
 			$trimmed = trim( $ua );
 		}
 
+		if ( $lead_with_claim && self::is_self_declared_bot( $ua ) ) {
+			$trimmed = self::claim_first( $trimmed );
+		}
+
 		return mb_substr( $trimmed, 0, 80 );
+	}
+
+	/**
+	 * The same user-agent with its self-identifying segment moved to the front, where the cap
+	 * would otherwise cut into it. See trimmed_user_agent().
+	 *
+	 * Unchanged when the string already fits, when no segment carries the claim, or when the
+	 * segment already ends inside the cap. The last one matters: it keeps every short bot
+	 * user-agent, and every one already leading with its comment, stored exactly as before, so a
+	 * bot's rows from either side of this change still read as one agent.
+	 *
+	 * @param string $trimmed User-agent with the boilerplate already removed.
+	 * @return string
+	 */
+	private static function claim_first( $trimmed ) {
+		if ( mb_strlen( $trimmed ) <= 80 ) {
+			return $trimmed;
+		}
+
+		// Only a browser-shaped string, which after the boilerplate is gone opens with its platform
+		// comment. One that opens with a product token is already leading with its own name —
+		// `AgentReadyScanner/0.1 (+https://github.com/elementor/…)` runs past the cap, and moving
+		// its link in front would have cut the name instead. A test caught exactly that.
+		if ( '(' !== substr( $trimmed, 0, 1 ) ) {
+			return $trimmed;
+		}
+
+		$segment = '';
+		$offset  = -1;
+		if ( preg_match_all( '~\([^()]*\)~', $trimmed, $comments, PREG_OFFSET_CAPTURE ) ) {
+			foreach ( $comments[0] as $comment ) {
+				if ( ! self::is_self_declared_bot( $comment[0] ) ) {
+					continue;
+				}
+				if ( '' === $segment ) {
+					list( $segment, $offset ) = $comment;
+				}
+				if ( 1 === preg_match( '~\bcompatible\b~i', $comment[0] ) ) {
+					list( $segment, $offset ) = $comment;
+					break;
+				}
+			}
+		}
+		if ( '' === $segment && preg_match_all( '~\S+~', $trimmed, $tokens, PREG_OFFSET_CAPTURE ) ) {
+			foreach ( $tokens[0] as $token ) {
+				if ( self::is_self_declared_bot( $token[0] ) ) {
+					list( $segment, $offset ) = $token;
+					break;
+				}
+			}
+		}
+		if ( '' === $segment ) {
+			return $trimmed;
+		}
+
+		// Offsets from preg are bytes; the cap is characters.
+		$start = mb_strlen( substr( $trimmed, 0, $offset ) );
+		if ( $start + mb_strlen( $segment ) <= 80 ) {
+			return $trimmed;
+		}
+
+		$rest = substr( $trimmed, 0, $offset ) . ' ' . substr( $trimmed, $offset + strlen( $segment ) );
+		$rest = trim( (string) preg_replace( '~\s+~', ' ', $rest ) );
+
+		return '' === $rest ? $segment : $segment . ' ' . $rest;
 	}
 
 	/**

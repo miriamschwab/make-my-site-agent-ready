@@ -414,7 +414,9 @@ Two methods, chosen per operator, because the operators are split on which they 
   third-party service and verification works on a host with no outbound HTTP. The trade-off is that
   they age: the capture date is reported alongside the verdicts, and `mmsar_agent_log_verify_ranges`
   lets you add a prefix without waiting for a release.
-- **Forward-confirmed reverse DNS** for Google, Apple, Amazon, Microsoft, Ahrefs, Babbar
+- **Forward-confirmed reverse DNS** for Google (including its user-triggered fetchers
+  Google-GeminiNotebook, Google-NotebookLM and Google-Read-Aloud, under `google.com` and
+  `googleusercontent.com` but not `googlebot.com`), Apple, Amazon, Microsoft, Ahrefs, Babbar
   (Barkrowler), Common Crawl, Huawei (PetalBot), You.com (YouBot), Yandex, Censys, LeakIX (l9scan),
   the Internet Archive (archive.org_bot), Qwant, DataForSEO, LohiSoft, Keywords Everywhere
   (PoweredByBot), Ibou (IbouBot), Baidu (Baiduspider), Cốc Cốc (coccocbot), FindFiles, Iframely and
@@ -443,13 +445,19 @@ meta-externalagent and Bytespider all have working reverse DNS on *some* address
 operators document no convention at all, so adopting one would verify those addresses and turn
 every genuine caller without the matching hostname into an accusation of forgery. Majestic says
 plainly that it cannot restrict MJ12bot to fixed addresses; Semrush says it uses no consecutive IP
-blocks. Both stay unverifiable on purpose. AgentTrustBot is the reverse case: its operator does
+blocks. Both stay unverifiable on purpose, and so does Semrush's SiteAuditBot, whose addresses
+also forward-confirm under the undocumented `bot.semrush.com` (1.62.0). Meta's meta-webindexer,
+meta-externalfetcher and meta-externalads are unverifiable for the same reason as
+meta-externalagent: Meta publishes neither a list nor a hostname, and its whole network is not a
+crawler range. AgentTrustBot is the reverse case: its operator does
 document reverse DNS, but the address it actually crawled from is on the operator's own published
 list and does not resolve under that domain, so following the documentation would have accused the
 genuine crawler. DomainStatsBot is the same case (1.50.0): all three of its addresses reverse to the
 documented `bot.domainstats.com`, but that name resolves forward to only one of them.
 Dataprovider.com documents reverse DNS under `dataproviderbot.com`, but the one full address on file
-had no reverse record at all, so it stays unverifiable until a real address confirms it (1.54.0). Amazon's search crawler is the one bundled list expected to go stale fastest: Amazon publishes it
+had no reverse record at all, so it stays unverifiable until a real address confirms it (1.54.0).
+VisionHeight documents `scan.visionheight.com`, but both addresses on file were stored as networks
+before it was recognised, so it waits for one full address to confirm it (1.62.0). Amazon's search crawler is the one bundled list expected to go stale fastest: Amazon publishes it
 as single cloud addresses, so a new one used before the plugin is updated reads as Spoofed until then
 (1.58.0).
 
@@ -489,13 +497,13 @@ category:
 | Category | Meaning |
 |---|---|
 | **AI training** | Collects content to train models (GPTBot, ClaudeBot, CCBot…) |
-| **AI search** | Builds or queries an index used to answer questions (OAI-SearchBot, PerplexityBot, LinkupBot, Amzn-SearchBot…) |
-| **AI assistant** | Fetches a page because a person asked an assistant right then (ChatGPT-User, Claude-User, Amazon Quick…) |
+| **AI search** | Builds or queries an index used to answer questions (OAI-SearchBot, PerplexityBot, LinkupBot, Amzn-SearchBot, meta-webindexer…) |
+| **AI assistant** | Fetches a page because a person asked an assistant right then (ChatGPT-User, Claude-User, Amazon Quick, Google-GeminiNotebook, meta-externalfetcher…) |
 | **Search engine** | Conventional web search (SeznamBot, DuckDuckBot, YandexBot, Baiduspider, Qwantbot…) |
-| **SEO tool** | SEO and backlink platforms (AhrefsBot, SemrushBot, Barkrowler, DataForSeoBot…) |
+| **SEO tool** | SEO and backlink platforms (AhrefsBot, SemrushBot, SiteAuditBot, Barkrowler, DataForSeoBot…) |
 | **Monitoring** | Brand and media monitoring (AwarioBot, trendictionbot, YaK, um-LN) |
-| **Scanner** | Readiness, security and attack-surface scanners (OraBot, KnownGood-Verifier, AgentReadyScanner, CensysInspect, Cortex Xpanse, l9scan, AgentTrustBot) |
-| **Other** | Link previews, feed readers, archiving and everything else named (Twitterbot, facebookexternalhit, Feedly, Inoreader, archive.org_bot…) |
+| **Scanner** | Readiness, security and attack-surface scanners (OraBot, KnownGood-Verifier, AgentReadyScanner, CensysInspect, Cortex Xpanse, l9scan, AgentTrustBot, VisionHeight) |
+| **Other** | Link previews, feed readers, archiving and everything else named (Twitterbot, facebookexternalhit, Feedly, Inoreader, archive.org_bot, Google-Read-Aloud…) |
 
 A category goes by what the operator documents *that specific bot* doing, not by the operator's
 business overall. It is shown under the agent name, filterable as **Crawler type**, and returned by
@@ -566,6 +574,11 @@ The log is off by default. When it is on, this is what it keeps about people:
 - **The page address is kept as requested**, query string included, so an internal search is
   recorded as typed (1.27.0). The throttle keys on the resolved page instead.
 - **The Referer is never stored.** Only whether it was this site.
+- **A user-agent that names no recognised crawler is kept to 80 characters**, with the boilerplate
+  every browser of a family sends identically removed first (1.45.1). A request filed as a crawler
+  whose name comes at the end of a browser-shaped string has its own `(compatible; …)` part moved to
+  the front before the cut (1.62.0), so the name survives it. Browsers and scripts are stored exactly
+  as before: keeping more of a person's user-agent would make visitors easier to tell apart.
 - **The cloud signal stores nothing.** It is derived from the network address already held.
 - **Web Bot Auth signatures come from agents, never from people's browsers**, so recording one stores
   nothing about a reader.
