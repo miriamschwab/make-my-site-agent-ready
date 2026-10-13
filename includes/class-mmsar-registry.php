@@ -40,6 +40,12 @@ class MMSAR_Registry {
 	const METHODS = array( 'GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS' );
 
 	/**
+	 * Most example questions kept for one endpoint. ARD asks for two to five; anything past five is
+	 * dropped rather than published, since a registry may reject a longer list.
+	 */
+	const MAX_QUERIES = 5;
+
+	/**
 	 * Option holding the endpoints the site owner added on the settings page.
 	 */
 	const OPTION = 'mmsar_endpoints';
@@ -115,6 +121,10 @@ class MMSAR_Registry {
 		 *                        When set, the endpoint gets its own entry in the Agent Skills index
 		 *                        instead of a bullet inside this plugin's SKILL.md.
 		 *   skill_digest string  Optional. 'sha256:<hex>' digest of that SKILL.md.
+		 *   queries     string[] Optional. Two to five questions a person might ask that this
+		 *                        endpoint answers, e.g. 'send a message to the site owner'. Used only
+		 *                        as `representativeQueries` in /.well-known/ai-catalog.json, which is
+		 *                        what an ARD registry indexes for search. Up to five are kept.
 		 *
 		 * Invalid entries are dropped rather than published — these documents are read by agents,
 		 * so a malformed entry is worse than a missing one.
@@ -255,9 +265,42 @@ class MMSAR_Registry {
 				'methods'     => $methods,
 				'auth'        => isset( $row['auth'] ) ? self::one_line( $row['auth'], 120 ) : '',
 				'surfaces'    => $surfaces,
+				'queries'     => isset( $row['queries'] ) ? self::queries( $row['queries'] ) : array(),
 			);
 		}
 
+		return $clean;
+	}
+
+	/**
+	 * Cleans a list of example questions.
+	 *
+	 * The settings form submits one question per line in a textarea; the Abilities API and code
+	 * registration submit an array. Both arrive here. Each question is flattened to one line,
+	 * empty and repeated ones are dropped (case-insensitively), and at most MAX_QUERIES are kept.
+	 *
+	 * @param mixed $raw Array of strings, or a newline-separated string.
+	 * @return string[] Clean questions, in the order given.
+	 */
+	public static function queries( $raw ) {
+		$items = is_array( $raw ) ? $raw : preg_split( '/\R/u', (string) $raw );
+		$clean = array();
+		$seen  = array();
+		foreach ( (array) $items as $item ) {
+			if ( ! is_scalar( $item ) ) {
+				continue;
+			}
+			$query = self::one_line( $item, 200 );
+			$key   = mb_strtolower( $query );
+			if ( '' === $query || isset( $seen[ $key ] ) ) {
+				continue;
+			}
+			$seen[ $key ] = true;
+			$clean[]      = $query;
+			if ( count( $clean ) >= self::MAX_QUERIES ) {
+				break;
+			}
+		}
 		return $clean;
 	}
 
@@ -360,6 +403,7 @@ class MMSAR_Registry {
 			'surfaces'     => $surfaces,
 			'skill_url'    => $skill_url,
 			'skill_digest' => $skill_digest,
+			'queries'      => isset( $endpoint['queries'] ) ? self::queries( $endpoint['queries'] ) : array(),
 		);
 	}
 

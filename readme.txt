@@ -4,7 +4,7 @@ Tags: markdown, llm, ai, llms-txt, agents
 Requires at least: 6.2
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.62.0
+Stable tag: 1.63.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -29,7 +29,7 @@ Every feature below can be switched off individually under Settings > Agent-Read
 * **MCP server** — Optional (off by default). A read-only Model Context Protocol endpoint AI clients can connect to directly, with tools to search the site, list content, read a page as Markdown, and get an overview of the site. Search and list can be narrowed to one topic (a category or tag), and the overview lists the topics. Rate-limited, and exposes nothing llms-full.txt doesn't already publish
 * **WebMCP** — Optional (off by default, needs the MCP server). Offers the MCP server's read-only tools to an AI agent working inside a visitor's browser, through WebMCP, so it can search the site, list content, read a page (the one it is on, by default) and get an overview without reading the page the way a person would. The tools come from the MCP server and every call is answered by it, so nothing is implemented twice. Adds a small inline script that checks for the browser API and stops at once where it is missing, which today is almost everywhere. Browser support is an experimental Chrome and Edge trial: paste your site's origin-trial token into the WebMCP settings section to switch it on for ordinary visitors. The token also serves any WebMCP tools your theme or other plugins register. While WebMCP is on, the same tools are listed at `/.well-known/webmcp.json` (and `/.well-known/webmcp`), so a tool or agent can see them before loading a page. No specification defines that file, and it can be switched off on its own
 * **auth.md** — Serves `/auth.md`, a plain-language explanation of how an agent gets access to the site — usually "you don't need credentials," stated so an agent doesn't assume otherwise
-* **Agentic Resource Discovery catalog** — Serves `/.well-known/ai-catalog.json` (also at `/.well-known/ard.json`), a typed inventory of the site's agentic resources with stable identifiers
+* **Agentic Resource Discovery catalog** — Serves `/.well-known/ai-catalog.json` (also at `/.well-known/ard.json`), a typed inventory of the site's agentic resources with stable identifiers. Each entry carries two to five example questions it answers, which is what agent search registries index, and an endpoint you add can carry its own
 * **security.txt** — Serves `/.well-known/security.txt` (RFC 9116). Enter your security contact as a full URL, a path like `/contact`, or an email address, and the plugin formats it correctly
 * **api-catalog** — Serves `/.well-known/api-catalog` (RFC 9727), a machine-readable index linking llms.txt, llms-full.txt, security.txt, the Agent Skills index, openapi.json, the MCP manifest, webmcp.json, sitemap, and feed, each only while it is served
 * **Agent Skills discovery** — Serves `/.well-known/agent-skills/index.json` plus a bundled skill teaching agents how to use this plugin's markdown endpoints
@@ -120,6 +120,8 @@ Yes, and you don't need to write any code. Go to **Settings > Agent-Ready > Your
 
 The description field is what an agent reads to decide whether to use your endpoint, so say what it does and mention anything a caller must do first. Each saved endpoint tells you underneath exactly which documents it's currently appearing in — or why it isn't.
 
+An endpoint that accepts more than GET, such as a form that takes a POST, is also listed in the AI catalog at `/.well-known/ai-catalog.json`. Fill in "Example questions" with two to five things a person might ask an assistant that it answers, one per line, such as "send a message to the site owner". Agent search registries index those questions to find it; without them the entry is listed but can't be found by search.
+
 = Can a plugin register an endpoint in code instead? =
 
 Yes. Plugin and theme authors can register one so it works on any site without the owner filling in a form:
@@ -136,7 +138,7 @@ Yes. Plugin and theme authors can register one so it works on any site without t
 `    ) );`
 `} );`
 
-Use the `mmsar_registered_endpoints` filter for the same thing without a direct call. Add `'surfaces' => array( 'llms_txt' )` to limit where it appears, and `'rel'` to set its api-catalog link relation. Endpoints that publish a SKILL.md of their own can pass `'skill_url'` to get their own entry in the Agent Skills index. Code-registered endpoints appear read-only under "Added by Plugins" on the settings page. Full documentation is in the plugin's README on GitHub.
+Use the `mmsar_registered_endpoints` filter for the same thing without a direct call. Add `'surfaces' => array( 'llms_txt' )` to limit where it appears, `'rel'` to set its api-catalog link relation, and `'queries'` (two to five example questions) for its AI catalog entry. Endpoints that publish a SKILL.md of their own can pass `'skill_url'` to get their own entry in the Agent Skills index. Code-registered endpoints appear read-only under "Added by Plugins" on the settings page. Full documentation is in the plugin's README on GitHub.
 
 = Where does the frontmatter's description come from? =
 
@@ -235,6 +237,19 @@ Each token is checked when you save: one for another site, another trial, or pas
 They are a floor. Many AI apps open links without telling the site where the visitor came from, and only ChatGPT reliably tags its links with `utm_source`. Those visits look like direct visits and cannot be counted. Pages already in your cache pick up the counting script when the cache next refreshes, and a security plugin that blocks the REST API for visitors stops the count entirely.
 
 == Changelog ==
+
+= 1.63.1 - 2026-10-13 =
+* Updated: the bundled crawler IP lists, re-fetched from every operator on 2026-10-13. Anthropic added ten addresses and OpenAI five ranges, and OpenAI withdrew one (`172.185.193.176/28`). No request in the log had come from the withdrawn range, and no request marked "Spoofed" came from the new ones. Every other list was unchanged.
+* 1.63.0 was not released on its own and ships inside this version.
+
+= 1.63.0 - 2026-10-13 =
+* New: six more bots (eight names) are recognised by the agent log, each with a category. Verified by the one address cl0q publishes: cl0q-crawler, cl0q-discovery and cl0q-favicon (the cl0q search engine's own bots, search engine). Recognised but not verifiable: cl0q-node (cl0q's crawler software, run by other people on their own servers, search engine), SojournerBot (Parallax search, search engine), Sogou web spider (Sogou search, search engine), CorpusBot (a citation index for blogs, other) and AstraBot (the Astra search engine, search engine).
+* cl0q-node is never checked against cl0q's address. Whoever runs a node sends from their own server, so a node is never reported as a forgery for not coming from cl0q.
+* CorpusBot and AstraBot are only recognised with their operators' domains (corpus.blog and junx.dev) in the user-agent. "BeansLLM-CorpusBot", a different bot, contains the name CorpusBot and is not recognised as it.
+* Sogou web spider's addresses resolve under crawl.sogou.com, but Sogou doesn't document that hostname, so it isn't used to verify. SojournerBot signs its requests with Web Bot Auth, which the log records but does not verify yet.
+* New: every entry in the AI catalog (`/.well-known/ai-catalog.json`) now carries two or three example questions it answers, the `representativeQueries` that agent search registries index. Before, most had one and the endpoints listed from Your Endpoints had none. ARD's conformance tool warned that entries with fewer than two "will not be found by search".
+* New: an "Example questions" field on each endpoint under Settings > Agent-Ready > Your Endpoints, one question per line, up to five. They appear only in the AI catalog. The `set-endpoint` and `list-endpoints` abilities and `mmsar_register_endpoint()` take them as `queries`.
+* The OKF bundle stays listed in the AI catalog as `text/markdown`. ARD's conformance tool asks for an Agent Skills profile on any Markdown entry, but the bundle isn't an Agent Skill, and the OKF specification defines no media type of its own.
 
 = 1.62.0 - 2026-10-08 =
 * New: seven more bots are recognised by the agent log, each with a category. Verified by reverse DNS: Google-GeminiNotebook and its former name Google-NotebookLM (Google's Gemini Notebook fetching a page someone added as a source, AI assistant) and Google-Read-Aloud (other). Recognised but not verifiable: meta-webindexer (Meta AI search, AI search), meta-externalfetcher (Meta AI fetching a link someone asked about, AI assistant), meta-externalads (other), SiteAuditBot (Semrush's Site Audit, SEO tool) and VisionHeight (an internet scanner, scanner).

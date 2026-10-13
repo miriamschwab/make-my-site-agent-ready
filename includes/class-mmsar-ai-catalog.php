@@ -87,6 +87,7 @@ class MMSAR_AI_Catalog {
 				array(
 					'what has ' . $site_name . ' published about a given topic',
 					'read the full text of a page on ' . $site_name,
+					'search ' . $site_name . ' from an MCP client',
 				)
 			);
 		}
@@ -100,7 +101,10 @@ class MMSAR_AI_Catalog {
 				home_url( '/.well-known/webmcp.json' ),
 				'The MCP server\'s read-only tools, registered by every page for an agent in the browser through WebMCP. No authentication.',
 				array_column( MMSAR_WebMCP::browser_tools(), 'name' ),
-				array( 'search ' . $site_name . ' from the page I am on' )
+				array(
+					'search ' . $site_name . ' from the page I am on',
+					'read the page I am on as plain text',
+				)
 			);
 		}
 
@@ -113,7 +117,10 @@ class MMSAR_AI_Catalog {
 				MMSAR_OpenAPI::url(),
 				'OpenAPI 3.1 description of every public endpoint on this site, including its error shape. No authentication.',
 				array( 'searchContent', 'listContent', 'readPageAsMarkdown' ),
-				array( 'search ' . $site_name . ' for a keyword', 'list the most recent posts on ' . $site_name )
+				array(
+					'search ' . $site_name . ' for a keyword',
+					'list the most recent posts on ' . $site_name,
+				)
 			);
 		}
 
@@ -126,7 +133,10 @@ class MMSAR_AI_Catalog {
 				home_url( '/.well-known/agent-skills/index.json' ),
 				'Agent Skills index describing how to fetch this site\'s content as Markdown.',
 				array( 'fetchContentAsMarkdown' ),
-				array( 'how do I read ' . $site_name . ' as markdown' )
+				array(
+					'how do I read ' . $site_name . ' as markdown',
+					'fetch a page from ' . $site_name . ' without the HTML',
+				)
 			);
 		}
 
@@ -139,11 +149,19 @@ class MMSAR_AI_Catalog {
 				home_url( '/llms.txt' ),
 				'Plain-text index of this site written for language models, including when the site is worth reading.',
 				array( 'listContent' ),
-				array( 'what is on ' . $site_name )
+				array(
+					'what is on ' . $site_name,
+					'which pages on ' . $site_name . ' are worth reading',
+				)
 			);
 		}
 
 		if ( mmsar_feature_enabled( 'okf_bundle' ) ) {
+			// Plain `text/markdown`, on purpose. ARD's conformance tool warns that it lacks
+			// `profile="urn:air:agent-skills"`, because that profile is the only Markdown type on its
+			// list, so every other Markdown document draws the same warning. The bundle is not an
+			// Agent Skill, and OKF's own spec defines no media type, so the profile would be false
+			// and an invented one would be a guess. See the decisions log, 1.63.0.
 			$entries[] = self::entry(
 				'document',
 				'okf',
@@ -152,7 +170,10 @@ class MMSAR_AI_Catalog {
 				home_url( '/okf/index.md' ),
 				'Open Knowledge Format (v0.2) bundle: this site\'s content as a browsable tree of typed Markdown concept files, one per post/page, for ingesting the whole corpus in one pass.',
 				array( 'listContent', 'fetchContentAsMarkdown' ),
-				array( 'ingest the whole ' . $site_name . ' knowledge base in one fetch' )
+				array(
+					'ingest the whole ' . $site_name . ' knowledge base in one fetch',
+					'every page on ' . $site_name . ' as markdown with its metadata',
+				)
 			);
 		}
 
@@ -170,7 +191,10 @@ class MMSAR_AI_Catalog {
 				$endpoint['href'],
 				$endpoint['description'],
 				$endpoint['methods'],
-				array()
+				// The owner's or the registering plugin's own examples (1.63.0). An endpoint given
+				// none still gets an entry, without the field: a made-up question would misdescribe
+				// what someone else's endpoint does.
+				$endpoint['queries']
 			);
 		}
 

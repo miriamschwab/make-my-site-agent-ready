@@ -175,6 +175,11 @@ function mmsar_register_abilities() {
 									'items' => array( 'type' => 'string' ),
 								),
 								'auth'         => array( 'type' => 'string' ),
+								'queries'      => array(
+									'type'        => 'array',
+									'items'       => array( 'type' => 'string' ),
+									'description' => 'Example questions this endpoint answers, published only as representativeQueries in the AI catalog.',
+								),
 								'managed_here' => array(
 									'type'        => 'boolean',
 									'description' => 'True when it is stored in this plugin\'s settings and can be changed with set-endpoint. False when a plugin or theme registered it in code, in which case it can only be changed by editing that plugin or theme.',
@@ -211,6 +216,7 @@ function mmsar_register_abilities() {
 						'rel'          => $endpoint['rel'],
 						'methods'      => $endpoint['methods'],
 						'auth'         => $endpoint['auth'],
+						'queries'      => $endpoint['queries'],
 						'managed_here' => in_array( $endpoint['id'], $stored_ids, true ),
 						'published_in' => $published,
 					);
@@ -282,6 +288,12 @@ function mmsar_register_abilities() {
 						),
 						'description' => 'Which documents to appear in. Defaults to all three.',
 					),
+					'queries'     => array(
+						'type'        => 'array',
+						'items'       => array( 'type' => 'string' ),
+						'maxItems'    => MMSAR_Registry::MAX_QUERIES,
+						'description' => 'Two to five questions a person might ask that this endpoint answers, e.g. "send a message to the site owner". Published only as representativeQueries in /.well-known/ai-catalog.json, which agent search registries index. Sending this replaces the whole list.',
+					),
 				),
 			),
 			'output_schema'       => array(
@@ -319,7 +331,7 @@ function mmsar_register_abilities() {
 				}
 
 				$fields = array();
-				foreach ( array( 'title', 'href', 'description', 'type', 'rel', 'methods', 'auth', 'surfaces' ) as $key ) {
+				foreach ( array( 'title', 'href', 'description', 'type', 'rel', 'methods', 'auth', 'surfaces', 'queries' ) as $key ) {
 					if ( isset( $input[ $key ] ) ) {
 						$fields[ $key ] = $input[ $key ];
 					}

@@ -30,7 +30,7 @@ Every feature below can be switched off individually under **Settings > Agent-Re
 - **MCP server** (read-only, off by default) — a [Model Context Protocol](https://modelcontextprotocol.io/) endpoint at `/wp-json/mmsar/v1/mcp` that AI clients can connect to directly over Streamable HTTP, with tools to search the site, list content, read a page as Markdown, and get an overview. `search_content` and `list_content` take an optional `topic` (a category, tag or other public taxonomy slug; an unknown one returns an error naming the site's topics), and the overview's `topics` section lists the 40 most used. Exposes nothing that `llms-full.txt` doesn't already publish, and is rate-limited to 60 calls/minute/IP. Publishes a discovery manifest at `/.well-known/mcp.json` and a server card at `/.well-known/mcp/server-card.json`. Off by default because, unlike everything else here, it answers by running a query rather than serving a file.
 - **WebMCP** (off by default, needs the MCP server) — registers the MCP server's read-only tools with an AI agent working inside the visitor's browser, through `document.modelContext`. A ~475-byte inline loader checks for the API and stops at once where it is missing; where it exists, it loads the bridge from `/mmsar-webmcp/<version>/bridge` (a versioned path without a `.js` extension, because some hosts redirect missing `.js` files and some CDNs ignore `?ver=`). The bridge reads tool definitions from the server card, registers the ones annotated read-only, and sends every call to the MCP endpoint, so search, the noindex and password rules and the rate limit stay on the server. `get_content` defaults to the page the visitor is on. Errors come back as the tool's text rather than thrown, because Chrome replaces a thrown error with a generic message. Calls are logged as `WebMCP JSON-RPC` with the address reduced to its network. Browser support is a Chrome and Edge origin trial: the WebMCP settings section takes the site's tokens, checks each one on save (origin, feature, expiry, no third-party tokens) and prints the working ones as `origin-trial` meta tags on every page, whether or not the bridge is on, since a token serves any WebMCP tools on the site. Site Health warns when the token is missing or expires within 14 days. While the bridge is on, `/.well-known/webmcp.json` (and `/.well-known/webmcp`) lists the same tools as the page registers them, built from the server card with the bridge's own shaping, plus the bridge script's URL and a link to the server card. **No specification defines that file**: WebMCP registers tools in the page, and the draft lists discovery as a non-goal. Its own toggle, on by default, so an owner can let another plugin answer that address instead. Requests for it are logged as `webmcp.json` and, like `WebMCP JSON-RPC`, shown in the default Agent Log view even from a browser (`MMSAR_Agent_Log::default_view_browser_surfaces()`).
 - **`/auth.md`** — a plain-language explanation of how an agent gets access to the site. For most sites the honest answer is "you don't need credentials," and saying so out loud stops an agent from assuming it needs a key it can't get and either giving up or probing for login endpoints.
-- **Agentic Resource Discovery (ARD) catalog** — `/.well-known/ai-catalog.json` (also served at `/.well-known/ard.json`), a typed inventory of the site's agentic resources (MCP server, its WebMCP tools, API, skills, content index) with stable identifiers, per the [ARD spec](https://agenticresourcediscovery.org/). Complements `/.well-known/api-catalog` below, which is a list of links rather than a typed inventory.
+- **Agentic Resource Discovery (ARD) catalog** — `/.well-known/ai-catalog.json` (also served at `/.well-known/ard.json`), a typed inventory of the site's agentic resources (MCP server, its WebMCP tools, API, skills, content index, OKF bundle, and any registered endpoint that accepts more than GET) with stable identifiers, per the [ARD spec](https://agenticresourcediscovery.org/). Every built-in entry carries two or three `representativeQueries`, the example questions an ARD registry indexes for search, and a registered endpoint carries its own (see [Registering your own endpoints](#registering-your-own-endpoints)). Two entries keep a media type ARD's conformance tool warns about, on purpose: `llms.txt` is `text/plain` because that is what it is served as, and the OKF bundle is `text/markdown` because the tool's only Markdown type is an Agent Skills profile, which the bundle is not, and the OKF spec defines none. Complements `/.well-known/api-catalog` below, which is a list of links rather than a typed inventory.
 - **`/.well-known/api-catalog`** (RFC 9727) — a Linkset (RFC 9264) JSON document indexing `llms.txt`, `llms-full.txt`, `security.txt`, the Agent Skills index, `openapi.json`, the MCP manifest, `webmcp.json`, the sitemap, and the feed in one machine-readable file, each listed only while it is served
 - **Agent Skills discovery** — `/.well-known/agent-skills/index.json` plus a bundled skill (`fetch-content-as-markdown`) teaching an agent how to use this plugin's markdown endpoints instead of parsing HTML. The served skill file and its index digest are computed from the same source at request time, so they can never drift out of sync.
 - **NLWeb `/ask` endpoint** (off by default) — answers questions about the site in [NLWeb](https://github.com/nlweb-ai/NLWeb)'s shape, with optional SSE streaming. A request in NLWeb protocol v0.54's nested form (`{"query": {"text": ...}}`) gets a v0.54 `Answer` or `Failure` back, and v0.54-style `data:` events when streaming; a flat `query` gets the earlier shape. Both request shapes and the event stream are described in `/openapi.json`. It is listed with the site's other endpoints in `llms.txt` and the API catalog. Retrieval only — it returns ranked pages, not a generated answer, and says so in every response. Ships with a Schema Map at `/schema-map.xml` in the format of NLWeb's [Schema Feeds spec](https://github.com/nlweb-ai/website/blob/main/SCHEMA_SPEC.md), listing the site's RSS feed, plus a `Schemamap:` robots.txt directive. Google Search Console reports the `Schemamap:` line as "Syntax not understood" (Google ignores it), so a checkbox under the NLWeb toggle can switch the robots.txt lines off; the maps are served either way. When Yoast SEO's schema aggregation endpoint is on, robots.txt also points to Yoast's map at `/schemamap.xml`, which lists its schema.org feeds per post type. Other plugins can add maps with the `mmsar_schemamap_urls` filter.
@@ -237,7 +237,9 @@ Return `''` to omit the key. HTML is stripped and line breaks become spaces.
 
 ## Registering your own endpoints
 
-If you've made something else on the site agent-ready — a contact form, a booking API, a product feed — it needs to be listed somewhere agents actually look. Describe it once and this plugin publishes it in `/.well-known/api-catalog`, `/llms.txt`, and the Agent Skills index together, each in that document's own idiom.
+If you've made something else on the site agent-ready — a contact form, a booking API, a product feed — it needs to be listed somewhere agents actually look. Describe it once and this plugin publishes it in `/.well-known/api-catalog`, `/llms.txt`, and the Agent Skills index together, each in that document's own idiom. An endpoint that accepts more than `GET` is also an entry in the AI catalog at `/.well-known/ai-catalog.json`, which is where its example questions go.
+
+Site owners don't need code for this: **Settings > Agent-Ready > Your Endpoints** has a row for each endpoint, including an *Example questions* box (one per line). The code route is for plugins and themes that want their endpoint listed on any site.
 
 ```php
 add_action( 'init', function () {
@@ -253,6 +255,7 @@ add_action( 'init', function () {
         'methods'     => array( 'POST' ),
         'auth'        => 'none',
         'rel'         => 'service-desc',
+        'queries'     => array( 'send the site owner a message', 'contact the site owner about a project' ),
     ) );
 } );
 ```
@@ -281,6 +284,7 @@ add_filter( 'mmsar_registered_endpoints', function ( $endpoints ) {
 | `surfaces` | no | Which documents to appear in: `api_catalog`, `llms_txt`, `agent_skills`. Defaults to all three. |
 | `skill_url` | no | Absolute URL of a `SKILL.md` you serve yourself. Gets its own entry in the Agent Skills index instead of a bullet inside this plugin's skill. |
 | `skill_digest` | no | `sha256:<hex>` digest of that `SKILL.md`, so agents can cache it and detect changes. |
+| `queries` | no | Two to five example questions a person might ask that this endpoint answers. Published only as `representativeQueries` in the AI catalog, which ARD registries index for search; without them the entry is listed but cannot be found by search. Each is flattened to one line, repeats are dropped, and at most five are kept. |
 
 Register on `init` or earlier — the documents are built on `template_redirect`. A surface only publishes your endpoint while its own feature toggle is on; the settings page shows each registered endpoint and where it is actually being listed.
 
@@ -408,7 +412,8 @@ Two methods, chosen per operator, because the operators are split on which they 
 - **Published IP ranges** for Anthropic, OpenAI, Perplexity, DuckDuckGo (DuckAssistBot and
   DuckDuckBot), Common Crawl (CCBot), Linkup, Seznam, Mojeek, SE Ranking, Parallel (ShapBot),
   Sofya, You.com (YouBot), Palo Alto Networks (Cortex Xpanse), Known Good (KnownGood-Verifier),
-  Inoreader and Amazon's search crawler (Amzn-SearchBot). Most of them
+  Inoreader, Amazon's search crawler (Amzn-SearchBot) and cl0q (cl0q-crawler, cl0q-discovery and
+  cl0q-favicon, one published address). Most of them
   publish no reverse-DNS records for their crawlers, so this is the only method their documentation
   describes. The ranges are bundled with the plugin rather than fetched, so nothing calls a
   third-party service and verification works on a host with no outbound HTTP. The trade-off is that
@@ -457,7 +462,11 @@ documented `bot.domainstats.com`, but that name resolves forward to only one of 
 Dataprovider.com documents reverse DNS under `dataproviderbot.com`, but the one full address on file
 had no reverse record at all, so it stays unverifiable until a real address confirms it (1.54.0).
 VisionHeight documents `scan.visionheight.com`, but both addresses on file were stored as networks
-before it was recognised, so it waits for one full address to confirm it (1.62.0). Amazon's search crawler is the one bundled list expected to go stale fastest: Amazon publishes it
+before it was recognised, so it waits for one full address to confirm it (1.62.0). Sogou web spider's
+addresses forward-confirm under `crawl.sogou.com`, which Sogou does not document, so it stays
+unverifiable like SemrushBot (1.63.0). cl0q-node is unverifiable by design: it is cl0q's crawler
+software run by other people on their own servers, so it is never checked against cl0q's address,
+and a node is never called a forgery for not coming from it (1.63.0). Amazon's search crawler is the one bundled list expected to go stale fastest: Amazon publishes it
 as single cloud addresses, so a new one used before the plugin is updated reads as Spoofed until then
 (1.58.0).
 
@@ -499,11 +508,11 @@ category:
 | **AI training** | Collects content to train models (GPTBot, ClaudeBot, CCBot…) |
 | **AI search** | Builds or queries an index used to answer questions (OAI-SearchBot, PerplexityBot, LinkupBot, Amzn-SearchBot, meta-webindexer…) |
 | **AI assistant** | Fetches a page because a person asked an assistant right then (ChatGPT-User, Claude-User, Amazon Quick, Google-GeminiNotebook, meta-externalfetcher…) |
-| **Search engine** | Conventional web search (SeznamBot, DuckDuckBot, YandexBot, Baiduspider, Qwantbot…) |
+| **Search engine** | Conventional web search (SeznamBot, DuckDuckBot, YandexBot, Baiduspider, Sogou web spider, Qwantbot, cl0q…) |
 | **SEO tool** | SEO and backlink platforms (AhrefsBot, SemrushBot, SiteAuditBot, Barkrowler, DataForSeoBot…) |
 | **Monitoring** | Brand and media monitoring (AwarioBot, trendictionbot, YaK, um-LN) |
 | **Scanner** | Readiness, security and attack-surface scanners (OraBot, KnownGood-Verifier, AgentReadyScanner, CensysInspect, Cortex Xpanse, l9scan, AgentTrustBot, VisionHeight) |
-| **Other** | Link previews, feed readers, archiving and everything else named (Twitterbot, facebookexternalhit, Feedly, Inoreader, archive.org_bot, Google-Read-Aloud…) |
+| **Other** | Link previews, feed readers, archiving and everything else named (Twitterbot, facebookexternalhit, Feedly, Inoreader, archive.org_bot, Google-Read-Aloud, CorpusBot…) |
 
 A category goes by what the operator documents *that specific bot* doing, not by the operator's
 business overall. It is shown under the agent name, filterable as **Crawler type**, and returned by
@@ -687,7 +696,7 @@ This plugin exposes abilities for the [WordPress Abilities API](https://develope
 | `make-my-site-agent-ready/get-settings` | Always on | Returns the enabled post types and content root CSS selector |
 | `make-my-site-agent-ready/regenerate-files` | Always on (destructive) | Regenerates cached markdown for all published content and clears the llms.txt and llms-full.txt caches. AI tools will ask for confirmation before running. |
 | `make-my-site-agent-ready/list-endpoints` | Always on | Lists every endpoint being published, flagging which are managed on the settings page and which a plugin or theme registered in code, plus where each is actually appearing right now. |
-| `make-my-site-agent-ready/set-endpoint` | Always on | Adds an endpoint, or updates one already managed on the settings page. Send only the fields you want changed when updating. |
+| `make-my-site-agent-ready/set-endpoint` | Always on | Adds an endpoint, or updates one already managed on the settings page. Send only the fields you want changed when updating. `queries` (two to five example questions) sets the endpoint's `representativeQueries` in the AI catalog, replacing the whole list. |
 | `make-my-site-agent-ready/delete-endpoint` | Always on (destructive) | Removes an endpoint managed on the settings page. |
 | `make-my-site-agent-ready/get-agent-insights` | Always on (read-only) | The Agent Log Summary as data: findings about the last 30 days under read, cited and broken, each with a kind, a sentence, supporting items and usually an action. Counts only verified crawler identities and user-run clients, never forged ones; WebMCP tool calls, which claim no identity, count as they are. Cached hourly; pass `fresh` to recompute |
 | `make-my-site-agent-ready/get-agent-log` | Always on (read-only) | Reads the agent request log: counts by agent, by surface, by requested detail and by day across the whole log, a verification breakdown, plus a page of individual entries. Pass `summary_only` for the aggregates alone, which carry counts of distinct IPs but no addresses, or `verified` to list only entries with a given verdict — `failed` lists the requests that forged a crawler identity. Every entry and `by_agent` row carries a `crawler_category`, `by_crawler_category` breaks traffic down by kind of bot, and the `crawler_category` input filter (`ai` for all three AI categories) separates AI traffic from search and SEO traffic. A `signals` block, a per-entry `signals` object and a `signal` filter carry the browser signals (signed, cloud network, came from a link on the site), each with its limits stated in the schema. `surface_categories` counts every entry by surface category — `docs`, `markdown`, `html`, `notfound`, `robots`, `feed`, `webmcp` (WebMCP tool calls, 1.58.0) and `mcp` (MCP server calls, 1.59.0) — and the `surface` filter takes the same values. Each entry carries `arguments`: on an MCP tool call, what the caller asked for (1.56.0). |

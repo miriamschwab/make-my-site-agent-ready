@@ -520,6 +520,13 @@ class MMSAR_Admin {
 		echo '<input type="text" class="large-text" name="' . esc_attr( $name ) . '[description]" value="' . esc_attr( $get( 'description' ) ) . '" placeholder="' . esc_attr__( 'What it does, and anything a caller must know before using it.', 'make-my-site-agent-ready' ) . '">';
 		echo '<span class="description">' . esc_html__( 'One sentence. This is what an agent reads to decide whether to use it — mention any required first step.', 'make-my-site-agent-ready' ) . '</span></p>';
 
+		// Example questions, for the AI catalog only. A textarea rather than five inputs, so a blank
+		// row stays short and there is no repeater to script.
+		$queries = $get( 'queries' );
+		echo '<p style="margin:0 0 10px;"><label style="display:block;font-weight:600;">' . esc_html__( 'Example questions', 'make-my-site-agent-ready' ) . '</label>';
+		echo '<textarea class="large-text" rows="3" name="' . esc_attr( $name ) . '[queries]" placeholder="' . esc_attr__( 'send a message to the site owner', 'make-my-site-agent-ready' ) . '">' . esc_textarea( is_array( $queries ) ? implode( "\n", $queries ) : '' ) . '</textarea>';
+		echo '<span class="description">' . esc_html__( 'Two to five, one per line: things a person might ask an assistant that this endpoint answers. Agent search engines that read your AI catalog (ai-catalog.json) use them to find it. Up to five are kept.', 'make-my-site-agent-ready' ) . '</span></p>';
+
 		// Where it gets listed.
 		$surfaces = isset( $row['surfaces'] ) && is_array( $row['surfaces'] ) ? $row['surfaces'] : array_keys( self::get_surface_labels() );
 		echo '<p style="margin:0 0 10px;"><span style="display:block;font-weight:600;">' . esc_html__( 'List it in', 'make-my-site-agent-ready' ) . '</span>';

@@ -179,6 +179,7 @@ class MMSAR_NLWeb {
 		if ( ! self::is_serving() || ! function_exists( 'mmsar_register_endpoint' ) ) {
 			return;
 		}
+		$site_name = html_entity_decode( get_bloginfo( 'name' ), ENT_QUOTES | ENT_HTML5, 'UTF-8' );
 		mmsar_register_endpoint(
 			array(
 				'id'          => 'nlweb-ask',
@@ -188,6 +189,10 @@ class MMSAR_NLWeb {
 				'type'        => 'application/json',
 				'methods'     => array( 'GET', 'POST' ),
 				'auth'        => 'none',
+				'queries'     => array(
+					'ask ' . $site_name . ' a question in plain language',
+					'find the pages on ' . $site_name . ' that answer a question',
+				),
 			)
 		);
 	}

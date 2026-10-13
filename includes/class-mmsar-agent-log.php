@@ -390,6 +390,39 @@ class MMSAR_Agent_Log {
 		// were stored at network precision and could not confirm it. Recognising the name is what
 		// starts keeping the address; the suffix waits for one that forward-confirms.
 		'visionheight.com',
+		// Added 1.63.0 from the agent-log-bot-watch report of 2026-10-13. Appended, for the ordering
+		// reason given above Googlebot.
+		//
+		// cl0q's own three bots (https://cl0q.com/bot), verified by the one address cl0q publishes;
+		// see MMSAR_Agent_Log_Verify::VERIFY_RANGES. Matched by their full names, never by a bare
+		// `cl0q` token, which would also match cl0q-node below and judge every node against an
+		// address no node ever uses.
+		'cl0q-crawler',
+		'cl0q-discovery',
+		'cl0q-favicon',
+		// cl0q's open-source node software (https://codeberg.org/cl0qsearch/crawler-node), run by
+		// third parties on their own servers after enrolling with cl0q. Recognise-only, with no
+		// range group: it never comes from cl0q's address. The kept address is a node operator's
+		// server, not a reader's, the same reasoning as the broken-link checkers above.
+		'cl0q-node',
+		// The rest are recognise-only.
+		//
+		// Parallax search's crawler, by Interdiction Studios (https://parallaxsearch.com/bot). No
+		// address list and no reverse DNS; it signs every request with Web Bot Auth, which this
+		// plugin records but does not verify, so it is recognise-only like ExaSearchBot.
+		'SojournerBot',
+		// Sogou's search spider (http://www.sogou.com/docs/help/webmasters.htm). Matched with its
+		// spaces, like Screaming Frog SEO Spider: the other Sogou names are not in Sogou's own
+		// documentation. A logged address reverses under crawl.sogou.com and forward-confirms, but
+		// Sogou does not document that hostname (decisions log, 1.44.0).
+		'Sogou web spider',
+		// corpus.blog's citation index for independent blogs (https://corpus.blog/crawler). Guarded
+		// in AGENT_DISCLOSURES: the name is inside `BeansLLM-CorpusBot`, an unrelated bot already in
+		// the log.
+		'CorpusBot',
+		// The Astra search engine's "educational crawler" (https://astra.junx.dev/bot). Guarded in
+		// AGENT_DISCLOSURES: Astra is a common product name.
+		'AstraBot',
 	);
 
 	/**
@@ -588,6 +621,19 @@ class MMSAR_Agent_Log {
 		'meta-externalads'             => self::CRAWLER_OTHER,
 		'SiteAuditBot'                 => self::CRAWLER_SEO,
 		'visionheight.com'             => self::CRAWLER_SCANNER,
+		// Added 1.63.0; categories as proposed in the 2026-10-13 bot watch.
+		'cl0q-crawler'                 => self::CRAWLER_SEARCH,
+		'cl0q-discovery'               => self::CRAWLER_SEARCH,
+		'cl0q-favicon'                 => self::CRAWLER_SEARCH,
+		// Feeds the same cl0q index from someone else's server (Miriam, 2026-10-13).
+		'cl0q-node'                    => self::CRAWLER_SEARCH,
+		'SojournerBot'                 => self::CRAWLER_SEARCH,
+		'Sogou web spider'             => self::CRAWLER_SEARCH,
+		// A citation index for blogs: fetched text stays private, only metadata is published. Not
+		// AI and not general search, the same call as MapTheNetBot.
+		'CorpusBot'                    => self::CRAWLER_OTHER,
+		// Calls itself an educational crawler, for a search engine.
+		'AstraBot'                     => self::CRAWLER_SEARCH,
 	);
 
 	/**
@@ -624,7 +670,8 @@ class MMSAR_Agent_Log {
 		// crawler-first one, which leaves a user-agent that already leads with its comment exactly
 		// as it was — so rows logged before recognition still satisfy the guard. CrawlerCategoryTest
 		// asserts it for um-LN, whose user-agent is the long one; BotUserAgentShapeTest asserts that
-		// the crawler-first shape leaves every guarded user-agent here unchanged.
+		// the crawler-first shape leaves every guarded user-agent here unchanged; BotWatchOctober13Test
+		// checks all three shapes for CorpusBot and AstraBot.
 		'YaK'               => 'linkfluence.com',
 		'um-LN'             => 'ubermetrics-technologies.com',
 		// A generic word rather than a short token, guarded for the same reason. The domain sits
@@ -642,6 +689,15 @@ class MMSAR_Agent_Log {
 		// recognised. It sits inside the first 80 characters of the user-agent, so the stored raw
 		// rows satisfy it too.
 		'AgentReadyScanner' => 'github.com/elementor',
+		// Added 1.63.0. Required, not precautionary: `BeansLLM-CorpusBot/1.1
+		// (+https://scrape.beansllm.ai/bot; …)`, an unrelated bot on hold, sent 66 requests in the
+		// week before and contains the name. Unguarded, every one of its rows would be stored as
+		// CorpusBot. The domain sits inside the first 80 characters in every stored shape; the only
+		// form seen is 44 characters long.
+		'CorpusBot'         => 'corpus.blog',
+		// A common product name. The domain sits inside the first 80 characters in every stored
+		// shape; the only form seen is 63 characters long.
+		'AstraBot'          => 'junx.dev',
 	);
 
 	/**

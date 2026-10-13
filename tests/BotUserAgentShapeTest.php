@@ -150,6 +150,9 @@ final class BotUserAgentShapeTest extends TestCase {
 			// 86 characters with its link last. It opens with its own product token, so it keeps its
 			// order; the first version of this rule moved the link ahead and cut the name.
 			'AgentReadyScanner'           => array( 'AgentReadyScanner/0.1 (+https://github.com/elementor/apps-is-agent-ready-cf-worker)' ),
+			// Added 1.63.0, both exactly as they arrived on live.
+			'CorpusBot'                   => array( 'CorpusBot/1.0 (+https://corpus.blog/crawler)' ),
+			'AstraBot'                    => array( 'AstraBot/0.1 (+https://astra.junx.dev/bot; educational crawler)' ),
 			'leading product token, long' => array( 'ExampleBot/2.0 (Windows NT 10.0; Win64; x64; +https://example.com/a/long/path/that/goes/past/the/cap)' ),
 			// No claim anywhere, so the gate inside the function holds even if a caller sets the flag.
 			'long string with no claim'   => array( 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0 OPR/120.0.0.0' ),

@@ -2,6 +2,21 @@
 
 All notable changes to Make My Site Agent-Ready.
 
+## 1.63.1 — 2026-10-13
+
+- Updated: bundled crawler IP lists re-fetched from every operator on 2026-10-13. Anthropic +10 addresses, OpenAI +5 ranges and −1 (`172.185.193.176/28`). No logged request came from the withdrawn range, and none marked Spoofed came from the new ones. All other lists unchanged.
+- 1.63.0 was not released on its own and ships inside this version.
+
+## 1.63.0 — 2026-10-13
+
+- New: six more recognised bots (eight names), each with a category. Verified by the one address cl0q publishes: cl0q-crawler, cl0q-discovery and cl0q-favicon (search engine). Recognise-only: cl0q-node (search engine), SojournerBot (search engine), Sogou web spider (search engine), CorpusBot (other), AstraBot (search engine).
+- cl0q-node is cl0q's crawler software run by third parties on their own servers, so it has no verification entry and is never judged against cl0q's address. The three operator-run names are matched in full, never as a bare `cl0q`.
+- CorpusBot and AstraBot are recognised only with `corpus.blog` and `junx.dev` in the user-agent. `BeansLLM-CorpusBot`, an unrelated bot already in the log, is not recognised as CorpusBot.
+- Sogou web spider (`crawl.sogou.com`, undocumented) and SojournerBot (Web Bot Auth only, not verified by this plugin) stay unverifiable.
+- New: every AI catalog entry carries two or three `representativeQueries`, which ARD registries index for search. Before, most built-in entries had one and endpoints from Your Endpoints had none.
+- New: an "Example questions" field per endpoint under Settings > Agent-Ready > Your Endpoints, published only in the AI catalog. `queries` in `mmsar_register_endpoint()` and the `set-endpoint` / `list-endpoints` abilities. Up to five are kept.
+- The OKF bundle's catalog entry stays `text/markdown`. ARD's conformance tool asks for `profile="urn:air:agent-skills"` on Markdown entries, but the bundle is not an Agent Skill and OKF defines no media type.
+
 ## 1.62.0 — 2026-10-08
 
 - New: seven more recognised bots, each with a category. Verified by reverse DNS: Google-GeminiNotebook and Google-NotebookLM (AI assistant), Google-Read-Aloud (other). Recognise-only: meta-webindexer (AI search), meta-externalfetcher (AI assistant), meta-externalads (other), SiteAuditBot (SEO tool), VisionHeight (scanner).

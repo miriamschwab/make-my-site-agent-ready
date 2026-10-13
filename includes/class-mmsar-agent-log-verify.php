@@ -322,6 +322,13 @@ class MMSAR_Agent_Log_Verify {
 		// addresses and will churn, so a stale bundle reads a new real address as `failed`; Miriam
 		// accepted that (2026-10-05). Refresh it at release time like the others.
 		'Amzn-SearchBot'        => 'amazon-searchbot',
+		// Added 1.63.0. Range-only: cl0q publishes one address and no reverse DNS, and the address
+		// has no PTR record. Both cl0q-discovery rows on the live log were from it on 2026-10-13.
+		// One address will churn the way Known Good's could; accepted on that precedent. cl0q-node
+		// is deliberately absent: third parties run it, so it never comes from this address.
+		'cl0q-crawler'          => 'cl0q',
+		'cl0q-discovery'        => 'cl0q',
+		'cl0q-favicon'          => 'cl0q',
 	);
 
 	/**
