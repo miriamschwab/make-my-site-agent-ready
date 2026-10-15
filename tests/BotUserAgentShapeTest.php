@@ -153,6 +153,8 @@ final class BotUserAgentShapeTest extends TestCase {
 			// Added 1.63.0, both exactly as they arrived on live.
 			'CorpusBot'                   => array( 'CorpusBot/1.0 (+https://corpus.blog/crawler)' ),
 			'AstraBot'                    => array( 'AstraBot/0.1 (+https://astra.junx.dev/bot; educational crawler)' ),
+			// Added 1.64.0, exactly as it arrived on live.
+			'BitMoversBot'                => array( 'Mozilla/5.0 (compatible; BitMoversBot/1.0; +https://bitmovers.co.uk/crawler/cfuhquku)' ),
 			'leading product token, long' => array( 'ExampleBot/2.0 (Windows NT 10.0; Win64; x64; +https://example.com/a/long/path/that/goes/past/the/cap)' ),
 			// No claim anywhere, so the gate inside the function holds even if a caller sets the flag.
 			'long string with no claim'   => array( 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0 OPR/120.0.0.0' ),

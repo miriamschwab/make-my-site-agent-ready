@@ -4,7 +4,7 @@ Tags: markdown, llm, ai, llms-txt, agents
 Requires at least: 6.2
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.63.1
+Stable tag: 1.64.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -237,6 +237,12 @@ Each token is checked when you save: one for another site, another trial, or pas
 They are a floor. Many AI apps open links without telling the site where the visitor came from, and only ChatGPT reliably tags its links with `utm_source`. Those visits look like direct visits and cannot be counted. Pages already in your cache pick up the counting script when the cache next refreshes, and a security plugin that blocks the REST API for visitors stops the count entirely.
 
 == Changelog ==
+
+= 1.64.0 - 2026-10-15 =
+* New: one more bot is recognised by the agent log: BitMoversBot (Byte Dev Limited's research crawler, which maps links between sites, identifies their technology and indexes page text), category other. Byte Dev publishes no address list or reverse DNS, so it reads as Unverifiable.
+* From this release, page views from BitMoversBot keep their full address instead of being reduced to the network. Earlier entries keep the address they were stored with.
+* Changed: the Re-check button on Settings > Agent Log now also settles earlier entries from bots that are recognised but can't be verified. Before, a bot added in an update kept "Unclaimed" on everything it had sent before the update, even though new entries read "Unverifiable", and Re-check skipped them because there was nothing to check them against. Now Re-check moves those entries to Unverifiable, which is what they are: a bot was named and can't be checked. The first press after updating may reopen more entries than usual, because it also picks up bots recognised in earlier versions. No lookups are made for them.
+* Checked: the bundled crawler IP lists were re-fetched from every operator on 2026-10-15. Nothing had changed since 2026-10-13.
 
 = 1.63.1 - 2026-10-13 =
 * Updated: the bundled crawler IP lists, re-fetched from every operator on 2026-10-13. Anthropic added ten addresses and OpenAI five ranges, and OpenAI withdrew one (`172.185.193.176/28`). No request in the log had come from the withdrawn range, and no request marked "Spoofed" came from the new ones. Every other list was unchanged.

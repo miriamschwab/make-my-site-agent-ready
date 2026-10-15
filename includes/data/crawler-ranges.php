@@ -27,7 +27,7 @@ return array(
 	// Anthropic — ClaudeBot, Claude-User, Claude-SearchBot.
 	// Source: https://claude.com/crawling/bots.json.
 	'anthropic'        => array(
-		'captured' => '2026-10-13',
+		'captured' => '2026-10-15',
 		'v4'       => array(
 			'16.58.26.69/32',
 			'18.225.238.228/32',
@@ -73,7 +73,7 @@ return array(
 	// OpenAI — GPTBot, OAI-SearchBot, ChatGPT-User.
 	// Source: https://openai.com/gptbot.json, https://openai.com/searchbot.json, https://openai.com/chatgpt-user.json.
 	'openai'           => array(
-		'captured' => '2026-10-13',
+		'captured' => '2026-10-15',
 		'v4'       => array(
 			'4.151.71.176/28',
 			'4.151.119.48/28',
@@ -366,7 +366,7 @@ return array(
 	// Perplexity — PerplexityBot, Perplexity-User.
 	// Source: https://www.perplexity.ai/perplexitybot.json, https://www.perplexity.ai/perplexity-user.json.
 	'perplexity'       => array(
-		'captured' => '2026-10-13',
+		'captured' => '2026-10-15',
 		'v4'       => array(
 			'3.211.124.183/32',
 			'3.222.232.239/32',
@@ -388,7 +388,7 @@ return array(
 	// they ever diverge, split this into two groups rather than unioning them.
 	// Source: https://duckduckgo.com/duckassistbot.json, https://duckduckgo.com/duckduckbot.json.
 	'duckduckgo'       => array(
-		'captured' => '2026-10-13',
+		'captured' => '2026-10-15',
 		'v4'       => array(
 			'4.144.148.23/32',
 			'4.144.182.50/32',
@@ -885,7 +885,7 @@ return array(
 	// reverse DNS — 35.198.113.100 has no PTR record. A single address is unusually narrow, so
 	// expect this one to churn: re-fetch at release time like the rest.
 	'linkup'           => array(
-		'captured' => '2026-10-13',
+		'captured' => '2026-10-15',
 		'v4'       => array(
 			'35.198.113.100/32',
 		),
@@ -893,7 +893,7 @@ return array(
 	),  // SeznamBot.
 	// Source: https://search.seznam.cz/ipranges/seznambot.json.
 	'seznam'           => array(
-		'captured' => '2026-10-13',
+		'captured' => '2026-10-15',
 		'v4'       => array(
 			'77.75.72.26/32',
 			'77.75.73.26/32',
@@ -994,7 +994,7 @@ return array(
 	// MojeekBot.
 	// Source: https://www.mojeek.com/mojeekbot.json.
 	'mojeek'           => array(
-		'captured' => '2026-10-13',
+		'captured' => '2026-10-15',
 		'v4'       => array(
 			'5.102.173.64/28',
 		),
@@ -1003,7 +1003,7 @@ return array(
 	// SERankingBacklinksBot. Published as a list of bare addresses, stored here as /32s.
 	// Source: https://api.seranking.com/backlinks-bot-ips.
 	'seranking'        => array(
-		'captured' => '2026-10-13',
+		'captured' => '2026-10-15',
 		'v4'       => array(
 			'95.217.114.159/32',
 			'95.217.114.179/32',
@@ -1094,7 +1094,7 @@ return array(
 	// ShapBot.
 	// Source: https://docs.parallel.ai/resources/shapbot.json.
 	'parallel'         => array(
-		'captured' => '2026-10-13',
+		'captured' => '2026-10-15',
 		'v4'       => array(
 			'23.251.146.115/32',
 			'34.9.172.22/32',
@@ -1120,7 +1120,7 @@ return array(
 	// crawl.commoncrawl.org is IPv4-only by Common Crawl's own statement, so for an IPv6 caller
 	// this list is the only evidence there is.
 	'commoncrawl'      => array(
-		'captured' => '2026-10-13',
+		'captured' => '2026-10-15',
 		'v4'       => array(
 			'3.41.188.32/29',
 			'18.97.9.168/29',
@@ -1140,7 +1140,7 @@ return array(
 	// /.well-known/http-message-signatures-directory; that is a third method this plugin does not
 	// implement, and it is noted here so the next person does not re-derive it.
 	'youcom'           => array(
-		'captured' => '2026-10-13',
+		'captured' => '2026-10-15',
 		'v4'       => array(
 			'68.67.112.0/24',
 		),
@@ -1149,7 +1149,7 @@ return array(
 	// SofyaBot.
 	// Source: https://sofya.co/bot/ips.json.
 	'sofya'            => array(
-		'captured' => '2026-10-13',
+		'captured' => '2026-10-15',
 		'v4'       => array(
 			'159.195.72.86/32',
 			'159.195.250.248/32',
@@ -1167,7 +1167,7 @@ return array(
 	// bot), so no verdict could be reached on them. The IPv6 entries are the page's /64s, written
 	// compressed.
 	'xpanse'           => array(
-		'captured' => '2026-10-13',
+		'captured' => '2026-10-15',
 		'v4'       => array(
 			'35.203.210.0/23',
 			'144.86.173.0/24',
@@ -1190,7 +1190,7 @@ return array(
 	// Linkup precedent: a single published /32 is still the operator's only method.
 	// Source: https://knowngood.sh/bot/ips.json.
 	'knowngood'        => array(
-		'captured' => '2026-10-13',
+		'captured' => '2026-10-15',
 		'v4'       => array(
 			'3.216.221.135/32',
 		),
@@ -1199,7 +1199,7 @@ return array(
 	// Inoreader — feed fetcher. Plain text, one CIDR per line.
 	// Source: https://www.inoreader.com/.well-known/ip_list.txt.
 	'inoreader'        => array(
-		'captured' => '2026-10-13',
+		'captured' => '2026-10-15',
 		'v4'       => array(
 			'45.76.28.241/32',
 			'84.242.180.248/29',
@@ -1221,7 +1221,7 @@ return array(
 	// 35 full addresses on the live log were inside on capture.
 	// Source: https://developer.amazon.com/amazonbot/searchbot-ip-addresses/.
 	'amazon-searchbot' => array(
-		'captured' => '2026-10-13',
+		'captured' => '2026-10-15',
 		'v4'       => array(
 			'3.82.67.224/32',
 			'3.82.90.168/32',
@@ -2047,7 +2047,7 @@ return array(
 	// which third parties run on their own servers. Bundled on the Known Good precedent.
 	// Source: https://cl0q.com/bot/ips.json.
 	'cl0q'             => array(
-		'captured' => '2026-10-13',
+		'captured' => '2026-10-15',
 		'v4'       => array(
 			'143.110.230.182/32',
 		),

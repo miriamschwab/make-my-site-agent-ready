@@ -2,6 +2,13 @@
 
 All notable changes to Make My Site Agent-Ready.
 
+## 1.64.0 — 2026-10-15
+
+- New: one more recognised bot, with a category. Recognise-only: BitMoversBot (other), Byte Dev Limited's research crawler. No address list or reverse DNS is published, so it reads as unverifiable.
+- From this release, BitMoversBot's page views keep their full address instead of being reduced to the network. Not retroactive.
+- Changed: Re-check now reopens `unclaimed` entries that name any recognised bot, not only bots with a verification method. A recognise-only bot's entries from before it was recognised move from `unclaimed` to `unverifiable`, matching its later entries. The first press after updating also picks up bots recognised in earlier versions. No DNS lookups are made for them. The count and the reset are scoped per agent and verdict, so a bot reopened for its `unclaimed` entries doesn't also reopen its `unverifiable` ones.
+- Checked: bundled crawler IP lists re-fetched from every operator on 2026-10-15. All unchanged since 2026-10-13.
+
 ## 1.63.1 — 2026-10-13
 
 - Updated: bundled crawler IP lists re-fetched from every operator on 2026-10-13. Anthropic +10 addresses, OpenAI +5 ranges and −1 (`172.185.193.176/28`). No logged request came from the withdrawn range, and none marked Spoofed came from the new ones. All other lists unchanged.

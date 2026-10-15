@@ -423,6 +423,11 @@ class MMSAR_Agent_Log {
 		// The Astra search engine's "educational crawler" (https://astra.junx.dev/bot). Guarded in
 		// AGENT_DISCLOSURES: Astra is a common product name.
 		'AstraBot',
+		// Byte Dev Limited's research crawler (https://bitmovers.co.uk/crawler/cfuhquku): maps how
+		// sites link to each other, identifies their technology and indexes page text. No address
+		// list and no reverse DNS; the one logged address is a UK residential line with no PTR.
+		// Not guarded: no other user-agent in the log contains the name.
+		'BitMoversBot',
 	);
 
 	/**
@@ -634,6 +639,10 @@ class MMSAR_Agent_Log {
 		'CorpusBot'                    => self::CRAWLER_OTHER,
 		// Calls itself an educational crawler, for a search engine.
 		'AstraBot'                     => self::CRAWLER_SEARCH,
+		// Added 1.64.0. The operator calls it research; its link-graph and technology profiling
+		// sit close to seo-tool (PoweredByBot), but the whole is nearer Dataprovider.com (Miriam,
+		// 2026-10-15).
+		'BitMoversBot'                 => self::CRAWLER_OTHER,
 	);
 
 	/**
@@ -1876,19 +1885,24 @@ class MMSAR_Agent_Log {
 	 *   the plugin learning one. Where it still has not — `meta-externalagent`, `YouBot`,
 	 *   `Bytespider`, `CCBot` at the time of writing — re-running produces `unverifiable` again,
 	 *   every time, for as long as nobody publishes a method.
-	 * - **`unclaimed`, on the same condition.** This verdict means no *recognised* name was found
-	 *   in the user-agent, and the set of recognised names grows with the plugin: every request a
-	 *   newly-added crawler made before it was added is sitting in the log reading `unclaimed`, and
-	 *   nothing retries it. LinkupBot is the case that exposed this — 326 rows on one site, all
-	 *   answerable the moment the name was added, none of them reopened. The `has_method()` test
-	 *   below is what keeps this from meaning "recheck everything": the overwhelming majority of
-	 *   `unclaimed` rows are browsers and unbranded tools that claim nothing, and they fail it.
+	 * - **`unclaimed`, where the agent now names any recognised crawler** — a wider condition than
+	 *   the one above. This verdict means no *recognised* name was found in the user-agent, and the
+	 *   set of recognised names grows with the plugin: every request a newly-added crawler made
+	 *   before it was added is sitting in the log reading `unclaimed`, and nothing retries it.
+	 *   LinkupBot is the case that exposed this — 326 rows on one site, all answerable the moment
+	 *   the name was added, none of them reopened. Until 1.64.0 this also required a method, which
+	 *   left every recognise-only crawler's early rows reading "nothing was claimed" beside its later
+	 *   rows reading `unverifiable` (BitMoversBot on 2026-10-15 is what surfaced it). A re-run turns
+	 *   such a row into `unverifiable`, which is a real change, and once changed it is no longer
+	 *   `unclaimed`, so the count cannot stick. The `claimed_name()` test is what keeps this
+	 *   from meaning "recheck everything": the overwhelming majority of `unclaimed` rows are
+	 *   browsers and unbranded tools that claim nothing, and they fail it.
 	 *
-	 * The second test cannot be done in SQL: whether an operator is covered is a fact about the
-	 * suffix map and the bundled range data, both of which live in PHP and are filterable. So the
-	 * agents are pulled distinct and filtered here, which is a handful of rows rather than a scan.
+	 * The tests cannot be done in SQL: whether a name is recognised, and whether its operator is
+	 * covered, are facts about the agent list, the suffix map and the bundled range data, all of
+	 * which live in PHP and are filterable. So the pairs are pulled distinct and filtered here.
 	 *
-	 * @return array[] Rows of `ip` and `agent`.
+	 * @return array[] Rows of `ip`, `agent` and `verified` (the verdict the row would be reopened from).
 	 */
 	public static function get_recheckable_pairs() {
 		global $wpdb;
@@ -1902,7 +1916,7 @@ class MMSAR_Agent_Log {
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- This plugin's own table.
 		$rows = $wpdb->get_results(
 			$wpdb->prepare(
-				'SELECT DISTINCT ip, agent FROM %i WHERE verified IN ( %s, %s )',
+				'SELECT DISTINCT ip, agent, verified FROM %i WHERE verified IN ( %s, %s )',
 				self::table(),
 				MMSAR_Agent_Log_Verify::UNVERIFIABLE,
 				MMSAR_Agent_Log_Verify::UNCLAIMED
@@ -1914,19 +1928,40 @@ class MMSAR_Agent_Log {
 		foreach ( (array) $rows as $pair ) {
 			$agent   = isset( $pair['agent'] ) ? (string) $pair['agent'] : '';
 			$pair_ip = isset( $pair['ip'] ) ? (string) $pair['ip'] : '';
+			$verdict = isset( $pair['verified'] ) ? (string) $pair['verified'] : '';
+
+			if ( MMSAR_Agent_Log_Verify::UNCLAIMED === $verdict ) {
+				// No precision test here. A reduced address withholds a *range* verdict, but for a
+				// row that claimed a now-recognised name the withheld answer is `unverifiable`,
+				// which still differs from `unclaimed` — and it stops being `unclaimed` once given.
+				if ( '' !== MMSAR_Agent_Log_Verify::claimed_name( $agent ) ) {
+					$pairs[] = array(
+						'ip'       => $pair_ip,
+						'agent'    => $agent,
+						'verified' => $verdict,
+					);
+				}
+				continue;
+			}
+
 			if ( ! MMSAR_Agent_Log_Verify::has_method( $agent ) ) {
 				continue;
 			}
 
-			// A row stored at network precision can never reach a verdict — verdict_for() withholds
-			// one rather than risk accusing a real crawler on evidence that was reduced at storage
-			// time. Offering it for re-check would put a count on screen that no number of presses
-			// could ever clear, which is the same emptiness this method exists to filter out.
+			// An `unverifiable` row stored at network precision can never reach a verdict —
+			// verdict_for() withholds one rather than risk accusing a real crawler on evidence that
+			// was reduced at storage time, and withholding is the verdict it already holds.
+			// Offering it for re-check would put a count on screen that no number of presses could
+			// ever clear, which is the same emptiness this method exists to filter out.
 			if ( '' === $pair_ip || self::anonymize_ip( $pair_ip ) === $pair_ip ) {
 				continue;
 			}
 
-			$pairs[] = $pair;
+			$pairs[] = array(
+				'ip'       => $pair_ip,
+				'agent'    => $agent,
+				'verified' => $verdict,
+			);
 		}
 		return $pairs;
 	}
@@ -1998,15 +2033,14 @@ class MMSAR_Agent_Log {
 		global $wpdb;
 
 		$total = 0;
-		foreach ( self::recheckable_agents() as $agent ) {
+		foreach ( self::recheckable_agents() as $target ) {
 			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- This plugin's own table; a cached count would be stale.
 			$total += (int) $wpdb->get_var(
 				$wpdb->prepare(
-					'SELECT COUNT(*) FROM %i WHERE verified IN ( %s, %s ) AND agent = %s',
+					'SELECT COUNT(*) FROM %i WHERE verified = %s AND agent = %s',
 					self::table(),
-					MMSAR_Agent_Log_Verify::UNVERIFIABLE,
-					MMSAR_Agent_Log_Verify::UNCLAIMED,
-					$agent
+					$target['verified'],
+					$target['agent']
 				)
 			);
 		}
@@ -2052,16 +2086,27 @@ class MMSAR_Agent_Log {
 	}
 
 	/**
-	 * The distinct agents a re-check could answer differently.
+	 * The distinct agents a re-check could answer differently, each with the verdict to reopen.
 	 *
-	 * @return string[]
+	 * Keyed by verdict as well as agent because the two verdicts qualify on different tests (see
+	 * get_recheckable_pairs()). An agent eligible only for its `unclaimed` rows — a recognise-only
+	 * crawler's early rows — must not drag its `unverifiable` rows along, which would be counted on
+	 * the button and re-judged to the same answer.
+	 *
+	 * @return array[] Each: agent (string), verified (string).
 	 */
 	private static function recheckable_agents() {
-		$agents = array();
+		$targets = array();
 		foreach ( self::get_recheckable_pairs() as $pair ) {
-			$agents[ (string) $pair['agent'] ] = true;
+			$agent   = (string) $pair['agent'];
+			$verdict = (string) $pair['verified'];
+
+			$targets[ $verdict . '|' . $agent ] = array(
+				'agent'    => $agent,
+				'verified' => $verdict,
+			);
 		}
-		return array_keys( $agents );
+		return array_values( $targets );
 	}
 
 	/**
@@ -2078,16 +2123,15 @@ class MMSAR_Agent_Log {
 		global $wpdb;
 
 		$reset = 0;
-		foreach ( self::recheckable_agents() as $agent ) {
+		foreach ( self::recheckable_agents() as $target ) {
 			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Annotating this plugin's own table.
 			$rows   = $wpdb->query(
 				$wpdb->prepare(
-					'UPDATE %i SET verified = %s, verified_at = NULL WHERE verified IN ( %s, %s ) AND agent = %s',
+					'UPDATE %i SET verified = %s, verified_at = NULL WHERE verified = %s AND agent = %s',
 					self::table(),
 					MMSAR_Agent_Log_Verify::PENDING,
-					MMSAR_Agent_Log_Verify::UNVERIFIABLE,
-					MMSAR_Agent_Log_Verify::UNCLAIMED,
-					$agent
+					$target['verified'],
+					$target['agent']
 				)
 			);
 			$reset += is_numeric( $rows ) ? (int) $rows : 0;

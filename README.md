@@ -477,6 +477,16 @@ address answers "no", which would read as `Spoofed` and accuse a real operator. 
 anything the log reads as a crawler keeps its full address, so this applies to rows written before a
 crawler was recognised rather than to new traffic.
 
+**Re-check settles rows an update made answerable.** A verdict reflects what the plugin knew when it
+was reached, and an update can teach it more: a new operator's range or suffix, or a crawler name it
+did not recognise. The **Re-check** button on the Agent Log screen (and on the dashboard widget)
+appears only when there is something of that kind, and reopens exactly those rows. An *Unverifiable*
+row is reopened when its crawler now has a verification method and the row holds a full address. An
+*Unclaimed* row is reopened when its user-agent now names any recognised crawler, with or without a
+method. Since 1.64.0 a recognise-only crawler counts too: its rows from before it was recognised move
+to *Unverifiable*, matching its later ones, with no lookup. Verified and Spoofed rows are never
+reopened, so a re-check cannot overwrite a conclusion already reached.
+
 **User-run clients get their own verdict (1.47.0).** Claude Code and the Claude desktop app's Code
 tab fetch pages from the user's own machine and still send a `Claude-User` user-agent, with a
 `claude-code/<version>` token in it. Such a request can never come from Anthropic's published ranges,
@@ -512,7 +522,7 @@ category:
 | **SEO tool** | SEO and backlink platforms (AhrefsBot, SemrushBot, SiteAuditBot, Barkrowler, DataForSeoBot…) |
 | **Monitoring** | Brand and media monitoring (AwarioBot, trendictionbot, YaK, um-LN) |
 | **Scanner** | Readiness, security and attack-surface scanners (OraBot, KnownGood-Verifier, AgentReadyScanner, CensysInspect, Cortex Xpanse, l9scan, AgentTrustBot, VisionHeight) |
-| **Other** | Link previews, feed readers, archiving and everything else named (Twitterbot, facebookexternalhit, Feedly, Inoreader, archive.org_bot, Google-Read-Aloud, CorpusBot…) |
+| **Other** | Link previews, feed readers, archiving and everything else named (Twitterbot, facebookexternalhit, Feedly, Inoreader, archive.org_bot, Google-Read-Aloud, CorpusBot, BitMoversBot…) |
 
 A category goes by what the operator documents *that specific bot* doing, not by the operator's
 business overall. It is shown under the agent name, filterable as **Crawler type**, and returned by
