@@ -50,6 +50,7 @@ class MMSAR_NLWeb {
 		add_filter( 'robots_txt', array( __CLASS__, 'add_schemamap_directive' ), PHP_INT_MAX );
 		add_action( 'init', array( __CLASS__, 'register_ask_endpoint' ), 20 );
 		add_filter( 'mmsar_openapi_document', array( __CLASS__, 'describe_ask_in_openapi' ) );
+		add_action( 'wp_head', array( __CLASS__, 'render_head_link' ) );
 	}
 
 	/**
@@ -249,6 +250,69 @@ class MMSAR_NLWeb {
 	 */
 	public static function ask_url() {
 		return home_url( '/ask' );
+	}
+
+	/**
+	 * The `rel="nlweb"` Link header for the current response, or '' when /ask is not being served.
+	 *
+	 * NLWeb's discovery signal is this relation: a `<link>` in `<head>` and a matching `Link` header.
+	 * Until 1.65.0 the plugin served /ask without either, so only an agent that read llms.txt or the
+	 * api-catalog could find it. The URL is ask_url(), the same one the endpoint registration
+	 * publishes, so the header and the catalogs cannot name two different addresses.
+	 *
+	 * @return string The header line, without a trailing newline, or ''.
+	 */
+	public static function link_header() {
+		if ( ! self::is_serving() ) {
+			return '';
+		}
+		return 'Link: <' . esc_url_raw( self::ask_url() ) . '>; rel="nlweb"';
+	}
+
+	/**
+	 * Sends the `rel="nlweb"` Link header, joining any Link header already set.
+	 *
+	 * Called from mmsar_send_link_headers() only while the `nlweb` feature is on, alongside the other
+	 * per-feature discovery headers, so it goes out on every front-end HTML response.
+	 *
+	 * @return void
+	 */
+	public static function send_link_header() {
+		$header = self::link_header();
+		if ( '' !== $header ) {
+			header( $header, false );
+		}
+	}
+
+	/**
+	 * The `<link rel="nlweb">` tag for `<head>`, or '' when /ask is not being served.
+	 *
+	 * @return string The tag with a trailing newline, or ''.
+	 */
+	public static function head_link() {
+		if ( ! self::is_serving() ) {
+			return '';
+		}
+		return '<link rel="nlweb" href="' . esc_url( self::ask_url() ) . '" title="' . esc_attr__( 'Ask this site', 'make-my-site-agent-ready' ) . '">' . "\n";
+	}
+
+	/**
+	 * Prints the `<link rel="nlweb">` tag. Hooked to `wp_head` from init(), which only runs while the
+	 * `nlweb` feature is on.
+	 *
+	 * @return void
+	 */
+	public static function render_head_link() {
+		echo wp_kses(
+			self::head_link(),
+			array(
+				'link' => array(
+					'rel'   => true,
+					'href'  => true,
+					'title' => true,
+				),
+			)
+		);
 	}
 
 	/**

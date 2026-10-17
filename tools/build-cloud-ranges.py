@@ -179,6 +179,16 @@ def main():
         found = drop_special(found, label)
         c4 = list(ipaddress.collapse_addresses(n for n in found if n.version == 4))
         c6 = list(ipaddress.collapse_addresses(n for n in found if n.version == 6))
+        # The encoding below stores IPv6 in /64 units. A provider sometimes lists a /64 minus a few
+        # addresses as a run of narrower pieces (Azure, 2026-10-12: four /64s each missing 64-128
+        # addresses, all in Microsoft's own space). Widen such a piece to its /64 and say so: the
+        # holes are the provider's own space, and the snapshot already counted those /64s whole.
+        narrow = [n for n in c6 if n.prefixlen > 64]
+        if narrow:
+            widened = sorted({n.supernet(new_prefix=64) for n in narrow})
+            for w in widened:
+                print(f'  widened in {label}: {sum(1 for n in narrow if n.subnet_of(w))} pieces narrower than /64 -> {w}')
+            c6 = list(ipaddress.collapse_addresses([n for n in c6 if n.prefixlen <= 64] + widened))
         v4 += [(int(n.network_address), int(n.broadcast_address), key) for n in c4]
         v6 += [(int(n.network_address), int(n.broadcast_address), key) for n in c6]
         meta.append((key, label, source, vintage, len(c4), len(c6)))

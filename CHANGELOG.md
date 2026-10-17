@@ -2,6 +2,13 @@
 
 All notable changes to Make My Site Agent-Ready.
 
+## 1.65.0 — 2026-10-16
+
+- New: JSON-LD for each page (off by default). A page's structured data is served at its address plus `.jsonld` (front page: `/index.jsonld`) as `application/ld+json` with CORS `*`, advertised by `<link rel="alternate" type="application/ld+json">` and a matching `Link` header. The body is the graph the page embeds: Yoast SEO's, including the plugin's Markdown pointer when Structured Data is on. Renamed posts redirect, as on `.md`. JSON-LD a theme prints by itself is not included. This is the per-page half of specification.website's Schemamap proposal; the `/schemamap.xml` index and `rel="schemamap"` are deliberately not shipped.
+- Checked: bundled crawler IP lists re-fetched from every operator on 2026-10-16. All unchanged.
+- Updated: the cloud-provider network list behind the Agent Log's cloud signal, refreshed from each provider's 2026-10-16 lists. Applies to older entries too, since the signal is worked out on read.
+- New: when the NLWeb `/ask` endpoint is on, every page advertises it with a `<link rel="nlweb">` tag and a matching `Link: <…/ask>; rel="nlweb"` header, as NLWeb's discovery convention asks. Before this, `/ask` was findable only through llms.txt and the API catalog. Nothing is sent while NLWeb is off or a page owns the `/ask` address.
+
 ## 1.64.0 — 2026-10-15
 
 - New: one more recognised bot, with a category. Recognise-only: BitMoversBot (other), Byte Dev Limited's research crawler. No address list or reverse DNS is published, so it reads as unverifiable.

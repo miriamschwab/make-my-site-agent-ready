@@ -4,7 +4,7 @@ Tags: markdown, llm, ai, llms-txt, agents
 Requires at least: 6.2
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.64.0
+Stable tag: 1.65.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -33,12 +33,13 @@ Every feature below can be switched off individually under Settings > Agent-Read
 * **security.txt** — Serves `/.well-known/security.txt` (RFC 9116). Enter your security contact as a full URL, a path like `/contact`, or an email address, and the plugin formats it correctly
 * **api-catalog** — Serves `/.well-known/api-catalog` (RFC 9727), a machine-readable index linking llms.txt, llms-full.txt, security.txt, the Agent Skills index, openapi.json, the MCP manifest, webmcp.json, sitemap, and feed, each only while it is served
 * **Agent Skills discovery** — Serves `/.well-known/agent-skills/index.json` plus a bundled skill teaching agents how to use this plugin's markdown endpoints
-* **NLWeb `/ask` endpoint** — Optional (off by default). Answers questions about the site in NLWeb's shape, retrieval only, including NLWeb protocol v0.54 requests, and can stream its results as server-sent events. Ships with a Schema Map at `/schema-map.xml` in NLWeb's Schema Feeds format, listing your RSS feed, plus a `Schemamap:` robots.txt directive. When Yoast SEO's schema aggregation endpoint is on, robots.txt points to Yoast's map too. Google Search Console reports the `Schemamap:` line as "Syntax not understood", so a checkbox can switch the robots.txt lines off
+* **NLWeb `/ask` endpoint** — Optional (off by default). Answers questions about the site in NLWeb's shape, retrieval only, including NLWeb protocol v0.54 requests, and can stream its results as server-sent events. Every page advertises it the way NLWeb asks, with a `<link rel="nlweb">` tag and a matching `Link` header. Ships with a Schema Map at `/schema-map.xml` in NLWeb's Schema Feeds format, listing your RSS feed, plus a `Schemamap:` robots.txt directive. When Yoast SEO's schema aggregation endpoint is on, robots.txt points to Yoast's map too. Google Search Console reports the `Schemamap:` line as "Syntax not understood", so a checkbox can switch the robots.txt lines off
 * **MCP Apps UI** — Experimental, off by default. Lets an MCP client render search/list results as a card list instead of plain text
 * **Agent-recoverable 404s** — A 404 adds Link headers and a short Markdown list pointing at the sitemap, llms.txt and endpoint catalog, instead of leaving an agent with nothing but a dead end. Looks identical to visitors
-* **Link response headers** — Every front-end response carries `Link` headers (RFC 8288) pointing to whichever of the resources above are switched on; singular posts/pages add one more pointing to their markdown alternate — so agents that only read headers, not HTML, can still find these resources
+* **Link response headers** — Every front-end response carries `Link` headers (RFC 8288) pointing to whichever of the resources above are switched on; singular posts/pages add one more pointing to their markdown alternate, and one to their JSON-LD when that feature is on — so agents that only read headers, not HTML, can still find these resources
 * **Content Signals** — Declares `Content-Signal: search=..., ai-input=..., ai-train=...` (contentsignals.org) under each AI crawler's group in `robots.txt`, configurable in Settings > Agent-Ready. Defaults to allowing search and live AI retrieval, declining AI training use.
 * **TDMRep reservation header** — Sends `tdm-reservation: 1` or `0` on every response, the machine-readable form EU copyright law (DSM Directive Article 4) requires for a text-and-data-mining reservation to count. The value is derived from the AI Train setting above, not a separate choice, so the two can never disagree. An optional Policy URL is sent alongside it when reserving
+* **JSON-LD for each page** — Optional (off by default). Serves each page's structured data on its own at the page's address plus `.jsonld` (`/about.jsonld`, `/index.jsonld` for the front page), as `application/ld+json` that any site can fetch, and points to it with a `rel="alternate"` link and header. The graph is the one the page embeds: Yoast SEO's, with the Markdown pointer below when that is on. A JSON-LD block your theme or another plugin prints by itself is not included
 * **Structured data (JSON-LD)** — Optional (off by default) pointer to the markdown alternate on each enabled post/page. When Yoast SEO is active and produces schema for the page, the pointer merges directly into Yoast's own `Article`/`WebPage` piece — no duplicate block. Otherwise, a standalone `Article`/`WebPage` JSON-LD block is added instead. Enable in Settings > Agent-Ready.
 * **AI crawler rules** — Gives each named AI crawler its own group in `robots.txt` — GPTBot, ClaudeBot, Anthropic-AI, GoogleOther, PerplexityBot, FacebookBot, Amazonbot, CCBot and LinkupBot — with an explicit `Allow: /` and the site's Content-Signal line, so a training crawler is told what the content may be used for instead of falling through to general rules that may say nothing about it
 * **Decline AI training crawlers** — Optional (off by default). Content Signals ask crawlers not to train on your content; this makes it a robots.txt rule. GPTBot, ClaudeBot, CCBot, Amazonbot, Applebot-Extended, meta-externalagent, Bytespider and other crawlers that collect for model training get `Disallow: /`, and nothing this plugin adds reopens any part of the site to them. Search and assistant crawlers stay allowed, so you remain visible in AI search and answers. The Agent Log's Summary shows whether they comply
@@ -88,7 +89,7 @@ This is the only way the plugin can affect what a human visitor sees, which is w
 
 = Does this slow down my site? =
 
-No. The only impact on normal page loads is a single `<link>` tag in the HTML head. Markdown is pre-generated on post save, so `.md` requests serve directly from the database with no runtime conversion.
+No. On a normal page load the plugin adds a few `<link>` tags to the HTML head and `Link` headers to the response, one for each feature you have on, and no script unless you switch on WebMCP or AI referral counting. Markdown is pre-generated on post save, so `.md` requests serve directly from the database with no runtime conversion.
 
 = What URL format does it use? =
 
@@ -237,6 +238,12 @@ Each token is checked when you save: one for another site, another trial, or pas
 They are a floor. Many AI apps open links without telling the site where the visitor came from, and only ChatGPT reliably tags its links with `utm_source`. Those visits look like direct visits and cannot be counted. Pages already in your cache pick up the counting script when the cache next refreshes, and a security plugin that blocks the REST API for visitors stops the count entirely.
 
 == Changelog ==
+
+= 1.65.0 - 2026-10-16 =
+* New: JSON-LD for each page, off by default. Switch it on and every page's structured data is also served on its own at the page's address plus `.jsonld` (for example `/about.jsonld`; the front page is `/index.jsonld`), as `application/ld+json` with `Access-Control-Allow-Origin: *`. Each page points to it with `<link rel="alternate" type="application/ld+json">` and a matching `Link` header. The graph is the one the page already carries: Yoast SEO's, including this plugin's Markdown pointer when Structured Data is on. A renamed post's old `.jsonld` address redirects, as its `.md` address does. Password-protected and unpublished posts are never served. A JSON-LD block that your theme or another plugin prints by itself, outside Yoast's graph, is not included.
+* Checked: bundled crawler IP lists re-fetched from every operator on 2026-10-16. All unchanged.
+* Updated: the cloud-provider network list behind the Agent Log's cloud signal, from each provider's lists of 2026-10-16 (AWS, Google Cloud, Azure, Linode, Vultr; Oracle and DigitalOcean unchanged). The signal is worked out when the log is read, so older entries pick up the new list too.
+* New: when the NLWeb `/ask` endpoint is on, every page now advertises it the way NLWeb asks: a `<link rel="nlweb">` tag in the page head and a matching `Link: <…/ask>; rel="nlweb"` response header. Before this, agents could only find `/ask` through llms.txt or the API catalog. Neither is sent while NLWeb is off, or while a page of yours already uses the `/ask` address.
 
 = 1.64.0 - 2026-10-15 =
 * New: one more bot is recognised by the agent log: BitMoversBot (Byte Dev Limited's research crawler, which maps links between sites, identifies their technology and indexes page text), category other. Byte Dev publishes no address list or reverse DNS, so it reads as Unverifiable.

@@ -189,6 +189,10 @@ class MMSAR_Admin {
 				__( 'NLWeb /ask endpoint', 'make-my-site-agent-ready' ),
 				__( 'Answers questions about your site at /ask, in Microsoft\'s NLWeb shape, with optional SSE streaming — plus a Schema Map at /schema-map.xml listing your RSS feed, and a Schemamap directive in robots.txt (for Yoast SEO\'s map too, when its schema aggregation endpoint is on). Retrieval only: it returns ranked pages from your site, not a generated answer, and says so in every response. Off by default, because unlike the documents above it runs a query on each call.', 'make-my-site-agent-ready' ),
 			),
+			'jsonld'               => array(
+				__( 'JSON-LD for each page (.jsonld)', 'make-my-site-agent-ready' ),
+				__( 'Serves each page\'s structured data on its own at the page\'s address plus .jsonld (for example /about.jsonld), as application/ld+json that any site can fetch, and points to it from the page with a rel="alternate" link and header. The graph is the one the page already embeds: Yoast SEO\'s, with this plugin\'s Markdown pointer when Structured Data is on below. Agents get it without parsing your HTML. A JSON-LD block your theme or another plugin prints by itself, outside Yoast\'s graph, is not included. Pages with no structured data get no link. Off by default, because it builds the graph on each request and few agents ask for it yet.', 'make-my-site-agent-ready' ),
+			),
 			'mcp_ui'               => array(
 				__( 'MCP Apps UI (experimental)', 'make-my-site-agent-ready' ),
 				__( 'Lets an MCP client render search and listing results as a card list inside the conversation, instead of as plain text, by exposing a ui:// resource and pointing the two list tools at it. Requires the MCP server above. Marked experimental for one honest reason: no MCP Apps host was available to render this template against, so unlike everything else here it has not been verified against the thing that consumes it. A client that ignores the metadata still gets the normal text result, so switching it on cannot break an existing one. Off by default.', 'make-my-site-agent-ready' ),

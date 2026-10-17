@@ -280,7 +280,7 @@ class MMSAR_Server {
 	 * @param string $path Requested path, without the `.md` suffix or surrounding slashes.
 	 * @return int Post ID, or 0.
 	 */
-	private static function resolve_renamed_post_id( $path ) {
+	public static function resolve_renamed_post_id( $path ) {
 		global $wpdb;
 
 		// Core matches an old slug, never an old path, so the comparison is on the last segment.
@@ -346,7 +346,19 @@ class MMSAR_Server {
 	 * @return mixed Result.
 	 */
 	private static function resolve_post_id() {
-		$path = get_query_var( 'llmmd_path' );
+		return self::resolve_path( (string) get_query_var( 'llmmd_path' ) );
+	}
+
+	/**
+	 * The post a mirror path names, or 0. `index` is the static front page.
+	 *
+	 * Public since 1.65.0 so the `.jsonld` mirror (MMSAR_JSONLD) resolves a path exactly as the `.md`
+	 * mirror does; two copies of this lookup would drift.
+	 *
+	 * @param string $path Requested path, without the suffix or surrounding slashes.
+	 * @return int Post ID, or 0. The post may be in any status; callers check.
+	 */
+	public static function resolve_path( $path ) {
 		if ( empty( $path ) ) {
 			return 0;
 		}

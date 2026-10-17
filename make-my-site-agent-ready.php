@@ -3,7 +3,7 @@
  * Plugin Name:       Make My Site Agent-Ready
  * Plugin URI:        https://miriamschwab.me/plugins/make-my-site-agent-ready
  * Description:       Makes your WordPress site ready for AI agents: .md URLs, llms.txt, llms-full.txt, an OpenAPI spec, a read-only MCP server, agent-recoverable 404s, security.txt, api-catalog, Agent Skills discovery, an OKF bundle, Link response headers, Content Signals, a TDMRep reservation header, optional JSON-LD structured data (merges into Yoast's own schema when active), and AI crawler rules in robots.txt.
- * Version:           1.64.0
+ * Version:           1.65.0
  * Author:            Miriam Schwab
  * Author URI:        https://miriamschwab.me
  * License:           GPL-2.0-or-later
@@ -19,7 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'MMSAR_VERSION', '1.64.0' );
+define( 'MMSAR_VERSION', '1.65.0' );
 define( 'MMSAR_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'MMSAR_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'MMSAR_PLUGIN_FILE', __FILE__ );
@@ -55,6 +55,7 @@ require_once MMSAR_PLUGIN_DIR . 'includes/class-mmsar-agent-view.php';
 require_once MMSAR_PLUGIN_DIR . 'includes/class-mmsar-nlweb.php';
 require_once MMSAR_PLUGIN_DIR . 'includes/class-mmsar-robots-allow.php';
 require_once MMSAR_PLUGIN_DIR . 'includes/class-mmsar-structured-data.php';
+require_once MMSAR_PLUGIN_DIR . 'includes/class-mmsar-jsonld.php';
 require_once MMSAR_PLUGIN_DIR . 'includes/class-mmsar-okf.php';
 require_once MMSAR_PLUGIN_DIR . 'includes/class-mmsar-indexnow.php';
 require_once MMSAR_PLUGIN_DIR . 'includes/class-mmsar-referrals.php';
@@ -134,6 +135,9 @@ function mmsar_get_feature_keys() {
 		// another plugin may publish this address too (Elementor core has one, not yet active), and
 		// the owner chooses which answers.
 		'webmcp_manifest'      => true,
+		// Off by default: a new URL per page, built by asking the SEO plugin for the page's graph on
+		// each request, and it rests on a proposal with one implementer. See MMSAR_JSONLD.
+		'jsonld'               => false,
 	);
 }
 
@@ -518,6 +522,9 @@ if ( mmsar_feature_enabled( 'agent_view' ) ) {
 if ( mmsar_feature_enabled( 'nlweb' ) ) {
 	MMSAR_NLWeb::init();
 }
+if ( mmsar_feature_enabled( 'jsonld' ) ) {
+	MMSAR_JSONLD::init();
+}
 if ( mmsar_feature_enabled( 'okf_bundle' ) ) {
 	MMSAR_OKF::init();
 }
@@ -726,6 +733,11 @@ function mmsar_send_link_headers() {
 	if ( mmsar_feature_enabled( 'auth_md' ) ) {
 		header( 'Link: <' . esc_url_raw( MMSAR_Auth_Md::url() ) . '>; rel="service-doc"; type="text/markdown"', false );
 	}
+	// rel="nlweb" is how NLWeb says "this site answers questions at this address". Sent only while
+	// /ask is actually served: the feature is on and no page owns the /ask slug.
+	if ( mmsar_feature_enabled( 'nlweb' ) ) {
+		MMSAR_NLWeb::send_link_header();
+	}
 	// rel="describedby" and type="text/plain" both match how the api-catalog already lists llms.txt,
 	// so an agent reading the header and an agent reading the catalog are told the same thing.
 	// llms-full.txt is deliberately not advertised here: it is the same content at full length, and
@@ -743,6 +755,20 @@ function mmsar_send_link_headers() {
 	$md_url = mmsar_get_markdown_url();
 	if ( $md_url ) {
 		header( 'Link: <' . esc_url_raw( $md_url ) . '>; rel="alternate"; type="text/markdown"', false );
+	}
+}
+
+add_action( 'template_redirect', 'mmsar_send_jsonld_link_header' );
+/**
+ * The `.jsonld` mirror's `rel="alternate"` header. A function of its own because
+ * mmsar_send_link_headers() returns early when markdown URLs are off, and this does not depend on
+ * them.
+ *
+ * @return void
+ */
+function mmsar_send_jsonld_link_header() {
+	if ( mmsar_feature_enabled( 'jsonld' ) ) {
+		MMSAR_JSONLD::send_link_header();
 	}
 }
 

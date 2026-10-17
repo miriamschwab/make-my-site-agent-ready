@@ -208,8 +208,11 @@ final class SignalsTest extends TestCase {
 			'Azure'                                        => array( '20.102.46.225', 'azure' ),
 			'AWS EC2 over IPv6'                            => array( '2600:1f6a:c800::1', 'aws' ),
 			'AWS EC2 over IPv6 at network precision'       => array( '2600:1f6a:c800:0::', 'aws' ),
-			'a /29 of Azure, the full address'             => array( '4.191.131.5', 'azure' ),
-			'the /24 around that /29: cannot tell'         => array( '4.191.131.0', MMSAR_Agent_Log_Signals::CLOUD_PARTIAL ),
+			// Azure listed only a /29 of 4.191.131.0/24 until its 2026-10-12 file, which covers the
+			// whole /24; the partial case moved to a /27 Azure still lists on its own.
+			'Azure, formerly a /29, now its whole /24'     => array( '4.191.131.0', 'azure' ),
+			'a /27 of Azure, the full address'             => array( '4.161.15.100', 'azure' ),
+			'the /24 around that /27: cannot tell'         => array( '4.161.15.0', MMSAR_Agent_Log_Signals::CLOUD_PARTIAL ),
 
 			// Not cloud, and several of these are the false positives the signal is built to avoid.
 			'residential broadband'                        => array( '86.209.233.10', '' ),

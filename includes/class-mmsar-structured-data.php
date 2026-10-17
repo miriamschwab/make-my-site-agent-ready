@@ -46,7 +46,7 @@ class MMSAR_Structured_Data {
 	 * or null if this page shouldn't get structured data at all.
 	 */
 	private static function eligible() {
-		if ( '1' !== get_option( 'mmsar_structured_data', '' ) ) {
+		if ( ! self::is_enabled() ) {
 			return null;
 		}
 		if ( ! is_singular( mmsar_get_enabled_post_types() ) ) {
@@ -135,13 +135,33 @@ class MMSAR_Structured_Data {
 	 * Yoast gives its own distinct schema to (e.g. WooCommerce products).
 	 */
 	public static function output_fallback() {
-		if ( self::$injected ) {
+		$data = self::fallback_node();
+		if ( ! $data ) {
 			return;
+		}
+
+		// JSON_HEX_TAG escapes < and > (as </>) so a title containing a literal
+		// "</script>" can't break out of the surrounding script tag.
+		echo '<script type="application/ld+json">' . wp_json_encode( $data, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG ) . '</script>' . "\n";
+	}
+
+	/**
+	 * The standalone node output_fallback() prints, or null when it prints nothing.
+	 *
+	 * Public since 1.65.0 so the `.jsonld` mirror (MMSAR_JSONLD) serves exactly the node the page
+	 * embeds. It reads the same per-request state: call it after Yoast's graph has been generated,
+	 * or the injection flag is not yet set and the node would be added to a page that has none.
+	 *
+	 * @return array|null
+	 */
+	public static function fallback_node() {
+		if ( self::$injected ) {
+			return null;
 		}
 
 		$info = self::eligible();
 		if ( ! $info ) {
-			return;
+			return null;
 		}
 
 		$post_id    = $info['post_id'];
@@ -158,8 +178,15 @@ class MMSAR_Structured_Data {
 		);
 		$data[ $is_article ? 'headline' : 'name' ] = $title;
 
-		// JSON_HEX_TAG escapes < and > (as </>) so a title containing a literal
-		// "</script>" can't break out of the surrounding script tag.
-		echo '<script type="application/ld+json">' . wp_json_encode( $data, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG ) . '</script>' . "\n";
+		return $data;
+	}
+
+	/**
+	 * Whether the opt-in structured data setting is on.
+	 *
+	 * @return bool
+	 */
+	public static function is_enabled() {
+		return '1' === get_option( 'mmsar_structured_data', '' );
 	}
 }
