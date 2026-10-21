@@ -426,8 +426,8 @@ Two methods, chosen per operator, because the operators are split on which they 
   `googleusercontent.com` but not `googlebot.com`), Apple, Amazon, Microsoft, Ahrefs, Babbar
   (Barkrowler), Common Crawl, Huawei (PetalBot), You.com (YouBot), Yandex, Censys, LeakIX (l9scan),
   the Internet Archive (archive.org_bot), Qwant, DataForSEO, LohiSoft, Keywords Everywhere
-  (PoweredByBot), Ibou (IbouBot), Baidu (Baiduspider), Cốc Cốc (coccocbot), FindFiles, Iframely and
-  creasource.dev (crawl-engine). The address is reversed to a hostname, that hostname is resolved
+  (PoweredByBot), ibou (IbouBot and ibou-search, both under `ibou.io`), Baidu (Baiduspider), Cốc Cốc
+  (coccocbot), FindFiles, Iframely and creasource.dev (crawl-engine). The address is reversed to a hostname, that hostname is resolved
   forward and must come back to the same address, and it must sit under a domain the claimed
   operator owns. Anyone
   can put any string in a `User-Agent`; nobody can put a record in someone else's DNS zone. A
@@ -519,8 +519,8 @@ category:
 |---|---|
 | **AI training** | Collects content to train models (GPTBot, ClaudeBot, CCBot…) |
 | **AI search** | Builds or queries an index used to answer questions (OAI-SearchBot, PerplexityBot, LinkupBot, Amzn-SearchBot, meta-webindexer…) |
-| **AI assistant** | Fetches a page because a person asked an assistant right then (ChatGPT-User, Claude-User, Amazon Quick, Google-GeminiNotebook, meta-externalfetcher…) |
-| **Search engine** | Conventional web search (SeznamBot, DuckDuckBot, YandexBot, Baiduspider, Sogou web spider, Qwantbot, cl0q…) |
+| **AI assistant** | Fetches a page because a person asked an assistant right then (ChatGPT-User, Claude-User, Amazon Quick, Google-GeminiNotebook, meta-externalfetcher, ExaUser…) |
+| **Search engine** | Conventional web search (SeznamBot, DuckDuckBot, YandexBot, Baiduspider, Sogou web spider, Qwantbot, cl0q, ibou-search, PoliasBot, Vento9…) |
 | **SEO tool** | SEO and backlink platforms (AhrefsBot, SemrushBot, SiteAuditBot, Barkrowler, DataForSeoBot…) |
 | **Monitoring** | Brand and media monitoring (AwarioBot, trendictionbot, YaK, um-LN) |
 | **Scanner** | Readiness, security and attack-surface scanners (OraBot, KnownGood-Verifier, AgentReadyScanner, CensysInspect, Cortex Xpanse, l9scan, AgentTrustBot, VisionHeight) |

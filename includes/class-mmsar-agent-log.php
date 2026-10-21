@@ -428,6 +428,34 @@ class MMSAR_Agent_Log {
 		// list and no reverse DNS; the one logged address is a UK residential line with no PTR.
 		// Not guarded: no other user-agent in the log contains the name.
 		'BitMoversBot',
+		// Added 1.66.0 from the agent-log-bot-watch report of 2026-10-19. Appended, for the
+		// ordering reason given above Googlebot.
+		//
+		// ibou's newer search crawler (https://www.ibou.com/crawlers.html), the same operator as
+		// IbouBot above and verified by the same `ibou.io` suffix; see
+		// MMSAR_Agent_Log_Verify::VERIFY_HOSTS. It needs an entry of its own because its user-agent
+		// does not contain `IbouBot`, and neither of ibou's two crawler pages says whether one name
+		// replaces the other, so both are recognised.
+		'ibou-search',
+		// The rest of this group is recognise-only.
+		//
+		// Polias, a German search engine run by one person (https://polias.eu/bot). The operator
+		// states plainly that the addresses change, because the crawler runs on Hetzner Cloud, and
+		// that the user-agent is what to rely on — so there is nothing to verify against. Its
+		// documented sibling `Polias-KI`, a chat fetch, has not been seen and the page gives no full
+		// user-agent for it, so it is deliberately not guessed at (Miriam, 2026-10-21).
+		'PoliasBot',
+		// Vento9, an independent German-language search engine (https://vento9.com/bot.php). The
+		// page calls it "Vento9Bot" but the documented and seen user-agent is `Vento9/1.0`, so the
+		// bare operator name is matched and covers both forms. Guarded in AGENT_DISCLOSURES for
+		// that reason: the bare name is what a product version could carry by accident. No address
+		// list and no reverse DNS are published.
+		'Vento9',
+		// Exa's user-triggered fetcher (https://crawler.exa.ai/exauser): it fetches a page when a
+		// person, or an app on the Exa API, asks for it, and does no scheduled crawling. Signed
+		// with Web Bot Auth, which this plugin records but does not verify, so it is recognise-only
+		// like its sibling ExaSearchBot.
+		'ExaUser',
 	);
 
 	/**
@@ -643,6 +671,19 @@ class MMSAR_Agent_Log {
 		// sit close to seo-tool (PoweredByBot), but the whole is nearer Dataprovider.com (Miriam,
 		// 2026-10-15).
 		'BitMoversBot'                 => self::CRAWLER_OTHER,
+		// Added 1.66.0; categories as proposed in the 2026-10-19 bot watch and confirmed per name
+		// by Miriam on 2026-10-21.
+		//
+		// ibou says it does not train AI models with the data, and classifies the crawler as Search.
+		'ibou-search'                  => self::CRAWLER_SEARCH,
+		// Collects pages for the Polias search index.
+		'PoliasBot'                    => self::CRAWLER_SEARCH,
+		// Its own German-language index; stores title, description, visible text, a screenshot and
+		// publicly listed imprint details. No AI use documented either way.
+		'Vento9'                       => self::CRAWLER_SEARCH,
+		// Fetched because a person asked, like ChatGPT-User and Claude-User, and not the crawler
+		// that feeds Exa's index — that is ExaSearchBot, which stays ai-search.
+		'ExaUser'                      => self::CRAWLER_AI_ASSISTANT,
 	);
 
 	/**
@@ -707,6 +748,12 @@ class MMSAR_Agent_Log {
 		// A common product name. The domain sits inside the first 80 characters in every stored
 		// shape; the only form seen is 63 characters long.
 		'AstraBot'          => 'junx.dev',
+		// Added 1.66.0. Precautionary, not a known collision: the operator's own docs call the bot
+		// "Vento9Bot" while it sends `Vento9/1.0`, so the bare operator name is what is matched, and
+		// a bare name with a version after it is the shape an unrelated product string could take.
+		// The domain sits inside the first 80 characters of the only form seen, which is 32
+		// characters long, so every stored shape satisfies the guard.
+		'Vento9'            => 'vento9.com',
 	);
 
 	/**

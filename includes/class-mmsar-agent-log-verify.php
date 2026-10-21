@@ -274,6 +274,16 @@ class MMSAR_Agent_Log_Verify {
 		// address. 146.59.197.253 reverses to crawler.creasource.dev and forward-confirms; the other
 		// row is stored at network precision. The full host, not the bare domain.
 		'crawl-engine'          => array( 'crawler.creasource.dev' ),
+		// Added 1.66.0 — https://www.ibou.com/crawlers.html, which documents the suffix as
+		// "ibou.io (forward-confirmed)" and tells a verifier to resolve the hostname back and check
+		// it returns the address it started from. Re-checked 2026-10-21 against ibou's own published
+		// range file (ibousearch-ip-ranges.json, creationTime 2026-09-28, one IPv4 /24 and one IPv6
+		// /44): every one of the 254 addresses in 188.241.38.0/24 that has a PTR resolves under
+		// ibou.io, as `c40` plus the zero-padded last octet, and eight sampled hosts forward-confirm.
+		// Nothing in the /24 resolves anywhere else. The range file is deliberately not bundled, for
+		// the Ahrefs reason above and to follow IbouBot, whose own list is unused: rDNS is proven
+		// here, and a stale bundled range turns a range miss on a PTR-less address into `failed`.
+		'ibou-search'           => array( 'ibou.io' ),
 	);
 
 	/**

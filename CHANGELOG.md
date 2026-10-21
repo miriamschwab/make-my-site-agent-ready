@@ -2,6 +2,17 @@
 
 All notable changes to Make My Site Agent-Ready.
 
+## 1.66.0 — 2026-10-21
+
+- New: four more bots recognised by the agent log, each with a category. Verified by reverse DNS: `ibou-search` (ibou's newer crawler, the same French operator as `IbouBot`, search-engine). Recognise-only: `PoliasBot` (the German search engine Polias, search-engine), `Vento9` (an independent German-language search engine, search-engine) and `ExaUser` (Exa's user-triggered fetcher, ai-assistant — its sibling `ExaSearchBot`, the automatic crawler, stays ai-search).
+- From this release a page view from any of the four keeps its full address instead of being reduced to its network, which is the half with a deadline: an address reduced at storage time can never be checked against a list published later. Entries stored earlier keep the address they were stored with.
+- `ibou-search` uses the documented `ibou.io` hostname check only, following `IbouBot`. ibou also publishes a range file; it is deliberately not bundled, because a stale bundled range turns a range miss on a PTR-less address into a reported forgery. Re-checked 2026-10-21: every address in ibou's published `188.241.38.0/24` that has a PTR resolves under `ibou.io`, and sampled hosts forward-confirm.
+- The other three publish no method. Polias states that its addresses change (Hetzner Cloud) and that the user-agent is what to rely on; Exa signs requests with Web Bot Auth, which this plugin records but does not verify. All three reach `unverifiable`.
+- `Vento9` is guarded in `AGENT_DISCLOSURES` by `vento9.com`. The operator's docs name the bot "Vento9Bot" while it sends `Vento9/1.0`, so the bare operator name is matched — which covers both forms and stores one clean label — and the domain keeps it from being worn by accident.
+- `Polias-KI`, Polias's documented chat fetcher, is deliberately not added: it has not been seen and no full user-agent is published for it.
+- Updated: bundled crawler IP ranges re-fetched from all 21 published source files on 2026-10-21. **Anthropic withdrew 24 of its 38 prefixes** (1,136 → 1,037 addresses, `creationTime` 2026-10-20) and added none; **OpenAI widened `9.129.0.0/17` to `/16`**. The other 15 operators were unchanged, including Amazon's 816 addresses and DuckDuckGo's 486. All 17 capture dates moved to 2026-10-21, so `ranges_captured()` now reports it.
+- The Anthropic withdrawal was taken only after checking it against live traffic: every log entry claiming `ClaudeBot` (516 verified rows, 47 addresses), `Claude-SearchBot` (20, 5) and `Claude-User` (56, 4) sits in a prefix Anthropic kept, so nothing that read `verified` became `failed`. Judged by address coverage, not by range count.
+
 ## 1.65.0 — 2026-10-16
 
 - New: JSON-LD for each page (off by default). A page's structured data is served at its address plus `.jsonld` (front page: `/index.jsonld`) as `application/ld+json` with CORS `*`, advertised by `<link rel="alternate" type="application/ld+json">` and a matching `Link` header. The body is the graph the page embeds: Yoast SEO's, including the plugin's Markdown pointer when Structured Data is on. Renamed posts redirect, as on `.md`. JSON-LD a theme prints by itself is not included. This is the per-page half of specification.website's Schemamap proposal; the `/schemamap.xml` index and `rel="schemamap"` are deliberately not shipped.

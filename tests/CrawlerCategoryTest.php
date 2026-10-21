@@ -461,9 +461,22 @@ final class CrawlerCategoryTest extends TestCase {
 			'CCBot, range miss, forward empty'         => array( 'CCBot', self::ELSEWHERE, 'x.crawl.commoncrawl.org', array(), 'failed' ),
 			// Range refresh, 2026-10-05: a prefix Anthropic added, and one OpenAI withdrew (no live
 			// row had ever come from the three withdrawn /24s).
-			'ClaudeBot, a 2026-10 Anthropic prefix'    => array( 'ClaudeBot', '160.79.106.20', '', array(), 'verified' ),
 			'GPTBot, a 2026-09 OpenAI prefix'          => array( 'GPTBot', '134.138.52.130', '', array(), 'verified' ),
 			'GPTBot, a withdrawn OpenAI /24'           => array( 'GPTBot', '172.182.204.10', '', array(), 'failed' ),
+			// Range refresh, 2026-10-21. Anthropic withdrew 24 of its 38 prefixes, among them the
+			// 160.79.106.16/28 this suite used to pin as *added* at the 2026-10-05 refresh — a
+			// reminder that a bundled range is a snapshot of a claim, not a fact. Both sides are
+			// pinned here. The verified addresses are real: they are what ClaudeBot and Claude-User
+			// actually arrived from on miriamschwab.me, and all of them sit in prefixes Anthropic
+			// kept, which is why the withdrawal was safe to take.
+			'ClaudeBot, a retained /22 address'        => array( 'ClaudeBot', '216.73.216.122', '', array(), 'verified' ),
+			'Claude-SearchBot, retained /22'          => array( 'Claude-SearchBot', '216.73.217.151', '', array(), 'verified' ),
+			'Claude-User, a retained /32'              => array( 'Claude-User', '34.162.191.81', '', array(), 'verified' ),
+			'ClaudeBot, a withdrawn /28'               => array( 'ClaudeBot', '160.79.106.20', '', array(), 'failed' ),
+			'ClaudeBot, another withdrawn prefix'      => array( 'ClaudeBot', '16.58.26.69', '', array(), 'failed' ),
+			// OpenAI widened 9.129.0.0/17 to /16 in the same refresh; this address is inside the
+			// new prefix and outside the old one, so it pins the widening rather than the file.
+			'ChatGPT-User, inside the widened /16'     => array( 'ChatGPT-User', '9.129.200.5', '', array(), 'verified' ),
 			'Baiduspider, raw user-agent'              => array( '(compatible; Baiduspider/2.0; +http://www.baidu.com/search/spider.html)', '116.179.32.145', 'baiduspider-116-179-32-145.crawl.baidu.com', array( '116.179.32.145' ), 'verified' ),
 			'Baiduspider, documented baidu.jp'         => array( 'Baiduspider', self::ELSEWHERE, 'crawl.baidu.jp', array( self::ELSEWHERE ), 'verified' ),
 			'Baiduspider, reverse without forward'     => array( 'Baiduspider', '116.179.32.145', 'baiduspider-116-179-32-145.crawl.baidu.com', array( '203.0.113.9' ), 'failed' ),

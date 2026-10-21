@@ -4,7 +4,7 @@ Tags: markdown, llm, ai, llms-txt, agents
 Requires at least: 6.2
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.65.0
+Stable tag: 1.66.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -238,6 +238,15 @@ Each token is checked when you save: one for another site, another trial, or pas
 They are a floor. Many AI apps open links without telling the site where the visitor came from, and only ChatGPT reliably tags its links with `utm_source`. Those visits look like direct visits and cannot be counted. Pages already in your cache pick up the counting script when the cache next refreshes, and a security plugin that blocks the REST API for visitors stops the count entirely.
 
 == Changelog ==
+
+= 1.66.0 - 2026-10-21 =
+* New: four more bots are recognised by the agent log, each with a category. Verified by reverse DNS: ibou-search (the newer crawler from ibou, the French search engine already behind IbouBot, search engine). Recognised but not verifiable: PoliasBot (the German search engine Polias, search engine), Vento9 (an independent German-language search engine, search engine) and ExaUser (Exa fetching a page because a person or an app asked for it right then, AI assistant).
+* From this release, page views from these four keep their full address instead of being reduced to the network, which is what makes verifying them possible at all. Entries stored earlier keep the address they were stored with.
+* ibou publishes an address list for ibou-search as well as a hostname convention. Only the hostname check is used, as with IbouBot: it was confirmed against every address in ibou's own published range on 2026-10-21, and an address list that falls out of date turns a genuine crawler into a reported forgery.
+* Polias, Vento9 and Exa publish nothing to check an address against — Polias says outright that its addresses change and that the user-agent is what to rely on, and Exa signs its requests instead, which this plugin records but does not verify. All three read as Unverifiable, which means "cannot be checked" and is not an accusation.
+* Vento9 is only recognised when its user-agent also names vento9.com. Its operator's documentation calls the bot "Vento9Bot" while it actually sends "Vento9/1.0", so the plugin matches the shorter name and uses the domain to keep it from being claimed by accident.
+* Updated: the bundled crawler IP lists were re-fetched from all 21 published files on 2026-10-21. Anthropic withdrew 24 of its 38 ranges; OpenAI widened one of its own. The other 15 operators' lists were unchanged. Before taking Anthropic's removal, every entry in this site's own log that claimed ClaudeBot, Claude-SearchBot or Claude-User was checked against the withdrawn ranges: none of them used one, so no entry that read Verified has become Spoofed.
+* If you run the agent log and see a Claude entry turn to Spoofed after this update, the address is worth checking by hand before treating it as a forgery. Anthropic publishes the list this check uses, and it changes.
 
 = 1.65.0 - 2026-10-16 =
 * New: JSON-LD for each page, off by default. Switch it on and every page's structured data is also served on its own at the page's address plus `.jsonld` (for example `/about.jsonld`; the front page is `/index.jsonld`), as `application/ld+json` with `Access-Control-Allow-Origin: *`. Each page points to it with `<link rel="alternate" type="application/ld+json">` and a matching `Link` header. The graph is the one the page already carries: Yoast SEO's, including this plugin's Markdown pointer when Structured Data is on. A renamed post's old `.jsonld` address redirects, as its `.md` address does. Password-protected and unpublished posts are never served. A JSON-LD block that your theme or another plugin prints by itself, outside Yoast's graph, is not included.
