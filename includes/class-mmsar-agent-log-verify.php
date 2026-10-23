@@ -339,6 +339,11 @@ class MMSAR_Agent_Log_Verify {
 		'cl0q-crawler'          => 'cl0q',
 		'cl0q-discovery'        => 'cl0q',
 		'cl0q-favicon'          => 'cl0q',
+		// Added 1.67.0. Range-only: Alpost documents one address and says bot.alpost.ch points to
+		// it, which is a forward record, not a reverse-DNS method. The address's PTR read
+		// bot.alpost.ch on 2026-10-22 and mx2.alpost.ch on 2026-10-23, so it is not a name the
+		// operator keeps stable, and no suffix is entered (Miriam, 2026-10-23).
+		'AlpostBot'             => 'alpost',
 	);
 
 	/**

@@ -211,8 +211,13 @@ final class SignalsTest extends TestCase {
 			// Azure listed only a /29 of 4.191.131.0/24 until its 2026-10-12 file, which covers the
 			// whole /24; the partial case moved to a /27 Azure still lists on its own.
 			'Azure, formerly a /29, now its whole /24'     => array( '4.191.131.0', 'azure' ),
-			'a /27 of Azure, the full address'             => array( '4.161.15.100', 'azure' ),
-			'the /24 around that /27: cannot tell'         => array( '4.161.15.0', MMSAR_Agent_Log_Signals::CLOUD_PARTIAL ),
+			// The same happened to 4.161.15.0/24: Azure listed only a /27 of it until its 2026-10-19
+			// file, which covers all of 4.160.0.0/12. The partial case moved again, to a /28 that
+			// was listed on its own in both the 2026-10-16 and 2026-10-23 captures.
+			'Azure, formerly a /27, now inside a /12'      => array( '4.161.15.0', 'azure' ),
+			'a /28 of Azure, the full address'             => array( '40.80.161.9', 'azure' ),
+			'the /24 around that /28: cannot tell'         => array( '40.80.161.0', MMSAR_Agent_Log_Signals::CLOUD_PARTIAL ),
+			'the same /24 outside the /28'                 => array( '40.80.161.200', '' ),
 
 			// Not cloud, and several of these are the false positives the signal is built to avoid.
 			'residential broadband'                        => array( '86.209.233.10', '' ),

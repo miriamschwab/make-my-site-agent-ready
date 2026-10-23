@@ -456,6 +456,23 @@ class MMSAR_Agent_Log {
 		// with Web Bot Auth, which this plugin records but does not verify, so it is recognise-only
 		// like its sibling ExaSearchBot.
 		'ExaUser',
+		// Added 1.67.0 from the agent-log-bot-watch report of 2026-10-22. Appended, for the
+		// ordering reason given above Googlebot.
+		//
+		// Alpost's search crawler (https://alpost.ch/en/bot/), which "connects only from" one
+		// documented address; see the `alpost` group in includes/data/crawler-ranges.php.
+		'AlpostBot',
+		// The rest of this group is recognise-only.
+		//
+		// ElevenLabs' training crawler (https://elevenlabs.io/docs/bots). No address list, no reverse
+		// DNS and no Web Bot Auth are published, and the 21 addresses it arrived from on live sit on
+		// budget VPS and colocation networks, most with no PTR.
+		'ElevenlabsCrawler',
+		// ElevenLabs' knowledge-base fetcher, documented on the same page and set independently of
+		// the crawler in robots.txt. Not yet seen on live; added from the documented user-agent
+		// (Miriam, 2026-10-23). That user-agent is a bare `ElevenlabsBot/1.0` with no URL, so there is
+		// no domain to guard it with.
+		'ElevenlabsBot',
 	);
 
 	/**
@@ -684,6 +701,14 @@ class MMSAR_Agent_Log {
 		// Fetched because a person asked, like ChatGPT-User and Claude-User, and not the crawler
 		// that feeds Exa's index — that is ExaSearchBot, which stays ai-search.
 		'ExaUser'                      => self::CRAWLER_AI_ASSISTANT,
+		// Collects pages for the Alpost search, keeping only title, description and language. No
+		// AI use documented.
+		'AlpostBot'                    => self::CRAWLER_SEARCH,
+		// Collects content "that may be used to train" ElevenLabs' generative AI models.
+		'ElevenlabsCrawler'            => self::CRAWLER_AI_TRAINING,
+		// Fetches the pages a customer adds to an ElevenLabs agent's knowledge base, when they add
+		// and refresh them: a person's request, not a crawl.
+		'ElevenlabsBot'                => self::CRAWLER_AI_ASSISTANT,
 	);
 
 	/**

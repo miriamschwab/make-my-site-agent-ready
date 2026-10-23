@@ -4,7 +4,7 @@ Tags: markdown, llm, ai, llms-txt, agents
 Requires at least: 6.2
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.66.0
+Stable tag: 1.67.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -238,6 +238,13 @@ Each token is checked when you save: one for another site, another trial, or pas
 They are a floor. Many AI apps open links without telling the site where the visitor came from, and only ChatGPT reliably tags its links with `utm_source`. Those visits look like direct visits and cannot be counted. Pages already in your cache pick up the counting script when the cache next refreshes, and a security plugin that blocks the REST API for visitors stops the count entirely.
 
 == Changelog ==
+
+= 1.67.0 - 2026-10-23 =
+* New: three more bots are recognised by the agent log, each with a category. Verified by the one address its operator publishes: AlpostBot (the search crawler for Alpost, a mail, hosting and portal service with its own search, search engine). Recognised but not verifiable: ElevenlabsCrawler (ElevenLabs collecting content that may be used to train its AI models, AI training) and ElevenlabsBot (ElevenLabs fetching the pages a customer adds to one of its agents' knowledge bases, AI assistant).
+* From this release, page views from these three keep their full address instead of being reduced to the network, which is what makes verifying them possible at all. Entries stored earlier keep the address they were stored with.
+* Alpost states that its bot connects only from one address, and that address is now bundled like Known Good's. If Alpost moves before the plugin is updated, its requests would read "Spoofed" until then; the `mmsar_agent_log_verify_ranges` filter can add a new address in the meantime. No hostname check is used: the address's reverse DNS name changed within a day, so it is not something the operator keeps stable.
+* ElevenLabs publishes no address list, hostname convention or request signature, so both of its bots read as Unverifiable, which means "cannot be checked" and is not an accusation. ElevenlabsBot has not been seen on a live site yet and is recognised from ElevenLabs' own documentation.
+* Updated: the bundled crawler IP lists were re-fetched from all 22 published sources on 2026-10-23 and were unchanged. The list of cloud-provider networks was refreshed too: AWS, Google Cloud and DigitalOcean added a few thousand addresses between them and Azure reorganised its list, with almost no change in what it covers.
 
 = 1.66.0 - 2026-10-21 =
 * New: four more bots are recognised by the agent log, each with a category. Verified by reverse DNS: ibou-search (the newer crawler from ibou, the French search engine already behind IbouBot, search engine). Recognised but not verifiable: PoliasBot (the German search engine Polias, search engine), Vento9 (an independent German-language search engine, search engine) and ExaUser (Exa fetching a page because a person or an app asked for it right then, AI assistant).

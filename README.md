@@ -414,8 +414,8 @@ Two methods, chosen per operator, because the operators are split on which they 
 - **Published IP ranges** for Anthropic, OpenAI, Perplexity, DuckDuckGo (DuckAssistBot and
   DuckDuckBot), Common Crawl (CCBot), Linkup, Seznam, Mojeek, SE Ranking, Parallel (ShapBot),
   Sofya, You.com (YouBot), Palo Alto Networks (Cortex Xpanse), Known Good (KnownGood-Verifier),
-  Inoreader, Amazon's search crawler (Amzn-SearchBot) and cl0q (cl0q-crawler, cl0q-discovery and
-  cl0q-favicon, one published address). Most of them
+  Inoreader, Amazon's search crawler (Amzn-SearchBot), cl0q (cl0q-crawler, cl0q-discovery and
+  cl0q-favicon, one published address) and Alpost (AlpostBot, one published address). Most of them
   publish no reverse-DNS records for their crawlers, so this is the only method their documentation
   describes. The ranges are bundled with the plugin rather than fetched, so nothing calls a
   third-party service and verification works on a host with no outbound HTTP. The trade-off is that
@@ -470,7 +470,10 @@ unverifiable like SemrushBot (1.63.0). cl0q-node is unverifiable by design: it i
 software run by other people on their own servers, so it is never checked against cl0q's address,
 and a node is never called a forgery for not coming from it (1.63.0). Amazon's search crawler is the one bundled list expected to go stale fastest: Amazon publishes it
 as single cloud addresses, so a new one used before the plugin is updated reads as Spoofed until then
-(1.58.0).
+(1.58.0). Alpost's AlpostBot is checked by its one published address only: the page says
+`bot.alpost.ch` points to it, which is a forward record, and the address's reverse name changed
+from `bot.alpost.ch` to `mx2.alpost.ch` within a day, so it is not a hostname the operator keeps
+(1.67.0).
 
 **Unverifiable** also covers a second case that says nothing about the operator: a row whose address
 was reduced to its network at storage time cannot be tested against a published range, so the
@@ -517,10 +520,10 @@ category:
 
 | Category | Meaning |
 |---|---|
-| **AI training** | Collects content to train models (GPTBot, ClaudeBot, CCBot…) |
+| **AI training** | Collects content to train models (GPTBot, ClaudeBot, CCBot, ElevenlabsCrawler…) |
 | **AI search** | Builds or queries an index used to answer questions (OAI-SearchBot, PerplexityBot, LinkupBot, Amzn-SearchBot, meta-webindexer…) |
-| **AI assistant** | Fetches a page because a person asked an assistant right then (ChatGPT-User, Claude-User, Amazon Quick, Google-GeminiNotebook, meta-externalfetcher, ExaUser…) |
-| **Search engine** | Conventional web search (SeznamBot, DuckDuckBot, YandexBot, Baiduspider, Sogou web spider, Qwantbot, cl0q, ibou-search, PoliasBot, Vento9…) |
+| **AI assistant** | Fetches a page because a person asked an assistant right then (ChatGPT-User, Claude-User, Amazon Quick, Google-GeminiNotebook, meta-externalfetcher, ExaUser, ElevenlabsBot…) |
+| **Search engine** | Conventional web search (SeznamBot, DuckDuckBot, YandexBot, Baiduspider, Sogou web spider, Qwantbot, cl0q, ibou-search, PoliasBot, Vento9, AlpostBot…) |
 | **SEO tool** | SEO and backlink platforms (AhrefsBot, SemrushBot, SiteAuditBot, Barkrowler, DataForSeoBot…) |
 | **Monitoring** | Brand and media monitoring (AwarioBot, trendictionbot, YaK, um-LN) |
 | **Scanner** | Readiness, security and attack-surface scanners (OraBot, KnownGood-Verifier, AgentReadyScanner, CensysInspect, Cortex Xpanse, l9scan, AgentTrustBot, VisionHeight) |

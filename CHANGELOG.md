@@ -2,6 +2,14 @@
 
 All notable changes to Make My Site Agent-Ready.
 
+## 1.67.0 — 2026-10-23
+
+- New: three more bots recognised by the agent log, each with a category. Verified by its operator's one published address: `AlpostBot` (Alpost's search crawler, search-engine). Recognise-only: `ElevenlabsCrawler` (ElevenLabs' training crawler, ai-training) and `ElevenlabsBot` (ElevenLabs' knowledge-base fetcher, ai-assistant — it fetches what a customer adds to an agent, not a crawl).
+- From this release a page view from any of the three keeps its full address instead of being reduced to its network. Entries stored earlier keep the address they were stored with.
+- `AlpostBot` is verified by a new one-address range group, `alpost` (`46.105.236.247/32`, captured 2026-10-23), on the Known Good precedent. No `VERIFY_HOSTS` suffix: the operator documents the forward record `bot.alpost.ch`, not a reverse-DNS method, and the address's PTR moved from `bot.alpost.ch` to `mx2.alpost.ch` between 2026-10-22 and 2026-10-23.
+- ElevenLabs publishes no IP list, rDNS convention or Web Bot Auth keys, so both names reach `unverifiable`. `ElevenlabsBot` has not appeared on live; it is matched on the bare token its documentation gives (`ElevenlabsBot/1.0`), which carries no domain to guard it with.
+- Updated: crawler IP ranges re-fetched from all 22 sources on 2026-10-23 — every list unchanged (You.com's page still shows two example addresses, one of them Google's, which are not bundled); all 18 capture dates moved to 2026-10-23. Cloud-range snapshot refreshed: AWS +768 IPv4 addresses, Google Cloud +256, DigitalOcean +4,096, Azure −243 (its +338 −717 range count is re-splitting, not lost coverage; `4.160.0.0/12` is now one block, so `SignalsTest`'s partial-/24 case moved to `40.80.161.0`). Oracle, Linode and Vultr unchanged.
+
 ## 1.66.0 — 2026-10-21
 
 - New: four more bots recognised by the agent log, each with a category. Verified by reverse DNS: `ibou-search` (ibou's newer crawler, the same French operator as `IbouBot`, search-engine). Recognise-only: `PoliasBot` (the German search engine Polias, search-engine), `Vento9` (an independent German-language search engine, search-engine) and `ExaUser` (Exa's user-triggered fetcher, ai-assistant — its sibling `ExaSearchBot`, the automatic crawler, stays ai-search).
