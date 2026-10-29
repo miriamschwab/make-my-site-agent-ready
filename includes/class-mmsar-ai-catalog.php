@@ -80,8 +80,10 @@ class MMSAR_AI_Catalog {
 				'server',
 				'mcp',
 				$site_name . ' content (MCP)',
-				'application/mcp-server-card+json',
-				home_url( '/.well-known/mcp/server-card.json' ),
+				MMSAR_MCP::SERVER_CARD_MIME,
+				// The SEP-2127 card, at the address that extension recommends. The older
+				// /.well-known/mcp/server-card.json is still served, but is not that card's shape.
+				MMSAR_MCP::endpoint_url() . '/server-card',
 				'Read-only MCP server over Streamable HTTP: search this site, list its content, and read any page as Markdown. No authentication.',
 				array_column( MMSAR_MCP::tools(), 'name' ),
 				array(

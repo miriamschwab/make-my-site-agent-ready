@@ -145,6 +145,26 @@ final class CrawlerVerdictTest extends TestCase {
 				=> array( 'GPTBot control', 'GPTBot', self::ELSEWHERE, 'failed' ),
 			'ClaudeBot outside Anthropic ranges'
 				=> array( 'ClaudeBot control', 'ClaudeBot', self::ELSEWHERE, 'failed' ),
+
+			// Anthropic's outbound range (1.68.0): where Claude connector calls come from. The two
+			// addresses are ones seen on live, 2026-10-29, both read `failed` before the range was added.
+			// The edges are the /21's first usable and last addresses (an address ending .0 is read as a
+			// reduced network, so .1 stands in); one past each must still fail. The range vouches for
+			// Claude-User only: ClaudeBot from it stays `failed`.
+			'Claude-User from Anthropic\'s outbound range (connector call)'
+				=> array( 'Claude connector', 'Claude-User', '160.79.106.21', 'verified' ),
+			'Claude-User from the outbound range, another live address'
+				=> array( 'Claude connector 2', 'Claude-User', '160.79.106.167', 'verified' ),
+			'Claude-User at the outbound range\'s first address'
+				=> array( 'Claude outbound first', 'Claude-User', '160.79.104.1', 'verified' ),
+			'Claude-User at the outbound range\'s last address'
+				=> array( 'Claude outbound last', 'Claude-User', '160.79.111.255', 'verified' ),
+			'Claude-User one address below the outbound range'
+				=> array( 'Claude below outbound', 'Claude-User', '160.79.103.255', 'failed' ),
+			'ClaudeBot from the outbound range is not a crawler'
+				=> array( 'ClaudeBot outbound', 'ClaudeBot', '160.79.106.21', 'failed' ),
+			'Claude-User one address above the outbound range'
+				=> array( 'Claude above outbound', 'Claude-User', '160.79.112.1', 'failed' ),
 			'CCBot inside Common Crawl\'s published v4 range'
 				=> array( 'CCBot in range', 'CCBot', self::CCBOT_IP, 'verified' ),
 			'CCBot inside the published v6 range, where rDNS does not exist'

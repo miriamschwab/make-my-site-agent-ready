@@ -287,6 +287,18 @@ class MMSAR_Agent_Log_Verify {
 	);
 
 	/**
+	 * Further range groups that also verify a claimed agent, beyond its VERIFY_RANGES group.
+	 *
+	 * For an operator whose agent arrives from infrastructure that is not in its crawler file.
+	 * Claude-User is the case: a person using a site through a Claude connector reaches it from
+	 * Anthropic's published outbound range, which Anthropic keeps separate from its crawler list.
+	 * A hit here verifies; a miss changes nothing, the agent's main group still decides.
+	 */
+	const EXTRA_RANGES = array(
+		'Claude-User' => array( 'anthropic-outbound' ),
+	);
+
+	/**
 	 * Which bundled range group, if any, covers each claimed agent.
 	 *
 	 * An agent listed here is verifiable by range. An agent listed here and *not* found in its
@@ -344,6 +356,10 @@ class MMSAR_Agent_Log_Verify {
 		// bot.alpost.ch on 2026-10-22 and mx2.alpost.ch on 2026-10-23, so it is not a name the
 		// operator keeps stable, and no suffix is entered (Miriam, 2026-10-23).
 		'AlpostBot'             => 'alpost',
+		// Added 1.68.0. Range-only: Kakao publishes eight /27s and no reverse-DNS method. The two
+		// live requests from outside them were robots.txt fetches, and read `failed` (Miriam,
+		// 2026-10-27).
+		'KakaoBot'              => 'kakao',
 	);
 
 	/**
@@ -724,6 +740,11 @@ class MMSAR_Agent_Log_Verify {
 
 		if ( $has_range && self::ip_in_ranges( $ip, $ranges[ $group ] ) ) {
 			return self::VERIFIED;
+		}
+		foreach ( isset( self::EXTRA_RANGES[ $claimed ] ) ? self::EXTRA_RANGES[ $claimed ] : array() as $extra ) {
+			if ( ! empty( $ranges[ $extra ] ) && self::ip_in_ranges( $ip, $ranges[ $extra ] ) ) {
+				return self::VERIFIED;
+			}
 		}
 
 		$hosts    = self::verify_hosts();

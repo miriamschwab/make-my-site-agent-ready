@@ -29,7 +29,7 @@ class MMSAR_Agent_Log {
 	 * additive; rows before them read '' and NULL, which the readers treat as "unsigned" and "not
 	 * recorded" respectively.
 	 */
-	const DB_VERSION = 7;
+	const DB_VERSION = 8;
 
 	/**
 	 * How long a caller may go quiet before its next request counts as a new visit, in seconds.
@@ -473,6 +473,25 @@ class MMSAR_Agent_Log {
 		// (Miriam, 2026-10-23). That user-agent is a bare `ElevenlabsBot/1.0` with no URL, so there is
 		// no domain to guard it with.
 		'ElevenlabsBot',
+		// Added 1.68.0 from the agent-log-bot-watch report of 2026-10-26. Appended, for the
+		// ordering reason given above Googlebot.
+		//
+		// Kakao's search crawler (https://cs.kakao.com/helps_html/1073213012), verified by the
+		// addresses that page lists; see the `kakao` group in includes/data/crawler-ranges.php. The
+		// page documents a Chrome-shaped user-agent too, and both carry `KakaoBot/`.
+		'KakaoBot',
+		// The rest of this group is recognise-only.
+		//
+		// Fusion Discover's public-search pilot (https://fusiondiscover.com/crawler.html). No address
+		// list or reverse DNS is published.
+		'FusionDiscoverBot',
+		// The agenticweb.wiki standards observatory's probe (https://agenticweb.wiki/about/), which
+		// checks a fixed list of well-known paths. Signed with Web Bot Auth, which this plugin
+		// records but does not verify, so it is recognise-only like ExaSearchBot.
+		'agenticweb-probe',
+		// Headline's company-sourcing crawler (https://headline.com/web-crawler). Guarded in
+		// AGENT_DISCLOSURES, because the name is generic. No verification method is published.
+		'ev-crawler',
 	);
 
 	/**
@@ -709,6 +728,18 @@ class MMSAR_Agent_Log {
 		// Fetches the pages a customer adds to an ElevenLabs agent's knowledge base, when they add
 		// and refresh them: a person's request, not a crawl.
 		'ElevenlabsBot'                => self::CRAWLER_AI_ASSISTANT,
+		// Added 1.68.0; categories as proposed in the 2026-10-26 bot watch and confirmed per name
+		// by Miriam on 2026-10-27.
+		//
+		// Visits public pages "to build Kakao search results". No link-preview or AI use documented.
+		'KakaoBot'                     => self::CRAWLER_SEARCH,
+		// A public-search pilot. No AI use documented.
+		'FusionDiscoverBot'            => self::CRAWLER_SEARCH,
+		// Checks a fixed list of capability and policy paths and never crawls content pages.
+		'agenticweb-probe'             => self::CRAWLER_SCANNER,
+		// A venture capital firm looking for companies in home, job and team pages: deal sourcing,
+		// which none of the other tags describes.
+		'ev-crawler'                   => self::CRAWLER_OTHER,
 	);
 
 	/**
@@ -779,6 +810,10 @@ class MMSAR_Agent_Log {
 		// The domain sits inside the first 80 characters of the only form seen, which is 32
 		// characters long, so every stored shape satisfies the guard.
 		'Vento9'            => 'vento9.com',
+		// Added 1.68.0. Precautionary: `ev-crawler` is a name any crawler could pick. The domain
+		// sits inside the first 80 characters of the only form seen, which is 76 characters long,
+		// so every stored shape satisfies the guard.
+		'ev-crawler'        => 'headline.com',
 	);
 
 	/**
@@ -881,8 +916,64 @@ class MMSAR_Agent_Log {
 			) {$collate};"
 		);
 
+		$previous = (int) get_option( self::DB_VERSION_OPTION, 0 );
 		update_option( self::DB_VERSION_OPTION, self::DB_VERSION, false );
 		self::migrate_legacy_entries();
+		if ( $previous > 0 && $previous < 8 ) {
+			self::reverify_anthropic_outbound();
+		}
+	}
+
+	/**
+	 * One-time correction for schema 8 (1.68.0): Claude rows wrongly judged `failed`.
+	 *
+	 * Until 1.68.0 the Anthropic range group held only the crawler file, so a Claude-User request
+	 * from Anthropic's published outbound range (Claude connectors, 160.79.104.0/21) read as a forged
+	 * name. `failed` is a conclusion and Re-check deliberately never reopens it, and the verdict was
+	 * cached per address for a week, so adding the range alone would have corrected nothing already
+	 * stored and nothing arriving that week.
+	 *
+	 * Narrow on purpose: only rows that claim an Anthropic name, only those currently `failed`, and
+	 * only flipped when the verdict computed now, against the corrected group, is `verified`. Every
+	 * other `failed` row stays exactly as it was.
+	 *
+	 * @return int Rows corrected.
+	 */
+	private static function reverify_anthropic_outbound() {
+		global $wpdb;
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- One-time correction of this plugin's own table.
+		$pairs = $wpdb->get_results(
+			$wpdb->prepare(
+				'SELECT DISTINCT ip, agent FROM %i WHERE verified = %s AND ( agent LIKE %s OR agent LIKE %s )',
+				self::table(),
+				MMSAR_Agent_Log_Verify::FAILED,
+				'%Claude%',
+				'%Anthropic%'
+			),
+			ARRAY_A
+		);
+
+		$corrected = 0;
+		foreach ( (array) $pairs as $pair ) {
+			MMSAR_Agent_Log_Verify::forget( $pair['agent'], $pair['ip'] );
+			if ( MMSAR_Agent_Log_Verify::VERIFIED !== MMSAR_Agent_Log_Verify::verdict_for( $pair['agent'], $pair['ip'] ) ) {
+				continue;
+			}
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- As above.
+			$updated    = $wpdb->query(
+				$wpdb->prepare(
+					'UPDATE %i SET verified = %s, verified_at = %s WHERE ip = %s AND agent = %s AND verified = %s',
+					self::table(),
+					MMSAR_Agent_Log_Verify::VERIFIED,
+					current_time( 'mysql', true ),
+					(string) $pair['ip'],
+					(string) $pair['agent'],
+					MMSAR_Agent_Log_Verify::FAILED
+				)
+			);
+			$corrected += is_numeric( $updated ) ? (int) $updated : 0;
+		}
+		return $corrected;
 	}
 
 	/**

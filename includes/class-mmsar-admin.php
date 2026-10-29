@@ -195,7 +195,11 @@ class MMSAR_Admin {
 			),
 			'mcp_ui'               => array(
 				__( 'MCP Apps UI (experimental)', 'make-my-site-agent-ready' ),
-				__( 'Lets an MCP client render search and listing results as a card list inside the conversation, instead of as plain text, by exposing a ui:// resource and pointing the two list tools at it. Requires the MCP server above. Marked experimental for one honest reason: no MCP Apps host was available to render this template against, so unlike everything else here it has not been verified against the thing that consumes it. A client that ignores the metadata still gets the normal text result, so switching it on cannot break an existing one. Off by default.', 'make-my-site-agent-ready' ),
+				__( 'Lets an MCP client show search and listing results as a card list, and the site\'s "about" details as a profile card, inside the conversation instead of as plain text. Every card ends with a small "Powered by Make My Site Agent Ready" line linking to the plugin\'s page. Requires the MCP server above. Follows the MCP Apps specification (2026-01-26) and has been seen working in the Claude desktop app, but not yet confirmed in every MCP client, which is why it is still marked experimental. A client that ignores the metadata still gets the normal text result, so switching it on cannot break an existing one. Off by default.', 'make-my-site-agent-ready' ),
+			),
+			'mcp_ui_send'          => array(
+				__( 'Send the about card\'s form through MCP (experimental)', 'make-my-site-agent-ready' ),
+				__( 'Needs MCP Apps UI on, and a contact endpoint given to the about card (see the mmsar_about filter). Off: the card\'s form sends straight to that endpoint from the visitor\'s own connection. On: for clients that support MCP Apps, it sends through a send_message tool on this server instead, which only the card can call. This is the one tool on the server that changes anything. Every message from Claude then arrives from Anthropic\'s shared addresses, so per-address rate limits on the endpoint are shared by everyone using Claude.', 'make-my-site-agent-ready' ),
 			),
 			'agent_404'            => array(
 				__( 'Agent-recoverable 404s', 'make-my-site-agent-ready' ),

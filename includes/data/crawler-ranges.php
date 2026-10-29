@@ -35,7 +35,7 @@ return array(
 	// check before shipping any future withdrawal here: this is the group where a stale list turns
 	// real desktop-chat and claude.ai fetches into accusations of forgery.
 	// Source: https://claude.com/crawling/bots.json.
-	'anthropic'        => array(
+	'anthropic'          => array(
 		'captured' => '2026-10-23',
 		'v4'       => array(
 			'34.152.124.140/32',
@@ -55,9 +55,26 @@ return array(
 		),
 		'v6'       => array(),
 	),
+	// Anthropic's outbound range — Claude-User only (MMSAR_Agent_Log_Verify::EXTRA_RANGES).
+	//
+	// Not a crawler list, so it is not in bots.json and not merged into the group above. Anthropic
+	// documents it as the stable range for its outbound requests, "for example, when making MCP tool
+	// calls to external servers", which is where Claude-User arrives from when a person uses a site
+	// through a Claude connector: every such call to miriamschwab.me on 2026-10-29 came from
+	// 160.79.106.x and read `failed`. Scoped to Claude-User because tool calls are what it is
+	// documented for; ClaudeBot from here stays `failed` (Anthropic withdrew 160.79.106.x/28 from its
+	// crawler list on 2026-10-20, so a crawler claiming it is not one).
+	// Source: https://platform.claude.com/docs/en/api/ip-addresses (Outbound IP addresses, IPv4).
+	'anthropic-outbound' => array(
+		'captured' => '2026-10-29',
+		'v4'       => array(
+			'160.79.104.0/21',
+		),
+		'v6'       => array(),
+	),
 	// OpenAI — GPTBot, OAI-SearchBot, ChatGPT-User.
 	// Source: https://openai.com/gptbot.json, https://openai.com/searchbot.json, https://openai.com/chatgpt-user.json.
-	'openai'           => array(
+	'openai'             => array(
 		'captured' => '2026-10-23',
 		'v4'       => array(
 			'4.151.71.176/28',
@@ -350,7 +367,7 @@ return array(
 	),
 	// Perplexity — PerplexityBot, Perplexity-User.
 	// Source: https://www.perplexity.ai/perplexitybot.json, https://www.perplexity.ai/perplexity-user.json.
-	'perplexity'       => array(
+	'perplexity'         => array(
 		'captured' => '2026-10-23',
 		'v4'       => array(
 			'3.211.124.183/32',
@@ -372,7 +389,7 @@ return array(
 	// (2026-09-14: 486 prefixes each, same creationTime, full overlap), so they share one group. If
 	// they ever diverge, split this into two groups rather than unioning them.
 	// Source: https://duckduckgo.com/duckassistbot.json, https://duckduckgo.com/duckduckbot.json.
-	'duckduckgo'       => array(
+	'duckduckgo'         => array(
 		'captured' => '2026-10-23',
 		'v4'       => array(
 			'4.144.148.23/32',
@@ -869,7 +886,7 @@ return array(
 	// One prefix, and Linkup's own documentation says to verify against this file rather than by
 	// reverse DNS — 35.198.113.100 has no PTR record. A single address is unusually narrow, so
 	// expect this one to churn: re-fetch at release time like the rest.
-	'linkup'           => array(
+	'linkup'             => array(
 		'captured' => '2026-10-23',
 		'v4'       => array(
 			'35.198.113.100/32',
@@ -877,7 +894,7 @@ return array(
 		'v6'       => array(),
 	),  // SeznamBot.
 	// Source: https://search.seznam.cz/ipranges/seznambot.json.
-	'seznam'           => array(
+	'seznam'             => array(
 		'captured' => '2026-10-23',
 		'v4'       => array(
 			'77.75.72.26/32',
@@ -978,7 +995,7 @@ return array(
 	),
 	// MojeekBot.
 	// Source: https://www.mojeek.com/mojeekbot.json.
-	'mojeek'           => array(
+	'mojeek'             => array(
 		'captured' => '2026-10-23',
 		'v4'       => array(
 			'5.102.173.64/28',
@@ -987,7 +1004,7 @@ return array(
 	),
 	// SERankingBacklinksBot. Published as a list of bare addresses, stored here as /32s.
 	// Source: https://api.seranking.com/backlinks-bot-ips.
-	'seranking'        => array(
+	'seranking'          => array(
 		'captured' => '2026-10-23',
 		'v4'       => array(
 			'95.217.114.159/32',
@@ -1078,7 +1095,7 @@ return array(
 	),
 	// ShapBot.
 	// Source: https://docs.parallel.ai/resources/shapbot.json.
-	'parallel'         => array(
+	'parallel'           => array(
 		'captured' => '2026-10-23',
 		'v4'       => array(
 			'23.251.146.115/32',
@@ -1104,7 +1121,7 @@ return array(
 	// first of the two tests. The IPv6 prefix matters more here than in most groups: rDNS under
 	// crawl.commoncrawl.org is IPv4-only by Common Crawl's own statement, so for an IPv6 caller
 	// this list is the only evidence there is.
-	'commoncrawl'      => array(
+	'commoncrawl'        => array(
 		'captured' => '2026-10-23',
 		'v4'       => array(
 			'3.41.188.32/29',
@@ -1130,7 +1147,7 @@ return array(
 	// crawl-66-249-66-106.googlebot.com), plus a YouBot example address that already sits inside
 	// the /24 below. A regex over the page reads both as new prefixes, and bundling the first would
 	// verify Googlebot as YouBot. Caught 2026-10-21.
-	'youcom'           => array(
+	'youcom'             => array(
 		'captured' => '2026-10-23',
 		'v4'       => array(
 			'68.67.112.0/24',
@@ -1139,7 +1156,7 @@ return array(
 	),
 	// SofyaBot.
 	// Source: https://sofya.co/bot/ips.json.
-	'sofya'            => array(
+	'sofya'              => array(
 		'captured' => '2026-10-23',
 		'v4'       => array(
 			'159.195.72.86/32',
@@ -1157,7 +1174,7 @@ return array(
 	// sit inside it; both were stored at network precision (the user-agent reads as a script, not a
 	// bot), so no verdict could be reached on them. The IPv6 entries are the page's /64s, written
 	// compressed.
-	'xpanse'           => array(
+	'xpanse'             => array(
 		'captured' => '2026-10-23',
 		'v4'       => array(
 			'35.203.210.0/23',
@@ -1180,7 +1197,7 @@ return array(
 	// that "will not change without notice on this file" (file dated 2026-08-21). Bundled on the
 	// Linkup precedent: a single published /32 is still the operator's only method.
 	// Source: https://knowngood.sh/bot/ips.json.
-	'knowngood'        => array(
+	'knowngood'          => array(
 		'captured' => '2026-10-23',
 		'v4'       => array(
 			'3.216.221.135/32',
@@ -1189,7 +1206,7 @@ return array(
 	),
 	// Inoreader — feed fetcher. Plain text, one CIDR per line.
 	// Source: https://www.inoreader.com/.well-known/ip_list.txt.
-	'inoreader'        => array(
+	'inoreader'          => array(
 		'captured' => '2026-10-23',
 		'v4'       => array(
 			'45.76.28.241/32',
@@ -1214,7 +1231,7 @@ return array(
 	// fetching user-agent beside it, so a regex over the page returns 817 addresses rather than 816.
 	// Drop anything appearing in that field. Caught 2026-10-21; the list itself was unchanged.
 	// Source: https://developer.amazon.com/amazonbot/searchbot-ip-addresses/.
-	'amazon-searchbot' => array(
+	'amazon-searchbot'   => array(
 		'captured' => '2026-10-23',
 		'v4'       => array(
 			'3.82.67.224/32',
@@ -2040,7 +2057,7 @@ return array(
 	// the operator calls "the only IP addresses cl0q's bots … send requests from". Not cl0q-node,
 	// which third parties run on their own servers. Bundled on the Known Good precedent.
 	// Source: https://cl0q.com/bot/ips.json.
-	'cl0q'             => array(
+	'cl0q'               => array(
 		'captured' => '2026-10-23',
 		'v4'       => array(
 			'143.110.230.182/32',
@@ -2051,10 +2068,28 @@ return array(
 	// from" (page dated 15.10.2026; re-read 2026-10-23, unchanged). Bundled on the Known Good
 	// precedent. The page's bot.alpost.ch is a forward record; the PTR is not documented and moved.
 	// Source: https://alpost.ch/en/bot/.
-	'alpost'           => array(
+	'alpost'             => array(
 		'captured' => '2026-10-23',
 		'v4'       => array(
 			'46.105.236.247/32',
+		),
+		'v6'       => array(),
+	),
+	// Kakao's search crawler, KakaoBot (1.68.0). Kakao lists eight /27s on its crawler page and says
+	// the list can change without notice. On miriamschwab.me, 35 of the first 37 KakaoBot requests
+	// came from inside them; the two that did not were both robots.txt fetches.
+	// Source: https://cs.kakao.com/helps_html/1073213012.
+	'kakao'              => array(
+		'captured' => '2026-10-27',
+		'v4'       => array(
+			'121.53.90.224/27',
+			'121.53.91.224/27',
+			'121.53.92.224/27',
+			'121.53.93.224/27',
+			'121.53.220.224/27',
+			'121.53.221.224/27',
+			'203.133.184.224/27',
+			'203.133.185.224/27',
 		),
 		'v6'       => array(),
 	),
