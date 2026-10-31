@@ -52,6 +52,10 @@ class MMSAR_Admin {
 			$paragraphs[] = __( 'When an agent searches this site through its MCP server, we also record the search terms. Anything that looks like an email address or a phone number is removed before it is stored.', 'make-my-site-agent-ready' );
 		}
 
+		if ( MMSAR_Agent_Log::retains_full() ) {
+			$paragraphs[] = __( 'We keep the full IP address and the full software name of every request, including visits from people, for six months, so that we can correctly identify automated agents. After six months, the address of any request not identified as a known automated crawler is shortened and the full software name is removed. Until then, this replaces the shortened address described above.', 'make-my-site-agent-ready' );
+		}
+
 		$limit        = MMSAR_Agent_Log::get_limit();
 		$paragraphs[] = $limit > 0
 			/* translators: %s: number of log entries kept */
@@ -893,6 +897,23 @@ class MMSAR_Admin {
 	}
 
 	/**
+	 * The six-month retention switch.
+	 *
+	 * @return void
+	 */
+	public static function render_agent_log_retain_field() {
+		echo '<label><input type="checkbox" name="' . esc_attr( MMSAR_Agent_Log::RETAIN_OPTION ) . '" value="1" ' . checked( true, MMSAR_Agent_Log::retains_full(), false ) . '> ';
+		esc_html_e( 'Store full IP addresses and full user-agents, including visitors\', for six months', 'make-my-site-agent-ready' );
+		echo '</label>';
+		echo '<p class="description">';
+		esc_html_e( 'Normally a visitor\'s address is reduced to its network and a user-agent is cut short before storage. That protects people, and it also means a visit that is misread today can never be checked again. With this on, every entry keeps both for six months, so a bot recognised later, or a published address list that changes, can still be applied to them.', 'make-my-site-agent-ready' );
+		echo '</p>';
+		echo '<p class="description">';
+		esc_html_e( 'After six months, the address on any entry that was not identified as a known crawler is reduced to its network, and every full user-agent is cleared. Switching this off stops new entries being kept this way and does not shorten the six months for entries already stored. A full IP address is personal data: say so in your privacy policy before switching this on. Suggested text is under Settings > Privacy. Site backups and CSV exports keep whatever they already hold.', 'make-my-site-agent-ready' );
+		echo '</p>';
+	}
+
+	/**
 	 * Sanitizes an on/off checkbox stored as '1' or ''.
 	 *
 	 * @param mixed $value Submitted value.
@@ -1206,6 +1227,15 @@ class MMSAR_Admin {
 
 		register_setting(
 			'mmsar_settings_group',
+			MMSAR_Agent_Log::RETAIN_OPTION,
+			array(
+				'sanitize_callback' => array( __CLASS__, 'sanitize_checkbox_flag' ),
+				'default'           => '',
+			)
+		);
+
+		register_setting(
+			'mmsar_settings_group',
 			MMSAR_Referrals::OPTION,
 			array(
 				'sanitize_callback' => array( __CLASS__, 'sanitize_referrals' ),
@@ -1225,6 +1255,14 @@ class MMSAR_Admin {
 				'mmsar_agent_log_pages',
 				__( 'Also log normal page views', 'make-my-site-agent-ready' ),
 				array( __CLASS__, 'render_agent_log_pages_field' ),
+				'make-my-site-agent-ready',
+				'mmsar_agent_log'
+			);
+
+			add_settings_field(
+				MMSAR_Agent_Log::RETAIN_OPTION,
+				__( 'Keep full addresses for six months', 'make-my-site-agent-ready' ),
+				array( __CLASS__, 'render_agent_log_retain_field' ),
 				'make-my-site-agent-ready',
 				'mmsar_agent_log'
 			);

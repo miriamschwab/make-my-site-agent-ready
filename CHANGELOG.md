@@ -2,6 +2,13 @@
 
 All notable changes to Make My Site Agent-Ready.
 
+## 1.69.0 — 2026-10-31
+
+- New: `mmsar_agent_log_retain_full`, "Keep full addresses for six months", off by default. Rows the log would have reduced keep the full address and are marked `held`; every row keeps its full user-agent in `ua_full` (printable ASCII, 512 characters). After 184 days `age_retained()` reduces held rows whose verdict is `unclaimed`, `client` or still pending, leaves the rest in full, clears `held`, and clears `ua_full`. Rows the log always kept in full never carry `held`, so nothing about them changes. It runs in batches of 200 beside pruning and when the Agent Log screen opens, with no cron, whichever way the setting is. The full user-agent is in the CSV export (`user_agent`, appended) and `get-agent-log` entries. Schema 9.
+- Changed: Re-check now tests every `failed` row with a full address against the operator's published ranges and moves it to `verified` when it is inside them (`MMSAR_Agent_Log::recheck_failed()`, which replaces the Anthropic-only correction from 1.68.0 and also runs once on upgrade). No DNS query, and nothing else about a `failed` row changes, so an operator verified by reverse DNS alone is unaffected.
+- Fixed: the `kakao` range group now holds Kakao's whole published list. 1.68.0 bundled the eight /27s and missed the 15 single addresses listed beside them, so five genuine KakaoBot requests on 2026-10-29 read `failed`.
+- Updated: crawler IP ranges re-fetched from all 24 sources on 2026-10-31; all 20 capture dates moved. OpenAI added `135.222.99.32/28` (`chatgpt-user.json`). Perplexity (`creationTime` 2026-10-28) withdrew nine addresses: `3.211.124.183`, `3.231.139.107`, `18.97.21.0/30` and three of `18.97.1.228/30`, and now writes its /29s as single addresses, which covers the same ground. Nothing else changed. Cloud-range snapshot refreshed, by address coverage: AWS +21,760 −256 IPv4, Google Cloud +66,560, Oracle +133,120, DigitalOcean +4,096, Azure +527 (its −287 range count is merging, not lost coverage), Vultr −256.
+
 ## 1.68.0 — 2026-10-29
 
 - New: four more bots recognised by the agent log, each with a category. Verified by its operator's published addresses: `KakaoBot` (Kakao's search crawler, search-engine). Recognise-only: `FusionDiscoverBot` (Fusion Discover's public-search pilot, search-engine), `agenticweb-probe` (the agenticweb.wiki standards observatory's probe of well-known paths, scanner) and `ev-crawler` (Headline's company-sourcing crawler, other).

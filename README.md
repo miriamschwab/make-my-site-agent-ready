@@ -54,7 +54,7 @@ Every feature below can be switched off individually under **Settings > Agent-Re
 ### Configuration and operations
 - **Settings page** (Settings > Agent-Ready) — per-feature on/off toggles, post type selector, CSS root selector, robots.txt preview and extra-rules textarea, security contact, Content Signals toggles, a TDMRep policy URL, a structured data (JSON-LD) toggle, WebMCP origin-trial tokens with their status, and a "View" link to every endpoint currently being served
 - **Bulk regeneration** — "Regenerate All" button on the settings page
-- **Agent request log** (off by default) — records which agents fetch the surfaces above, and robots.txt and the site's feeds, on its own screen at Settings > Agent Log, with filters, a Journeys view, a retention setting, a dashboard widget, a CSV export, and a read-only ability so an agent can read it too. Verifies each claimed crawler identity and tags every recognised bot with a category, so AI traffic can be separated from search and SEO traffic. An MCP tool call records what it asked for in its own `arguments` column (content type, topic, the path of the page served, overview sections), each value stored only after it matches something on the site; search terms only if the owner opts in, redacted. Browser-shaped rows carry three signals — a Web Bot Auth signature (recorded, not verified), a published cloud-provider network, and whether the request followed a link on the site — because an agent driving a real browser otherwise looks exactly like a reader; the cloud-network signal also covers HTTP clients such as axios or curl. The screen opens on a Summary of what the last 30 days mean, with findings under three questions (being read, being cited, broken or ignored), also on the dashboard widget and as the `get-agent-insights` ability. See [The agent log](#the-agent-log)
+- **Agent request log** (off by default) — records which agents fetch the surfaces above, and robots.txt and the site's feeds, on its own screen at Settings > Agent Log, with filters, a Journeys view, a retention setting, a dashboard widget, a CSV export, and a read-only ability so an agent can read it too. Verifies each claimed crawler identity and tags every recognised bot with a category, so AI traffic can be separated from search and SEO traffic. An MCP tool call records what it asked for in its own `arguments` column (content type, topic, the path of the page served, overview sections), each value stored only after it matches something on the site; search terms only if the owner opts in, redacted. Browser-shaped rows carry three signals — a Web Bot Auth signature (recorded, not verified), a published cloud-provider network, and whether the request followed a link on the site — because an agent driving a real browser otherwise looks exactly like a reader; the cloud-network signal also covers HTTP clients such as axios or curl. The screen opens on a Summary of what the last 30 days mean, with findings under three questions (being read, being cited, broken or ignored), also on the dashboard widget and as the `get-agent-insights` ability. An optional setting keeps every entry's full address and full user-agent for six months, so a misread visit can still be corrected. See [The agent log](#the-agent-log)
 - **Visitors sent by AI assistants** (off by default, needs the agent log) — counts people who arrive from ChatGPT, Perplexity, Claude, Gemini, Copilot and other assistants, per assistant and landing page, shown on the Agent Log screen. Kept as a daily count only. See [Visitors sent by AI assistants](#visitors-sent-by-ai-assistants)
 - **Proper HTTP headers** — `Content-Type: text/markdown`, `X-Robots-Tag: noindex`, `X-Content-Type-Options: nosniff`, canonical link
 - **Password protection** — password-protected posts return 403 on `.md` and `.jsonld` URLs, and are excluded from every aggregate document (`llms-full.txt`, the OKF bundle) and the agent log
@@ -337,8 +337,8 @@ calls itself, and filtering on user-agent would hide exactly the clients worth k
 
 An optional sub-setting also records ordinary HTML page views — from recognized crawlers only, or
 from everything including human visitors (human rows stored against the network, not the full
-address; anything read as a crawler keeps its address, recognised or not, except a user-run client
-such as Claude Code). That
+address, unless the owner chooses to [keep it for six months](#privacy); anything read as a crawler
+keeps its address, recognised or not, except a user-run client such as Claude Code). That
 one supplies the denominator. Without it the log shows only the agents that asked for an agent-facing
 file, and "which agents ask for markdown" cannot be answered without also knowing which ones came
 and did not. In practice this is where the interesting answer lives — on the author's own site, the
@@ -415,7 +415,7 @@ Two methods, chosen per operator, because the operators are split on which they 
   DuckDuckBot), Common Crawl (CCBot), Linkup, Seznam, Mojeek, SE Ranking, Parallel (ShapBot),
   Sofya, You.com (YouBot), Palo Alto Networks (Cortex Xpanse), Known Good (KnownGood-Verifier),
   Inoreader, Amazon's search crawler (Amzn-SearchBot), cl0q (cl0q-crawler, cl0q-discovery and
-  cl0q-favicon, one published address) Alpost (AlpostBot, one published address) and Kakao (KakaoBot). Most of them
+  cl0q-favicon, one published address), Alpost (AlpostBot, one published address) and Kakao (KakaoBot). Most of them
   publish no reverse-DNS records for their crawlers, so this is the only method their documentation
   describes. The ranges are bundled with the plugin rather than fetched, so nothing calls a
   third-party service and verification works on a host with no outbound HTTP. The trade-off is that
@@ -473,7 +473,7 @@ as single cloud addresses, so a new one used before the plugin is updated reads 
 (1.58.0). Alpost's AlpostBot is checked by its one published address only: the page says
 `bot.alpost.ch` points to it, which is a forward record, and the address's reverse name changed
 from `bot.alpost.ch` to `mx2.alpost.ch` within a day, so it is not a hostname the operator keeps
-(1.67.0). Kakao's KakaoBot is checked against the eight /27s Kakao publishes. On the author's site
+(1.67.0). Kakao's KakaoBot is checked against the eight /27s and 15 single addresses Kakao publishes. On the author's site
 the only KakaoBot requests from outside them were robots.txt fetches, which read as Spoofed (1.68.0).
 
 **Unverifiable** also covers a second case that says nothing about the operator: a row whose address
@@ -490,8 +490,10 @@ appears only when there is something of that kind, and reopens exactly those row
 row is reopened when its crawler now has a verification method and the row holds a full address. An
 *Unclaimed* row is reopened when its user-agent now names any recognised crawler, with or without a
 method. Since 1.64.0 a recognise-only crawler counts too: its rows from before it was recognised move
-to *Unverifiable*, matching its later ones, with no lookup. Verified and Spoofed rows are never
-reopened, so a re-check cannot overwrite a conclusion already reached.
+to *Unverifiable*, matching its later ones, with no lookup. Verified rows are never reopened. Since
+1.69.0 a Spoofed row gets one narrow test: if its full address is inside the operator's published
+list, it moves to Verified. No DNS query is made and nothing else about it changes, so a late list
+update can no longer leave a genuine request accused for good, and a real forgery stays marked.
 
 **User-run clients get their own verdict (1.47.0).** Claude Code and the Claude desktop app's Code
 tab fetch pages from the user's own machine and still send a `Claude-User` user-agent, with a
@@ -628,6 +630,15 @@ The log is off by default. When it is on, this is what it keeps about people:
 - **AI referral counts keep nothing about the visitor.** A day, an assistant, a landing page and a
   count. No address, no user-agent, no referrer URL, no cookie.
 
+**You can choose to keep more, for six months (1.69.0).** Off by default. "Keep full addresses for
+six months" stores every entry's full address and full user-agent, people's included, because a
+visit that was misread can never be checked again from a reduced address. After six months, the
+address on any entry not identified as a known crawler is reduced to its network, and every full
+user-agent is cleared, in small batches during normal logging and when the Agent Log screen opens,
+with no cron. Entries the log always kept in full are not affected. Switching it off does not shorten
+the six months for what is already stored. A full IP address is personal data, so say so in your
+privacy policy first; there is suggested text under Settings > Privacy.
+
 Recognised crawlers keep their full address, because verification needs it. Uninstalling the plugin
 drops the table, and the Agent Log screen can clear it at any time.
 
@@ -675,7 +686,7 @@ people, and the log's surface categories and identity checks are built for agent
 
 The screen paginates at 50 entries. **Export CSV** writes the whole log — columns `logged_at_utc`,
 `agent`, `surface`, `detail`, `ip`, `verified`, `verified_at_utc`, `client_type`, `signature_agent`,
-`same_site`, `cloud_network`, `arguments` — streamed in batches so peak
+`same_site`, `cloud_network`, `arguments`, `user_agent` — streamed in batches so peak
 memory does not grow with the log. Columns are only ever appended, never reordered. The
 timestamp column is named for its timezone on purpose: rows are stored in UTC and the screen renders
 them in the site's timezone. Cells whose value begins `=`, `+`, `-`, `@`, tab or CR are written with
@@ -719,6 +730,6 @@ This plugin exposes abilities for the [WordPress Abilities API](https://develope
 | `make-my-site-agent-ready/set-endpoint` | Always on | Adds an endpoint, or updates one already managed on the settings page. Send only the fields you want changed when updating. `queries` (two to five example questions) sets the endpoint's `representativeQueries` in the AI catalog, replacing the whole list. |
 | `make-my-site-agent-ready/delete-endpoint` | Always on (destructive) | Removes an endpoint managed on the settings page. |
 | `make-my-site-agent-ready/get-agent-insights` | Always on (read-only) | The Agent Log Summary as data: findings about the last 30 days under read, cited and broken, each with a kind, a sentence, supporting items and usually an action. Counts only verified crawler identities and user-run clients, never forged ones; WebMCP tool calls, which claim no identity, count as they are. Cached hourly; pass `fresh` to recompute |
-| `make-my-site-agent-ready/get-agent-log` | Always on (read-only) | Reads the agent request log: counts by agent, by surface, by requested detail and by day across the whole log, a verification breakdown, plus a page of individual entries. Pass `summary_only` for the aggregates alone, which carry counts of distinct IPs but no addresses, or `verified` to list only entries with a given verdict — `failed` lists the requests that forged a crawler identity. Every entry and `by_agent` row carries a `crawler_category`, `by_crawler_category` breaks traffic down by kind of bot, and the `crawler_category` input filter (`ai` for all three AI categories) separates AI traffic from search and SEO traffic. A `signals` block, a per-entry `signals` object and a `signal` filter carry the browser signals (signed, cloud network, came from a link on the site), each with its limits stated in the schema. `surface_categories` counts every entry by surface category — `docs`, `markdown`, `html`, `notfound`, `robots`, `feed`, `webmcp` (WebMCP tool calls, 1.58.0) and `mcp` (MCP server calls, 1.59.0) — and the `surface` filter takes the same values. Each entry carries `arguments`: on an MCP tool call, what the caller asked for (1.56.0). |
+| `make-my-site-agent-ready/get-agent-log` | Always on (read-only) | Reads the agent request log: counts by agent, by surface, by requested detail and by day across the whole log, a verification breakdown, plus a page of individual entries. Pass `summary_only` for the aggregates alone, which carry counts of distinct IPs but no addresses, or `verified` to list only entries with a given verdict — `failed` lists the requests that forged a crawler identity. Every entry and `by_agent` row carries a `crawler_category`, `by_crawler_category` breaks traffic down by kind of bot, and the `crawler_category` input filter (`ai` for all three AI categories) separates AI traffic from search and SEO traffic. A `signals` block, a per-entry `signals` object and a `signal` filter carry the browser signals (signed, cloud network, came from a link on the site), each with its limits stated in the schema. `surface_categories` counts every entry by surface category — `docs`, `markdown`, `html`, `notfound`, `robots`, `feed`, `webmcp` (WebMCP tool calls, 1.58.0) and `mcp` (MCP server calls, 1.59.0) — and the `surface` filter takes the same values. Each entry carries `arguments`: on an MCP tool call, what the caller asked for (1.56.0), and `user_agent`: the full user-agent, while the owner keeps it (1.69.0). |
 
 Endpoints a plugin or theme registered in code are read-only to `set-endpoint` and `delete-endpoint`: both return a `409` explaining that the owning plugin or theme has to be edited instead. Reporting success for a write that changed nothing would be worse than refusing it.

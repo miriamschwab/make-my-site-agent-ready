@@ -29,7 +29,7 @@ class MMSAR_Agent_Log {
 	 * additive; rows before them read '' and NULL, which the readers treat as "unsigned" and "not
 	 * recorded" respectively.
 	 */
-	const DB_VERSION = 8;
+	const DB_VERSION = 9;
 
 	/**
 	 * How long a caller may go quiet before its next request counts as a new visit, in seconds.
@@ -77,6 +77,26 @@ class MMSAR_Agent_Log {
 	 * deleted it, and both wrote its contents into the table. Every migrated entry appeared twice.
 	 */
 	const MIGRATED_FLAG = 'mmsar_agent_log_migrated';
+
+	/**
+	 * Option holding the switch for keeping full addresses and user-agents for a while. '1' is on.
+	 */
+	const RETAIN_OPTION = 'mmsar_agent_log_retain_full';
+
+	/**
+	 * How long that switch keeps them, in days: six months, rounded up so the copy stays true.
+	 */
+	const RETAIN_DAYS = 184;
+
+	/**
+	 * Rows one pass of age_retained() settles. Bounded because it runs inside a visitor's request.
+	 */
+	const RETAIN_BATCH = 200;
+
+	/**
+	 * Longest full user-agent kept. Long enough for every real one seen, short of unbounded input.
+	 */
+	const FULL_UA_LENGTH = 512;
 
 	/**
 	 * How often pruning runs, as one prune per N inserts.
@@ -908,58 +928,46 @@ class MMSAR_Agent_Log {
 			signature_agent varchar(100) NOT NULL DEFAULT '',
 			same_site tinyint(1) DEFAULT NULL,
 			arguments varchar(500) NOT NULL DEFAULT '',
+			ua_full varchar(512) NOT NULL DEFAULT '',
+			held tinyint(1) NOT NULL DEFAULT 0,
 			PRIMARY KEY  (id),
 			KEY logged_at (logged_at),
 			KEY verified (verified),
 			KEY client_type (client_type),
-			KEY visit (ip, logged_at)
+			KEY visit (ip, logged_at),
+			KEY held (held, logged_at)
 			) {$collate};"
 		);
 
 		$previous = (int) get_option( self::DB_VERSION_OPTION, 0 );
 		update_option( self::DB_VERSION_OPTION, self::DB_VERSION, false );
 		self::migrate_legacy_entries();
-		if ( $previous > 0 && $previous < 8 ) {
-			self::reverify_anthropic_outbound();
+		if ( $previous > 0 && $previous < 9 ) {
+			self::recheck_failed();
 		}
 	}
 
 	/**
-	 * One-time correction for schema 8 (1.68.0): Claude rows wrongly judged `failed`.
+	 * Turns `failed` rows whose address is inside the operator's published ranges into `verified`.
 	 *
-	 * Until 1.68.0 the Anthropic range group held only the crawler file, so a Claude-User request
-	 * from Anthropic's published outbound range (Claude connectors, 160.79.104.0/21) read as a forged
-	 * name. `failed` is a conclusion and Re-check deliberately never reopens it, and the verdict was
-	 * cached per address for a week, so adding the range alone would have corrected nothing already
-	 * stored and nothing arriving that week.
-	 *
-	 * Narrow on purpose: only rows that claim an Anthropic name, only those currently `failed`, and
-	 * only flipped when the verdict computed now, against the corrected group, is `verified`. Every
-	 * other `failed` row stays exactly as it was.
+	 * `failed` is a conclusion, so the rest of Re-check leaves it alone. But it is the one verdict
+	 * that a late list update turns into a false accusation: Claude-User was read as forged until
+	 * 1.68.0 added Anthropic's outbound range, and five KakaoBot requests until 1.69.0 added Kakao's
+	 * single addresses. So this asks one narrow question of every `failed` row and changes nothing
+	 * else: is the full address on file inside the list? Any other row stays exactly as it was, and
+	 * no DNS query is made. See MMSAR_Agent_Log_Verify::in_published_ranges().
 	 *
 	 * @return int Rows corrected.
 	 */
-	private static function reverify_anthropic_outbound() {
+	public static function recheck_failed() {
 		global $wpdb;
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- One-time correction of this plugin's own table.
-		$pairs = $wpdb->get_results(
-			$wpdb->prepare(
-				'SELECT DISTINCT ip, agent FROM %i WHERE verified = %s AND ( agent LIKE %s OR agent LIKE %s )',
-				self::table(),
-				MMSAR_Agent_Log_Verify::FAILED,
-				'%Claude%',
-				'%Anthropic%'
-			),
-			ARRAY_A
-		);
 
 		$corrected = 0;
-		foreach ( (array) $pairs as $pair ) {
+		foreach ( self::failed_pairs_in_ranges() as $pair ) {
+			// The verdict is cached per address for a week, so a new row from this address would
+			// otherwise read `failed` again.
 			MMSAR_Agent_Log_Verify::forget( $pair['agent'], $pair['ip'] );
-			if ( MMSAR_Agent_Log_Verify::VERIFIED !== MMSAR_Agent_Log_Verify::verdict_for( $pair['agent'], $pair['ip'] ) ) {
-				continue;
-			}
-			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- As above.
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Annotating this plugin's own table.
 			$updated    = $wpdb->query(
 				$wpdb->prepare(
 					'UPDATE %i SET verified = %s, verified_at = %s WHERE ip = %s AND agent = %s AND verified = %s',
@@ -974,6 +982,32 @@ class MMSAR_Agent_Log {
 			$corrected += is_numeric( $updated ) ? (int) $updated : 0;
 		}
 		return $corrected;
+	}
+
+	/**
+	 * Distinct `failed` (ip, agent) pairs whose address is inside the operator's published ranges.
+	 *
+	 * @return array[] Rows of `ip` and `agent`.
+	 */
+	private static function failed_pairs_in_ranges() {
+		global $wpdb;
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- This plugin's own table.
+		$pairs = $wpdb->get_results(
+			$wpdb->prepare(
+				'SELECT DISTINCT ip, agent FROM %i WHERE verified = %s',
+				self::table(),
+				MMSAR_Agent_Log_Verify::FAILED
+			),
+			ARRAY_A
+		);
+
+		$found = array();
+		foreach ( (array) $pairs as $pair ) {
+			if ( MMSAR_Agent_Log_Verify::in_published_ranges( (string) $pair['agent'], (string) $pair['ip'] ) ) {
+				$found[] = $pair;
+			}
+		}
+		return $found;
 	}
 
 	/**
@@ -1249,7 +1283,7 @@ class MMSAR_Agent_Log {
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- This plugin's own table; a cached read would show a stale log.
 		$rows = $wpdb->get_results(
 			$wpdb->prepare(
-				"SELECT logged_at, surface, detail, arguments, agent, ip, verified, verified_at, client_type, signature_agent, same_site
+				"SELECT logged_at, surface, detail, arguments, agent, ip, verified, verified_at, client_type, signature_agent, same_site, ua_full
 				FROM %i
 				WHERE ( %s = '' OR FIND_IN_SET( IF( verified = '', 'pending', verified ), %s ) > 0 )
 				  AND ( %s = '' OR FIND_IN_SET( IF( client_type = '', 'unrecorded', client_type ), %s ) > 0 OR ( %s <> '' AND FIND_IN_SET( surface, %s ) > 0 ) )
@@ -2207,7 +2241,7 @@ class MMSAR_Agent_Log {
 				)
 			);
 		}
-		return $total;
+		return $total + count( self::failed_pairs_in_ranges() );
 	}
 
 	/**
@@ -2428,7 +2462,7 @@ class MMSAR_Agent_Log {
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- This plugin's own table; a cached read would show a stale log.
 		$rows = $wpdb->get_results(
 			$wpdb->prepare(
-				"SELECT id, logged_at, surface, detail, arguments, agent, ip, verified, verified_at, client_type, signature_agent, same_site
+				"SELECT id, logged_at, surface, detail, arguments, agent, ip, verified, verified_at, client_type, signature_agent, same_site, ua_full
 				FROM %i
 				WHERE id < %d
 				  AND ( %s = '' OR FIND_IN_SET( IF( verified = '', 'pending', verified ), %s ) > 0 )
@@ -3194,7 +3228,7 @@ class MMSAR_Agent_Log {
 		// The throttle always keys on the real address, even when a reduced one is stored: it lives
 		// in a transient for five minutes and never reaches the table, and keying it on the network
 		// instead would collapse everyone behind one ISP range into a single entry.
-		$stored_ip = $anonymize ? self::anonymize_ip( $ip ) : $ip;
+		$stored = self::storage_address( $ip, $anonymize );
 
 		// Throttle before touching the database. Only reached by requests already known to be
 		// agent-facing, so this never runs on an ordinary page view.
@@ -3228,20 +3262,150 @@ class MMSAR_Agent_Log {
 				'surface'         => mb_substr( $surface, 0, 100 ),
 				'detail'          => self::fit_detail( $detail ),
 				'agent'           => mb_substr( $agent, 0, 120 ),
-				'ip'              => $stored_ip,
+				'ip'              => $stored['ip'],
 				'client_type'     => $client_type,
 				'signature_agent' => $signature_agent,
 				'same_site'       => $same_site,
 				'arguments'       => mb_substr( (string) $arguments, 0, 500 ),
+				'ua_full'         => self::retains_full() ? self::fit_full_user_agent( self::user_agent() ) : '',
+				'held'            => $stored['held'],
 			),
-			array( '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%s' )
+			array( '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%s', '%s', '%d' )
 		);
 
 		// Prune every so often rather than on every insert: an append is the cost this request
 		// should pay, and a log a few rows over its limit between prunes is not observable.
 		if ( $inserted && 0 === ( (int) $wpdb->insert_id % self::PRUNE_EVERY ) ) {
 			self::prune();
+			self::age_retained();
 		}
+	}
+
+	/**
+	 * Whether the owner has chosen to keep full addresses and user-agents for six months.
+	 *
+	 * Off by default. A misread identity cannot be corrected from a reduced address or a cut
+	 * user-agent, which is why the switch exists; a visitor's full address is personal data, which is
+	 * why it is a choice. See the decisions log.
+	 *
+	 * @return bool
+	 */
+	public static function retains_full() {
+		return '1' === (string) get_option( self::RETAIN_OPTION, '' );
+	}
+
+	/**
+	 * What to store for a request's address, and whether it is on a clock.
+	 *
+	 * `held` marks a row whose full address is on file only because of the retention switch, so that
+	 * age_retained() can never reach an address the log keeps for its own reasons, such as a
+	 * recognised crawler's.
+	 *
+	 * @param string $ip        Client IP.
+	 * @param bool   $anonymize Whether the rules above reduce this request's address.
+	 * @return array{ip: string, held: int}
+	 */
+	public static function storage_address( $ip, $anonymize ) {
+		if ( ! $anonymize ) {
+			return array(
+				'ip'   => (string) $ip,
+				'held' => 0,
+			);
+		}
+		if ( self::retains_full() ) {
+			return array(
+				'ip'   => (string) $ip,
+				'held' => 1,
+			);
+		}
+		return array(
+			'ip'   => self::anonymize_ip( $ip ),
+			'held' => 0,
+		);
+	}
+
+	/**
+	 * A raw user-agent in the form it is kept: printable ASCII, bounded.
+	 *
+	 * Caller-supplied text reaching this table is held to the same standard as a 404 path.
+	 *
+	 * @param string $ua Raw user-agent.
+	 * @return string
+	 */
+	public static function fit_full_user_agent( $ua ) {
+		return substr( (string) preg_replace( '/[^\x20-\x7E]/', '', (string) $ua ), 0, self::FULL_UA_LENGTH );
+	}
+
+	/**
+	 * What a held address becomes once its six months are up.
+	 *
+	 * A row that a verdict ties to a recognised crawler stays in full, like any other crawler's. One
+	 * that never was identified, and a user-run client, which is a person's own machine, are reduced.
+	 *
+	 * @param string $ip      Stored address.
+	 * @param string $verdict Stored verdict.
+	 * @return string
+	 */
+	public static function aged_address( $ip, $verdict ) {
+		$identified = array(
+			MMSAR_Agent_Log_Verify::VERIFIED,
+			MMSAR_Agent_Log_Verify::FAILED,
+			MMSAR_Agent_Log_Verify::UNVERIFIABLE,
+			MMSAR_Agent_Log_Verify::NODNS,
+		);
+		return in_array( (string) $verdict, $identified, true ) ? (string) $ip : self::anonymize_ip( $ip );
+	}
+
+	/**
+	 * Settles rows past the retention period: reduces held addresses, clears full user-agents.
+	 *
+	 * Runs alongside pruning and when the Agent Log screen opens, in small batches, rather than on
+	 * cron, which this plugin promises not to use. The screen is what covers a log that has been
+	 * switched off and receives no inserts. It runs whichever way the switch is set: turning it off
+	 * does not stop the clock on what was already kept.
+	 *
+	 * @return int Rows settled.
+	 */
+	public static function age_retained() {
+		global $wpdb;
+
+		$cutoff = gmdate( 'Y-m-d H:i:s', time() - self::RETAIN_DAYS * DAY_IN_SECONDS );
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- This plugin's own table; a cached read would settle rows twice.
+		$rows = $wpdb->get_results(
+			$wpdb->prepare(
+				'SELECT id, ip, verified FROM %i WHERE held = 1 AND logged_at < %s ORDER BY id ASC LIMIT %d',
+				self::table(),
+				$cutoff,
+				self::RETAIN_BATCH
+			),
+			ARRAY_A
+		);
+
+		$settled = 0;
+		foreach ( (array) $rows as $row ) {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Annotating this plugin's own table.
+			$wpdb->query(
+				$wpdb->prepare(
+					'UPDATE %i SET ip = %s, held = 0 WHERE id = %d',
+					self::table(),
+					self::aged_address( (string) $row['ip'], (string) $row['verified'] ),
+					(int) $row['id']
+				)
+			);
+			++$settled;
+		}
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- As above.
+		$wpdb->query(
+			$wpdb->prepare(
+				"UPDATE %i SET ua_full = '' WHERE ua_full <> '' AND logged_at < %s LIMIT %d",
+				self::table(),
+				$cutoff,
+				self::RETAIN_BATCH
+			)
+		);
+
+		return $settled;
 	}
 
 	/**

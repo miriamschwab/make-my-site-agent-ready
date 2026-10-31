@@ -239,6 +239,7 @@ class MMSAR_Agent_Log_Page {
 		}
 
 		$before = MMSAR_Agent_Log::get_verification_summary();
+		$fixed  = MMSAR_Agent_Log::recheck_failed();
 		$reset  = MMSAR_Agent_Log::reset_undecided();
 		$done   = MMSAR_Agent_Log_Verify::run_batch(
 			MMSAR_Agent_Log_Verify::BUTTON_IPS,
@@ -259,7 +260,7 @@ class MMSAR_Agent_Log_Page {
 
 		self::redirect_after_pass(
 			array(
-				'mmsar_rechecked'    => (int) $reset,
+				'mmsar_rechecked'    => (int) $reset + (int) $fixed,
 				'mmsar_changed'      => (int) $changed,
 				'mmsar_verified_ips' => (int) $done['ips'],
 			),
@@ -302,7 +303,7 @@ class MMSAR_Agent_Log_Page {
 		// them in the site's timezone, and a bare "logged_at" would leave a reader comparing an
 		// exported row against the screen with no way to tell which one they were holding.
 		// Appended, never reordered: the column order is documented and something is parsing it.
-		fputcsv( $handle, array( 'logged_at_utc', 'agent', 'surface', 'detail', 'ip', 'verified', 'verified_at_utc', 'client_type', 'signature_agent', 'same_site', 'cloud_network', 'arguments' ) );
+		fputcsv( $handle, array( 'logged_at_utc', 'agent', 'surface', 'detail', 'ip', 'verified', 'verified_at_utc', 'client_type', 'signature_agent', 'same_site', 'cloud_network', 'arguments', 'user_agent' ) );
 
 		$cursor = 0;
 		do {
@@ -325,6 +326,7 @@ class MMSAR_Agent_Log_Page {
 						null === $signals['same_site'] ? '' : ( $signals['same_site'] ? '1' : '0' ),
 						self::csv_cell( null === $signals['cloud_network'] ? '' : $signals['cloud_network'] ),
 						self::csv_cell( isset( $row['arguments'] ) ? $row['arguments'] : '' ),
+						self::csv_cell( isset( $row['ua_full'] ) ? $row['ua_full'] : '' ),
 					)
 				);
 				$cursor = (int) $row['id'];
@@ -1096,6 +1098,9 @@ class MMSAR_Agent_Log_Page {
 		if ( ! current_user_can( 'manage_options' ) ) {
 			return;
 		}
+
+		// A log that is switched off gets no inserts, so this is what keeps the clock running.
+		MMSAR_Agent_Log::age_retained();
 
 		// Decide a few identities before reading, so simply opening this screen keeps a live log
 		// current. Bounded by a wall-clock budget, so a slow resolver delays the page rather than

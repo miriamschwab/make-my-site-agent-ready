@@ -148,6 +148,9 @@ final class BotWatchOctober26Test extends TestCase {
 			'label, inside a block'      => array( 'KakaoBot', self::KAKAO_IN_IP, 'verified' ),
 			'stored row, inside a block' => array( $stored, self::KAKAO_IN_IP, 'verified' ),
 			'last address of a block'    => array( 'KakaoBot', '203.133.185.255', 'verified' ),
+			// A published single address, added 1.69.0. This one read `failed` on live on 2026-10-29.
+			'a single published address' => array( 'KakaoBot', '211.249.246.105', 'verified' ),
+			'beside a single address'    => array( 'KakaoBot', '211.249.246.106', 'failed' ),
 			'one below a block'          => array( 'KakaoBot', '121.53.90.223', 'failed' ),
 			'the live robots.txt fetch'  => array( 'KakaoBot', self::KAKAO_OUT_IP, 'failed' ),
 			'stored row, outside'        => array( $stored, self::KAKAO_OUT_IP, 'failed' ),

@@ -738,13 +738,8 @@ class MMSAR_Agent_Log_Verify {
 		$group     = isset( $range_map[ $claimed ] ) ? $range_map[ $claimed ] : '';
 		$has_range = '' !== $group && ! empty( $ranges[ $group ] );
 
-		if ( $has_range && self::ip_in_ranges( $ip, $ranges[ $group ] ) ) {
+		if ( self::in_operator_ranges( $claimed, $ip ) ) {
 			return self::VERIFIED;
-		}
-		foreach ( isset( self::EXTRA_RANGES[ $claimed ] ) ? self::EXTRA_RANGES[ $claimed ] : array() as $extra ) {
-			if ( ! empty( $ranges[ $extra ] ) && self::ip_in_ranges( $ip, $ranges[ $extra ] ) ) {
-				return self::VERIFIED;
-			}
 		}
 
 		$hosts    = self::verify_hosts();
@@ -964,6 +959,53 @@ class MMSAR_Agent_Log_Verify {
 			}
 		}
 		return false;
+	}
+
+	/**
+	 * Whether an address is inside the ranges published for a claimed crawler.
+	 *
+	 * @param string $claimed Key from claimed_operator_key().
+	 * @param string $ip      Validated IP.
+	 * @return bool
+	 */
+	private static function in_operator_ranges( $claimed, $ip ) {
+		$ranges    = self::verify_ranges();
+		$range_map = self::VERIFY_RANGES;
+		$groups    = isset( self::EXTRA_RANGES[ $claimed ] ) ? self::EXTRA_RANGES[ $claimed ] : array();
+		if ( isset( $range_map[ $claimed ] ) ) {
+			$groups[] = $range_map[ $claimed ];
+		}
+		foreach ( $groups as $group ) {
+			if ( ! empty( $ranges[ $group ] ) && self::ip_in_ranges( $ip, $ranges[ $group ] ) ) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Whether a stored row's address proves its claim against the operator's published ranges.
+	 *
+	 * What Re-check asks of a `failed` row (1.69.0). A range hit is the one answer that can overturn
+	 * that verdict on the evidence alone, so this makes no DNS query: a forged row re-judged by
+	 * reverse DNS could drift to `nodns` when a PTR disappears, and lose the record of the forgery.
+	 * It can only ever say yes for a full address inside a published list. A reduced address, a
+	 * user-run client and any operator verified by reverse DNS alone all answer no, which leaves the
+	 * row as it was.
+	 *
+	 * @param string $agent Value as stored in the `agent` column.
+	 * @param string $ip    Value as stored in the `ip` column.
+	 * @return bool
+	 */
+	public static function in_published_ranges( $agent, $ip ) {
+		$claimed = self::claimed_operator_key( $agent );
+		if ( '' === $claimed || MMSAR_Agent_Log::is_user_run_client( $agent ) ) {
+			return false;
+		}
+		if ( ! filter_var( $ip, FILTER_VALIDATE_IP ) || MMSAR_Agent_Log::anonymize_ip( $ip ) === $ip ) {
+			return false;
+		}
+		return self::in_operator_ranges( $claimed, $ip );
 	}
 
 	/**

@@ -838,6 +838,10 @@ function mmsar_register_abilities() {
 									'description' => 'On an MCP tool call (1.56.0), what the caller asked the tool for, as space-separated key=value pairs: post_type, topic, url (the path of the post served, never the raw input), sections, and query (JSON-quoted, redacted, and only when the site owner has switched on query logging). Each value is stored only after it was checked against the site, so an empty string can mean no arguments or none that passed. Empty on every other surface and on entries recorded before 1.56.0.',
 								),
 								'ip'               => array( 'type' => 'string' ),
+								'user_agent'       => array(
+									'type'        => 'string',
+									'description' => 'The full user-agent as sent, when the site owner keeps it (1.69.0): up to 512 characters, for six months, then empty. Empty when that setting is off or on rows stored before it. The agent field is what the verdict and category are derived from; this is the evidence for reading it.',
+								),
 								'client_type'      => array(
 									'type'        => 'string',
 									'enum'        => array( '', 'crawler', 'browser', 'http' ),
@@ -972,6 +976,8 @@ function mmsar_register_abilities() {
 				);
 				foreach ( $entries as $i => $entry ) {
 					$entries[ $i ]['crawler_category'] = MMSAR_Agent_Log::crawler_category( isset( $entry['agent'] ) ? (string) $entry['agent'] : '' );
+					$entries[ $i ]['user_agent']       = isset( $entry['ua_full'] ) ? (string) $entry['ua_full'] : '';
+					unset( $entries[ $i ]['ua_full'] );
 				}
 				$entries = MMSAR_Agent_Log_Signals::annotate( MMSAR_Agent_Log_Attribution::annotate( $entries ) );
 				// The raw columns are carried inside `signals`, in their reported shape; drop the
