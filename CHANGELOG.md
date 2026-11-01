@@ -2,6 +2,12 @@
 
 All notable changes to Make My Site Agent-Ready.
 
+## 1.70.0 — 2026-11-01
+
+- New: the WebMCP bridge returns `{ text, structuredContent }` for tools that have structured data (`search_content`, `list_content` and `get_about`, while `mcp_ui` is on). Every other result, and every error, stays plain text.
+- Fixed: `get_about` over WebMCP described a contact card that no browser shows. The server card and `webmcp.json` now list it without the `draft` input or that sentence (`MMSAR_MCP::without_card_form()`), and a call through the bridge returns no card wording and an empty `contact.mode`. `tools/list` and MCP calls are unchanged.
+- Fixed: `get_about` told every MCP client that "the card shows a contact form". Only a client that declared MCP Apps gets that sentence now; others get wording that holds with or without a card and points to the contact page (`MMSAR_MCP::about_contact_note()`). The tool description and `draft` schema are reworded to match.
+
 ## 1.69.0 — 2026-10-31
 
 - New: `mmsar_agent_log_retain_full`, "Keep full addresses for six months", off by default. Rows the log would have reduced keep the full address and are marked `held`; every row keeps its full user-agent in `ua_full` (printable ASCII, 512 characters). After 184 days `age_retained()` reduces held rows whose verdict is `unclaimed`, `client` or still pending, leaves the rest in full, clears `held`, and clears `ua_full`. Rows the log always kept in full never carry `held`, so nothing about them changes. It runs in batches of 200 beside pruning and when the Agent Log screen opens, with no cron, whichever way the setting is. The full user-agent is in the CSV export (`user_agent`, appended) and `get-agent-log` entries. Schema 9.

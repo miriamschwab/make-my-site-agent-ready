@@ -31,6 +31,14 @@
       .join('\n\n');
   }
 
+  // Where a tool has structured data, the agent gets it beside the text, under MCP's own name.
+  // Chrome passes an object to the agent as a JSON string. Everything else stays plain text.
+  function outputOf(result) {
+    var text = textOf(result) || (result && result.isError ? 'The site could not run this tool.' : '');
+    var data = result && result.structuredContent;
+    return data && typeof data === 'object' ? { text: text, structuredContent: data } : text;
+  }
+
   function call(name, args) {
     return fetch(endpoint, {
       method: 'POST',
@@ -60,8 +68,7 @@
       if (message && message.error) {
         return message.error.message || 'The site could not run this tool.';
       }
-      var result = message && message.result;
-      return textOf(result) || (result && result.isError ? 'The site could not run this tool.' : '');
+      return outputOf(message && message.result);
     }, function () {
       return 'The site could not be reached, so the tool did not run.';
     });

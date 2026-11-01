@@ -33,6 +33,39 @@ final class McpContactFormTest extends TestCase {
 	}
 
 	/**
+	 * The server card offers no form: its readers are browsers, where no card shows.
+	 */
+	public function test_without_card_form() {
+		$about = array(
+			'name'        => 'get_about',
+			'description' => 'Who runs it.' . MMSAR_MCP::ABOUT_DRAFT_NOTE,
+			'inputSchema' => array(
+				'type'                 => 'object',
+				'properties'           => array( 'draft' => array( 'type' => 'object' ) ),
+				'additionalProperties' => false,
+			),
+		);
+		$out   = MMSAR_MCP::without_card_form( $about );
+		$this->assertSame( 'Who runs it.', $out['description'] );
+		$this->assertSame( '{}', wp_json_encode( $out['inputSchema']['properties'] ) );
+		$this->assertFalse( $out['inputSchema']['additionalProperties'] );
+
+		$other = array_merge( $about, array( 'name' => 'search_content' ) );
+		$this->assertSame( $other, MMSAR_MCP::without_card_form( $other ) );
+	}
+
+	/**
+	 * Only a client that declared MCP Apps is told a card is showing.
+	 */
+	public function test_about_contact_note() {
+		$this->assertStringStartsWith( 'The card shows a contact form.', MMSAR_MCP::about_contact_note( false, true ) );
+		$this->assertStringStartsWith( 'The card shows a contact form, filled in with your draft.', MMSAR_MCP::about_contact_note( true, true ) );
+		$this->assertStringStartsWith( 'If this client shows the about card, it has a contact form:', MMSAR_MCP::about_contact_note( false, false ) );
+		$this->assertStringContainsString( 'filled in with your draft:', MMSAR_MCP::about_contact_note( true, false ) );
+		$this->assertStringContainsString( 'give them the contact page', MMSAR_MCP::about_contact_note( false, false ) );
+	}
+
+	/**
 	 * Only a declared MCP Apps extension counts.
 	 */
 	public function test_client_has_ui() {

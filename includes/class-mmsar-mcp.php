@@ -201,11 +201,16 @@ class MMSAR_MCP {
 	}
 
 	/**
+	 * The sentence in get_about's description that offers the card's form.
+	 */
+	const ABOUT_DRAFT_NOTE = ' When the person wants to send a message, pass a draft (a subject and the message in their words, plus their name and email if they gave them): a client that shows the about card puts it in a contact form for them to check and send.';
+
+	/**
 	 * How a request reached the endpoint: over MCP, or from the WebMCP bridge in a browser.
 	 *
-	 * The bridge marks its calls with `X-MMSAR-Surface: webmcp`. The header only labels the route
-	 * in the log and grants nothing, so a client that forges it gains nothing but a different
-	 * label. A WebMCP call comes from the visitor's own browser, so its address is a person's and
+	 * The bridge marks its calls with `X-MMSAR-Surface: webmcp`. The header labels the route in the
+	 * log and leaves the card's wording out of get_about, and grants nothing, so a client that
+	 * forges it gains nothing but a different label and less text. A WebMCP call comes from the visitor's own browser, so its address is a person's and
 	 * is stored at network level, like a page view.
 	 *
 	 * @param WP_REST_Request $request The request.
@@ -378,7 +383,7 @@ class MMSAR_MCP {
 				}
 				break;
 			case 'tools/call':
-				$result = self::call_tool( $params );
+				$result = self::call_tool( $params, $route );
 				break;
 			case 'resources/list':
 				$result = array( 'resources' => self::resources() );
@@ -919,7 +924,7 @@ class MMSAR_MCP {
 		$tools[] = array(
 			'name'        => 'get_about',
 			'title'       => 'About this site',
-			'description' => 'Who runs ' . $site_name . ' and how to reach them: name, role, a short bio, profile links and the contact page. Use this when someone asks who is behind the site, about the person or organization, or how to get in touch.' . ( self::ui_enabled() && '' !== self::contact_api() ? ' When the person wants to send a message, pass a draft (a subject and the message in their words, plus their name and email if they gave them): the card shows it in a contact form for them to check and send.' : '' ),
+			'description' => 'Who runs ' . $site_name . ' and how to reach them: name, role, a short bio, profile links and the contact page. Use this when someone asks who is behind the site, about the person or organization, or how to get in touch.' . ( self::ui_enabled() && '' !== self::contact_api() ? self::ABOUT_DRAFT_NOTE : '' ),
 			'inputSchema' => self::about_input_schema(),
 			'annotations' => array(
 				'readOnlyHint'    => true,
@@ -971,9 +976,10 @@ class MMSAR_MCP {
 	 * Dispatch a tools/call.
 	 *
 	 * @param array $params Call params.
+	 * @param array $route  How the request arrived, from route_of().
 	 * @return array|WP_Error Tool result, or an error for a malformed call.
 	 */
-	private static function call_tool( $params ) {
+	private static function call_tool( $params, $route = array() ) {
 		$name      = isset( $params['name'] ) ? (string) $params['name'] : '';
 		$arguments = isset( $params['arguments'] ) && is_array( $params['arguments'] ) ? $params['arguments'] : array();
 
@@ -987,7 +993,7 @@ class MMSAR_MCP {
 			case 'get_site_overview':
 				return self::tool_overview( $arguments );
 			case 'get_about':
-				return self::tool_about( $arguments, $params );
+				return self::tool_about( $arguments, $params, isset( $route['surface'] ) && MMSAR_Agent_Log::SURFACE_WEBMCP === $route['surface'] );
 			case self::TOOL_SEND:
 				return self::tool_send( $arguments, $params );
 		}
@@ -1175,15 +1181,16 @@ class MMSAR_MCP {
 	 *
 	 * @param array $arguments Tool arguments: an optional `draft` for the card's form.
 	 * @param array $params    Request params, which say whether the client renders cards.
+	 * @param bool  $browser   Whether the call came through the WebMCP bridge, where no card shows.
 	 * @return array Tool result.
 	 */
-	private static function tool_about( $arguments = array(), $params = array() ) {
+	private static function tool_about( $arguments = array(), $params = array(), $browser = false ) {
 		$about = MMSAR_About::get();
 		$text  = MMSAR_About::to_text( $about );
-		$mode  = self::contact_mode( $params );
-		$draft = isset( $arguments['draft'] ) ? self::sanitize_draft( $arguments['draft'] ) : array();
+		$mode  = $browser ? '' : self::contact_mode( $params );
+		$draft = ! $browser && isset( $arguments['draft'] ) ? self::sanitize_draft( $arguments['draft'] ) : array();
 		if ( '' !== $mode ) {
-			$text .= "\n\nThe card shows a contact form" . ( $draft ? ', filled in with your draft' : '' ) . '. The person reviews it and presses Send themselves; nothing is sent until they do. Do not say a message was sent unless the card tells you so.';
+			$text .= "\n\n" . self::about_contact_note( (bool) $draft, self::client_has_ui( $params ) );
 		}
 		$result = self::tool_text( $text );
 		if ( self::ui_enabled() ) {
@@ -1196,6 +1203,24 @@ class MMSAR_MCP {
 			);
 		}
 		return $result;
+	}
+
+	/**
+	 * What get_about tells the model about the card's contact form.
+	 *
+	 * Only a client that declared MCP Apps is known to show the card. Older clients have no way to
+	 * declare it, so the wording has to hold whether or not a card appears.
+	 *
+	 * @param bool $has_draft Whether a draft was passed.
+	 * @param bool $has_ui    Whether the client declared MCP Apps support.
+	 * @return string
+	 */
+	public static function about_contact_note( $has_draft, $has_ui ) {
+		$filled = $has_draft ? ', filled in with your draft' : '';
+		if ( $has_ui ) {
+			return 'The card shows a contact form' . $filled . '. The person reviews it and presses Send themselves; nothing is sent until they do. Do not say a message was sent unless the card tells you so.';
+		}
+		return 'If this client shows the about card, it has a contact form' . $filled . ': the person reviews it and presses Send themselves. If it does not, give them the contact page. Do not say a message was sent unless the card tells you so.';
 	}
 
 	/**
@@ -1945,6 +1970,24 @@ class MMSAR_MCP {
 	}
 
 	/**
+	 * A tool as the server card lists it: get_about without the card's contact form.
+	 *
+	 * MCP clients take their tools from tools/list. This card's readers are the WebMCP bridge,
+	 * webmcp.json and scanners, and no card shows in a browser, so the draft has nowhere to go.
+	 *
+	 * @param array $tool Tool definition.
+	 * @return array
+	 */
+	public static function without_card_form( $tool ) {
+		if ( 'get_about' !== $tool['name'] ) {
+			return $tool;
+		}
+		$tool['description']               = str_replace( self::ABOUT_DRAFT_NOTE, '', $tool['description'] );
+		$tool['inputSchema']['properties'] = (object) array();
+		return $tool;
+	}
+
+	/**
 	 * The server card, filtered, exactly as /.well-known/mcp/server-card.json serves it.
 	 *
 	 * Public since 1.58.0, because the WebMCP bridge registers its tools from this card at run time
@@ -1958,6 +2001,7 @@ class MMSAR_MCP {
 
 		$tools = array();
 		foreach ( self::tools() as $tool ) {
+			$tool    = self::without_card_form( $tool );
 			$tools[] = array(
 				'name'        => $tool['name'],
 				'title'       => isset( $tool['title'] ) ? $tool['title'] : $tool['name'],
@@ -2190,7 +2234,7 @@ class MMSAR_MCP {
 		$schema['properties'] = array(
 			'draft' => array(
 				'type'                 => 'object',
-				'description'          => 'Optional. When the person wants to get in touch, a draft for the card\'s contact form: their name and email if they gave them, a short subject, and the message in their words. The person reviews and edits it, and only they can send it.',
+				'description'          => 'Optional. When the person wants to get in touch, a draft for the about card\'s contact form, where the client shows the card: their name and email if they gave them, a short subject, and the message in their words. The person reviews and edits it, and only they can send it.',
 				'properties'           => $fields,
 				'additionalProperties' => false,
 			),
