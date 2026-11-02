@@ -2,6 +2,10 @@
 
 All notable changes to Make My Site Agent-Ready.
 
+## 1.71.1 — 2026-11-02
+
+- Changed: the Logs table is easier to read. Each time fits on one line ("Nov 2, 17:20", the full time on hover), the Accept detail sits on a smaller second line under Requested, the client is one word (Crawler, Browser, Script), signals appear under it instead of in a column of their own, and long details such as query strings are cut to the column with the whole value on hover.
+
 ## 1.71.0 — 2026-11-02
 - New: the Summary opens with the last 30 days in numbers: bot requests, the share verified, how many different bots, Spoofed requests and visitors sent by AI, each compared with the 30 days before once the log reaches back that far. Below them, "Who is visiting": everything the log recorded, split into people (browsers), search engines and SEO tools, AI agents, and other bots and scripts, as shares for the 30 days and as stacked bars per day. Then a "Who visited" table of the busiest bots with what each is for and whether it was verified, and "What they're built for", requests by kind of bot. Each kind and the Spoofed number link to the matching entries.
 - New: the Agent Log says that visits served from your hosting's cache aren't logged, so its counts may be lower than your real traffic. Also explained in the FAQ.

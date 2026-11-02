@@ -1679,8 +1679,7 @@ class MMSAR_Agent_Log_Page {
 		echo '<th>' . esc_html__( 'Agent', 'make-my-site-agent-ready' ) . '</th>';
 		echo '<th>' . esc_html__( 'Requested', 'make-my-site-agent-ready' ) . '</th>';
 		echo '<th>' . esc_html__( 'Details', 'make-my-site-agent-ready' ) . '</th>';
-		echo '<th>' . esc_html__( 'Client', 'make-my-site-agent-ready' ) . '</th>';
-		echo '<th>' . esc_html__( 'Signals', 'make-my-site-agent-ready' ) . '</th>';
+		echo '<th title="' . esc_attr__( 'What kind of software made the request, and any signals about it: a Web Bot Auth signature, a cloud-provider network, or a link followed from this site.', 'make-my-site-agent-ready' ) . '">' . esc_html__( 'Client', 'make-my-site-agent-ready' ) . '</th>';
 		echo '<th>' . esc_html__( 'Identity', 'make-my-site-agent-ready' ) . '</th>';
 		echo '<th>' . esc_html__( 'IP', 'make-my-site-agent-ready' ) . '</th>';
 		echo '</tr></thead><tbody>';
@@ -1689,7 +1688,7 @@ class MMSAR_Agent_Log_Page {
 			// Stored in UTC; shown in the site's timezone, which is what the reader expects.
 			$stamp = isset( $entry['logged_at'] ) ? strtotime( $entry['logged_at'] . ' UTC' ) : 0;
 			echo '<tr>';
-			echo '<td>' . esc_html( $stamp ? wp_date( 'Y-m-d H:i', $stamp ) : '—' ) . '</td>';
+			echo '<td style="white-space:nowrap;"' . ( $stamp ? ' title="' . esc_attr( wp_date( 'Y-m-d H:i:s T', $stamp ) ) . '"' : '' ) . '>' . esc_html( $stamp ? self::short_time( $stamp ) : '—' ) . '</td>';
 			$attributed = isset( $entry['attributed_to'] ) ? (string) $entry['attributed_to'] : '';
 			echo '<td>' . esc_html( isset( $entry['agent'] ) ? $entry['agent'] : '—' );
 			echo self::crawler_tag( isset( $entry['agent'] ) ? (string) $entry['agent'] : '' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Built from esc_html() in crawler_tag().
@@ -1703,18 +1702,22 @@ class MMSAR_Agent_Log_Page {
 					. '</span>';
 			}
 			echo '</td>';
-			echo '<td>' . esc_html( isset( $entry['surface'] ) ? $entry['surface'] : '—' ) . '</td>';
+			echo '<td>' . self::surface_cell( isset( $entry['surface'] ) ? (string) $entry['surface'] : '' ) . '</td>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Built from esc_html() in surface_cell().
 			$detail    = isset( $entry['detail'] ) ? (string) $entry['detail'] : '';
 			$arguments = isset( $entry['arguments'] ) ? (string) $entry['arguments'] : '';
-			echo '<td>' . ( '' === $detail ? '<span style="color:#8c8f94;">—</span>' : '<code>' . esc_html( $detail ) . '</code>' );
+			// Long values (a query string, a scraper's token) are cut to the column with the whole
+			// value on hover, so one row cannot squeeze every other column.
+			$clip = 'display:inline-block;max-width:24em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:top;';
+			echo '<td>' . ( '' === $detail ? '<span style="color:#8c8f94;">—</span>' : '<code style="' . esc_attr( $clip ) . '" title="' . esc_attr( $detail ) . '">' . esc_html( $detail ) . '</code>' );
 			if ( '' !== $arguments ) {
-				echo '<br><code style="font-size:11px;">' . esc_html( $arguments ) . '</code>';
+				echo '<br><code style="' . esc_attr( $clip . 'font-size:11px;' ) . '" title="' . esc_attr( $arguments ) . '">' . esc_html( $arguments ) . '</code>';
 			}
 			echo '</td>';
-			$ctype = isset( $entry['client_type'] ) ? (string) $entry['client_type'] : '';
-			echo '<td><span style="font-size:11px;color:' . ( MMSAR_Agent_Log::CLIENT_BROWSER === $ctype ? '#8c8f94' : 'inherit' ) . ';">'
-				. esc_html( MMSAR_Agent_Log::client_type_label( $ctype ) ) . '</span></td>';
-			echo '<td>' . wp_kses_post( self::signal_badges( $entry ) ) . '</td>';
+			$ctype   = isset( $entry['client_type'] ) ? (string) $entry['client_type'] : '';
+			$signals = self::signal_badges( $entry );
+			echo '<td><span title="' . esc_attr( MMSAR_Agent_Log::client_type_label( $ctype ) ) . '" style="white-space:nowrap;font-size:12px;color:' . ( MMSAR_Agent_Log::CLIENT_BROWSER === $ctype ? '#646970' : 'inherit' ) . ';">'
+				. esc_html( self::client_short_label( $ctype ) ) . '</span>'
+				. ( '' !== $signals ? '<br>' . wp_kses_post( $signals ) : '' ) . '</td>';
 			echo '<td>' . wp_kses_post( self::verdict_badge( $entry ) ) . '</td>';
 			echo '<td>' . wp_kses_post( self::ip_cell( isset( $entry['ip'] ) ? (string) $entry['ip'] : '', $filters ) ) . '</td>';
 			echo '</tr>';
@@ -2192,7 +2195,57 @@ class MMSAR_Agent_Log_Page {
 	}
 
 	/**
-	 * The Signals cell: one small badge per signal present on the row, or a dash.
+	 * A log time on one line: "Nov 2, 17:20", with the year only when it is not this year.
+	 *
+	 * @param int $stamp Unix timestamp.
+	 * @return string
+	 */
+	private static function short_time( $stamp ) {
+		$format = wp_date( 'Y', $stamp ) === wp_date( 'Y' ) ? 'M j, H:i' : 'M j Y, H:i';
+		return (string) wp_date( $format, $stamp );
+	}
+
+	/**
+	 * The Requested cell: the surface on the first line, and the part in brackets, such as what
+	 * the request's Accept header asked for, on a smaller second line.
+	 *
+	 * @param string $surface Stored surface label.
+	 * @return string Escaped HTML.
+	 */
+	private static function surface_cell( $surface ) {
+		if ( '' === $surface ) {
+			return '—';
+		}
+		if ( preg_match( '/^(.+?) \((.+)\)$/', $surface, $m ) ) {
+			return esc_html( $m[1] ) . '<br><span style="font-size:11px;color:#646970;">' . esc_html( $m[2] ) . '</span>';
+		}
+		return esc_html( $surface );
+	}
+
+	/**
+	 * A one-word client label for the table. The full label is the cell's hover text and is what
+	 * the filters, the export and the ability use.
+	 *
+	 * @param string $type Stored client type.
+	 * @return string
+	 */
+	private static function client_short_label( $type ) {
+		switch ( $type ) {
+			case MMSAR_Agent_Log::CLIENT_CRAWLER:
+				return __( 'Crawler', 'make-my-site-agent-ready' );
+			case MMSAR_Agent_Log::CLIENT_BROWSER:
+				return __( 'Browser', 'make-my-site-agent-ready' );
+			case MMSAR_Agent_Log::CLIENT_HTTP:
+				return __( 'Script', 'make-my-site-agent-ready' );
+			default:
+				return '—';
+		}
+	}
+
+	/**
+	 * The signals under the Client cell: one small badge per signal present on the row, or nothing.
+	 *
+	 * A column of their own until 1.71.1; it read "—" on almost every row and took the width of one.
 	 *
 	 * Worded so none of them reads as a verdict. "Signed" always says "claims", the cloud badge
 	 * names a network rather than a kind of visitor, and a stored network that straddles a range
@@ -2232,7 +2285,7 @@ class MMSAR_Agent_Log_Page {
 				. '</span>';
 		}
 
-		return $badges ? implode( '', $badges ) : '<span style="color:#8c8f94;">—</span>';
+		return implode( '', $badges );
 	}
 
 	/**

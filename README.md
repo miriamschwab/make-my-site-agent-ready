@@ -549,7 +549,7 @@ authenticated admin contexts, and all of them bounded by a wall-clock budget.
 
 `client_type` separates browser engines from HTTP clients. It cannot separate a person from an agent
 driving a real browser, because that agent *is* a browser and sends everything a reader sends. Since
-1.48.0 browser-shaped traffic carries three signals, shown in a *Signals* column and filterable. None
+1.48.0 browser-shaped traffic carries three signals, shown under the *Client* column (a column of their own until 1.71.1) and filterable as *Signals*. None
 is a verdict, and none moves a row out of the browser count; they annotate it. Since 1.55.0 the cloud
 signal also covers HTTP clients, where it answers a different question (see below).
 
