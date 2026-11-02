@@ -2,6 +2,17 @@
 
 All notable changes to Make My Site Agent-Ready.
 
+## 1.71.0 — 2026-11-02
+- New: the Summary opens with the last 30 days in numbers: bot requests, the share verified, how many different bots, Spoofed requests and visitors sent by AI, each compared with the 30 days before once the log reaches back that far. Below them, "Who is visiting": everything the log recorded, split into people (browsers), search engines and SEO tools, AI agents, and other bots and scripts, as shares for the 30 days and as stacked bars per day. Then a "Who visited" table of the busiest bots with what each is for and whether it was verified, and "What they're built for", requests by kind of bot. Each kind and the Spoofed number link to the matching entries.
+- New: the Agent Log says that visits served from your hosting's cache aren't logged, so its counts may be lower than your real traffic. Also explained in the FAQ.
+- Changed: the Agent Log opens on its log of requests again, in a tab now called Logs (was List). The tabs read Logs, Summary, Journeys.
+- Changed: the Crawler identity box is shorter. Each count is now a link to the entries it counts and explains itself when you point at it, and the longer notes are under "How identity is checked". The list of every crawler name that can't be confirmed is gone; the Unverifiable count opens those entries.
+- Changed: on the Logs tab, Export sits at the bottom of the filters, and "Entries to keep" is under "Log settings" at the bottom of the page. The AI referrals panel is gone: the Summary's "People assistants send you" card and its "Visitors sent by AI" number show the same counts.
+- Changed: the Journeys tab shows only its filters and the visits. It used to repeat the Logs tab's identity, referrals, export and not-found panels.
+- Fixed: Verify now and Re-check bring you back to the tab and filters you pressed them on. They used to land on the Summary.
+- Fixed: deleting the plugin now also removes the Summary's cached results, which were left to expire on their own.
+- Removed: the "Delete the log" button. "Entries to keep" still drops the oldest entries past the number you set, and deleting the plugin removes the whole table.
+
 ## 1.70.0 — 2026-11-01
 
 - New: the WebMCP bridge returns `{ text, structuredContent }` for tools that have structured data (`search_content`, `list_content` and `get_about`, while `mcp_ui` is on). Every other result, and every error, stays plain text.

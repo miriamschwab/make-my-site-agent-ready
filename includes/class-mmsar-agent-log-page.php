@@ -3,8 +3,8 @@
  * The Agent Log admin screen.
  *
  * A page of its own rather than a section on the settings screen: a settings screen is for
- * configuration, and this is data that grows. Keeping them apart is what makes pagination, a
- * retention control and a clear button possible without the log pushing the settings off-screen.
+ * configuration, and this is data that grows. Keeping them apart is what makes pagination and a
+ * retention control possible without the log pushing the settings off-screen.
  *
  * @package Make_My_Site_Agent_Ready
  */
@@ -30,15 +30,15 @@ class MMSAR_Agent_Log_Page {
 	const VISITS_PER_PAGE = 20;
 
 	/**
-	 * The two views of the same log.
+	 * The three views of the same log, in tab order.
 	 *
-	 * The list is the original and stays the default: it is the view that answers "what happened
-	 * just now", it is what every existing bookmark and every link in this plugin points at, and
-	 * a screen that silently changed shape under someone who knows it would be a worse screen.
-	 * Journeys answer a different question — what one caller did in sequence — and that question
-	 * is asked less often, from a link or a tab rather than on arrival.
+	 * The list (the "Logs" tab) is the default again since 1.71.0. The Summary was the default
+	 * from 1.55.0, and in use it was the wrong door: the person opening this screen mostly wants
+	 * to see what just happened, and the buttons that act on the log live on the list. Journeys
+	 * answer a different question — what one caller did in sequence — and that question is asked
+	 * less often, from a link or a tab rather than on arrival.
 	 */
-	const VIEWS = array( 'summary', 'list', 'journeys' );
+	const VIEWS = array( 'list', 'summary', 'journeys' );
 
 	/**
 	 * Rows read per query while streaming an export.
@@ -56,8 +56,8 @@ class MMSAR_Agent_Log_Page {
 	 */
 	public static function init() {
 		add_action( 'admin_menu', array( __CLASS__, 'add_menu' ) );
+		add_action( 'admin_enqueue_scripts', array( __CLASS__, 'enqueue_styles' ) );
 		add_action( 'admin_init', array( __CLASS__, 'register_settings' ) );
-		add_action( 'admin_post_mmsar_clear_agent_log', array( __CLASS__, 'handle_clear' ) );
 		add_action( 'admin_post_mmsar_export_agent_log', array( __CLASS__, 'handle_export' ) );
 		add_action( 'admin_post_mmsar_verify_agent_log', array( __CLASS__, 'handle_verify' ) );
 		add_action( 'admin_post_mmsar_recheck_agent_log', array( __CLASS__, 'handle_recheck' ) );
@@ -79,6 +79,28 @@ class MMSAR_Agent_Log_Page {
 	}
 
 	/**
+	 * The few styles inline attributes cannot carry: hover states on the identity tiles and chart bars.
+	 *
+	 * Attached to core's `common` stylesheet, which every admin screen loads, so this adds no file
+	 * and no request.
+	 *
+	 * @param string $hook Current admin page hook.
+	 * @return void
+	 */
+	public static function enqueue_styles( $hook ) {
+		if ( 'settings_page_' . self::SLUG !== $hook ) {
+			return;
+		}
+		wp_add_inline_style(
+			'common',
+			'.mmsar-idtile{flex:1 1 7rem;padding:.6rem 1.1rem;border-right:1px solid #f0f0f1;color:inherit;text-decoration:none;}'
+			. 'a.mmsar-idtile:hover,a.mmsar-idtile:focus{background:#f6f7f7;color:inherit;}'
+			. '.mmsar-idtile.is-active{background:#f0f6fc;box-shadow:inset 0 -2px 0 #2271b1;}'
+			. '.mmsar-chart .mmsar-bar:hover .mmsar-hit{fill:#f0f0f1;}'
+		);
+	}
+
+	/**
 	 * Register settings.
 	 *
 	 * @return void
@@ -92,47 +114,6 @@ class MMSAR_Agent_Log_Page {
 				'default'           => 0,
 			)
 		);
-	}
-
-	/**
-	 * Empties the log.
-	 *
-	 * @return void
-	 */
-	public static function handle_clear() {
-		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_die( esc_html__( 'Unauthorized.', 'make-my-site-agent-ready' ) );
-		}
-		if ( ! isset( $_POST['mmsar_nonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['mmsar_nonce'] ) ), 'mmsar_clear_agent_log' ) ) {
-			wp_die( esc_html__( 'Security check failed.', 'make-my-site-agent-ready' ) );
-		}
-
-		// The typed word is checked here as well as in the browser. A disabled button is a
-		// convenience, not a guard: this endpoint is reachable directly with a valid nonce.
-		$typed = isset( $_POST['mmsar_clear_confirm'] ) ? trim( sanitize_text_field( wp_unslash( $_POST['mmsar_clear_confirm'] ) ) ) : '';
-		if ( _x( 'DELETE', 'confirmation word typed to clear the agent log', 'make-my-site-agent-ready' ) !== $typed ) {
-			wp_die(
-				esc_html__( 'The log was not cleared: the confirmation word did not match.', 'make-my-site-agent-ready' ),
-				esc_html__( 'Confirmation required', 'make-my-site-agent-ready' ),
-				array(
-					'response'  => 400,
-					'back_link' => true,
-				)
-			);
-		}
-
-		MMSAR_Agent_Log::clear();
-
-		wp_safe_redirect(
-			add_query_arg(
-				array(
-					'page'          => self::SLUG,
-					'mmsar_cleared' => '1',
-				),
-				admin_url( 'options-general.php' )
-			)
-		);
-		exit;
 	}
 
 	/**
@@ -156,6 +137,7 @@ class MMSAR_Agent_Log_Page {
 		// Read here rather than in the redirect helper: the nonce check above is in this function,
 		// which is what lets the sniff see a $_POST read as guarded.
 		$return = isset( $_POST['mmsar_return'] ) ? sanitize_key( wp_unslash( $_POST['mmsar_return'] ) ) : '';
+		$back   = self::back_args_from_post( $return );
 
 		$done = MMSAR_Agent_Log_Verify::run_batch(
 			MMSAR_Agent_Log_Verify::BUTTON_IPS,
@@ -168,7 +150,8 @@ class MMSAR_Agent_Log_Page {
 				'mmsar_verified_ips' => (int) $done['ips'],
 				'mmsar_verify_done'  => empty( $done['exhausted'] ) ? '0' : '1',
 			),
-			'dashboard' === $return
+			$return,
+			$back
 		);
 	}
 
@@ -177,25 +160,97 @@ class MMSAR_Agent_Log_Page {
 	 *
 	 * The verify and re-check buttons exist in two places as of 1.29.0 — this screen and the
 	 * dashboard widget — and always returning to the log screen would answer the question by
-	 * moving the person who asked it.
+	 * moving the person who asked it. On this screen that goes for the view and its filters too
+	 * (1.71.0): before, a press on the list came back on whichever view was the default, with
+	 * the filters gone.
 	 *
-	 * The destination is chosen from a fixed pair rather than taken from the request. A posted URL
-	 * to redirect to is an open redirect waiting to happen even behind `wp_safe_redirect()`, and
-	 * there are only ever two answers, so a flag is enough.
+	 * The destination is chosen from fixed values rather than taken from the request. A posted URL
+	 * to redirect to is an open redirect waiting to happen even behind `wp_safe_redirect()`, so the
+	 * form posts the view and filters as fields and they are validated like any other filter.
 	 *
-	 * @param array $args         Query args describing what the pass did.
-	 * @param bool  $to_dashboard Whether the button was pressed on the dashboard widget.
+	 * @param array  $args   Query args describing what the pass did.
+	 * @param string $origin Where the button was pressed: `dashboard`, or a view of this screen.
+	 * @param array  $back   View and filter arguments from back_args_from_post().
 	 * @return void
 	 */
-	private static function redirect_after_pass( $args, $to_dashboard ) {
-		if ( $to_dashboard ) {
+	private static function redirect_after_pass( $args, $origin, $back ) {
+		if ( 'dashboard' === $origin ) {
 			wp_safe_redirect( add_query_arg( $args, admin_url( 'index.php' ) ) );
 			exit;
 		}
 
-		$args['page'] = self::SLUG;
-		wp_safe_redirect( add_query_arg( $args, admin_url( 'options-general.php' ) ) );
+		wp_safe_redirect( add_query_arg( array_merge( $back, $args ), admin_url( 'options-general.php' ) ) );
 		exit;
+	}
+
+	/**
+	 * The view and filters a verify or re-check form was posted from, validated.
+	 *
+	 * Only the list and journeys views carry these buttons. Anything else, including a form from
+	 * before 1.71.0 that posted no view, goes back to the list.
+	 *
+	 * @param string $origin The posted `mmsar_return` value, already sanitized.
+	 * @return array Query arguments for this screen, `page` included.
+	 */
+	private static function back_args_from_post( $origin ) {
+		$view = in_array( $origin, array( 'list', 'journeys' ), true ) ? $origin : 'list';
+		$ip   = '';
+		$one  = '';
+		if ( 'journeys' === $view ) {
+			// phpcs:ignore WordPress.Security.NonceVerification.Missing -- The caller verified its nonce before reaching this.
+			$ip = isset( $_POST['mmsar_ip'] ) ? sanitize_text_field( wp_unslash( $_POST['mmsar_ip'] ) ) : '';
+			$ip = ( '' !== $ip && filter_var( $ip, FILTER_VALIDATE_IP ) ) ? $ip : '';
+			// phpcs:ignore WordPress.Security.NonceVerification.Missing -- As above.
+			$one = ( isset( $_POST['mmsar_single'] ) && '1' === sanitize_key( wp_unslash( $_POST['mmsar_single'] ) ) ) ? '1' : '';
+		}
+
+		return self::filter_args(
+			self::filters_from_post(),
+			array(
+				'view'   => $view,
+				'ip'     => $ip,
+				'single' => $one,
+			)
+		);
+	}
+
+	/**
+	 * The current filters as hidden form fields, named as the screen's own query arguments.
+	 *
+	 * @param array $filters Filter set.
+	 * @return void
+	 */
+	private static function render_hidden_filters( $filters ) {
+		foreach ( array(
+			'verdict' => 'verdicts',
+			'client'  => 'clients',
+			'surface' => 'categories',
+			'crawler' => 'crawlers',
+			'signal'  => 'signals',
+		) as $arg => $key ) {
+			foreach ( ( $filters[ $key ] ?? array() ) as $value ) {
+				printf( '<input type="hidden" name="%1$s[]" value="%2$s">', esc_attr( $arg ), esc_attr( $value ) );
+			}
+		}
+	}
+
+	/**
+	 * The fields a verify or re-check form posts so the browser comes back to this view.
+	 *
+	 * @param string $view    Current view.
+	 * @param array  $filters Current filter set.
+	 * @param string $ip      Current address filter.
+	 * @return void
+	 */
+	private static function render_back_fields( $view, $filters, $ip ) {
+		echo '<input type="hidden" name="mmsar_return" value="' . esc_attr( $view ) . '">';
+		self::render_hidden_filters( $filters );
+		if ( 'journeys' === $view ) {
+			echo '<input type="hidden" name="mmsar_ip" value="' . esc_attr( $ip ) . '">';
+			if ( ! self::current_multi_only() ) {
+				echo '<input type="hidden" name="mmsar_single" value="1">';
+			}
+		}
 	}
 
 	/**
@@ -224,6 +279,7 @@ class MMSAR_Agent_Log_Page {
 
 		// See handle_verify(): read while the nonce check is still in scope.
 		$return = isset( $_POST['mmsar_return'] ) ? sanitize_key( wp_unslash( $_POST['mmsar_return'] ) ) : '';
+		$back   = self::back_args_from_post( $return );
 
 		// Both lists: get_undecided_pairs() covers the verdicts a re-check has always reopened, and
 		// get_recheckable_pairs() is the set actually about to be reset — which now includes rows
@@ -264,7 +320,8 @@ class MMSAR_Agent_Log_Page {
 				'mmsar_changed'      => (int) $changed,
 				'mmsar_verified_ips' => (int) $done['ips'],
 			),
-			'dashboard' === $return
+			$return,
+			$back
 		);
 	}
 
@@ -339,13 +396,14 @@ class MMSAR_Agent_Log_Page {
 	}
 
 	/**
-	 * The filter set carried on the export form, validated the same way the screen validates it.
+	 * The filter set carried on the export, verify and re-check forms, validated the same way the
+	 * screen validates it.
 	 *
 	 * @return array{verdicts: string[], clients: string[], categories: string[]}
 	 */
 	private static function filters_from_post() {
 		$pick = static function ( $key, $allowed ) {
-			// phpcs:ignore WordPress.Security.NonceVerification.Missing -- The caller verified the export nonce before reaching this.
+			// phpcs:ignore WordPress.Security.NonceVerification.Missing -- The caller verified its form's nonce before reaching this.
 			$raw = isset( $_POST[ $key ] ) ? array_map( 'sanitize_key', (array) wp_unslash( $_POST[ $key ] ) ) : array();
 			return array_values( array_intersect( $raw, $allowed ) );
 		};
@@ -426,26 +484,16 @@ class MMSAR_Agent_Log_Page {
 	/**
 	 * Which view is being asked for.
 	 *
-	 * The Summary is the default since 1.55.0. Before that the list was, and every URL it built
-	 * left `view` out. So a URL without `view` that carries a filter, an address or a page number
-	 * is one of those older list URLs — a bookmark, a link from the widget — and still opens the
-	 * list. Every URL built now names its view.
+	 * The list is the default (again, since 1.71.0; the Summary was from 1.55.0). Every URL built
+	 * names its view, so a link to the Summary, such as the dashboard widget's, keeps opening the
+	 * Summary.
 	 *
 	 * @return string One of VIEWS.
 	 */
 	private static function current_view() {
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only view selection on an admin screen.
 		$view = isset( $_GET['view'] ) ? sanitize_key( wp_unslash( $_GET['view'] ) ) : '';
-		if ( in_array( $view, self::VIEWS, true ) ) {
-			return $view;
-		}
-		foreach ( array( 'verdict', 'client', 'surface', 'crawler', 'signal', 'ip', 'paged' ) as $arg ) {
-			// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- As above; only presence is read.
-			if ( isset( $_GET[ $arg ] ) ) {
-				return 'list';
-			}
-		}
-		return 'summary';
+		return in_array( $view, self::VIEWS, true ) ? $view : 'list';
 	}
 
 	/**
@@ -654,13 +702,14 @@ class MMSAR_Agent_Log_Page {
 	 * A plain GET form, so every view is a URL that can be bookmarked or sent to someone, and no
 	 * JavaScript is needed to combine axes.
 	 *
-	 * @param array $filters Current filter set.
-	 * @param int   $shown   Rows the current filter matches.
-	 * @param int   $total   Rows in the whole log.
-	 * @param array $extra   View-state arguments to carry through the form, from view_args().
+	 * @param array $filters     Current filter set.
+	 * @param int   $shown       Rows the current filter matches.
+	 * @param int   $total       Rows in the whole log.
+	 * @param array $extra       View-state arguments to carry through the form, from view_args().
+	 * @param bool  $with_export Whether to show the export buttons in the footer (Logs tab only).
 	 * @return void
 	 */
-	private static function render_filter_bar( $filters, $shown, $total, $extra = array() ) {
+	private static function render_filter_bar( $filters, $shown, $total, $extra = array(), $with_export = false ) {
 		$catcounts = MMSAR_Agent_Log::get_category_counts();
 
 		echo '<form id="mmsar-filter-form" method="get" action="' . esc_url( admin_url( 'options-general.php' ) ) . '" style="margin:1.5em 0 1em;padding:1rem 1.2rem;background:#fff;border:1px solid #c3c4c7;">';
@@ -721,6 +770,9 @@ class MMSAR_Agent_Log_Page {
 		self::render_filter_group( 'signal', __( 'Signals', 'make-my-site-agent-ready' ), $signal_opts, $filters['signals'], $signal_totals, self::signal_hints() );
 
 		echo '<div style="clear:both;padding-top:.6rem;border-top:1px solid #f0f0f1;margin-top:.4rem;">';
+		if ( $with_export ) {
+			self::render_export_buttons( $filters, $shown, $total );
+		}
 		echo '<span id="mmsar-filter-apply">';
 		submit_button( __( 'Apply filters', 'make-my-site-agent-ready' ), 'primary', 'submit', false );
 		echo '</span>';
@@ -873,73 +925,6 @@ class MMSAR_Agent_Log_Page {
 	}
 
 	/**
-	 * Visitors AI assistants sent, over the last 30 days.
-	 *
-	 * Shown whenever the counting is switched on or there are counts to show, open when there are
-	 * any. This is people, not agents, so it sits in a panel of its own and never in the table below.
-	 *
-	 * @return void
-	 */
-	private static function render_referrals_panel() {
-		$enabled = MMSAR_Referrals::is_enabled();
-		$summary = MMSAR_Referrals::get_summary( 30 );
-		if ( ! $enabled && 0 === $summary['total'] ) {
-			return;
-		}
-
-		$open = $summary['total'] > 0 ? ' open' : '';
-		echo '<details' . esc_attr( $open ) . ' style="margin:1em 0;padding:.8rem 1.2rem;background:#fff;border:1px solid #c3c4c7;">';
-		echo '<summary style="cursor:pointer;font-weight:600;">';
-		printf(
-			/* translators: %s: number of visits */
-			esc_html( _n( 'Visitors sent by AI assistants in the last 30 days: %s', 'Visitors sent by AI assistants in the last 30 days: %s', $summary['total'], 'make-my-site-agent-ready' ) ),
-			esc_html( number_format_i18n( $summary['total'] ) )
-		);
-		echo '</summary>';
-
-		echo '<p class="description" style="margin:.6rem 0 .8rem;">'
-			. esc_html__( 'People who clicked a link in an AI assistant and landed here. A floor, not a total: many assistant apps open links without saying where they came from, so those visits cannot be told from direct ones. One visitor landing on one page from one assistant counts once per half hour.', 'make-my-site-agent-ready' )
-			. '</p>';
-
-		if ( ! $enabled ) {
-			echo '<p class="description"><strong>' . esc_html__( 'Counting is switched off. These are the counts kept from when it was on.', 'make-my-site-agent-ready' ) . '</strong></p>';
-		}
-
-		if ( 0 === $summary['total'] ) {
-			echo '<p><em>' . esc_html__( 'None yet. Cached pages pick up the counting script when the cache next refreshes, so the first visits can take a day to appear.', 'make-my-site-agent-ready' ) . '</em></p>';
-			echo '</details>';
-			return;
-		}
-
-		echo '<div style="display:flex;flex-wrap:wrap;gap:1.5rem;align-items:flex-start;">';
-
-		echo '<table class="widefat striped" style="width:auto;min-width:16rem;"><thead><tr>';
-		echo '<th>' . esc_html__( 'Assistant', 'make-my-site-agent-ready' ) . '</th>';
-		echo '<th style="width:6em;">' . esc_html__( 'Visits', 'make-my-site-agent-ready' ) . '</th>';
-		echo '</tr></thead><tbody>';
-		foreach ( $summary['by_assistant'] as $row ) {
-			echo '<tr><td>' . esc_html( $row['label'] ) . '</td><td>' . esc_html( number_format_i18n( $row['hits'] ) ) . '</td></tr>';
-		}
-		echo '</tbody></table>';
-
-		echo '<table class="widefat striped" style="width:auto;flex:1;min-width:20rem;"><thead><tr>';
-		echo '<th>' . esc_html__( 'Landed on', 'make-my-site-agent-ready' ) . '</th>';
-		echo '<th style="width:6em;">' . esc_html__( 'Visits', 'make-my-site-agent-ready' ) . '</th>';
-		echo '<th>' . esc_html__( 'From', 'make-my-site-agent-ready' ) . '</th>';
-		echo '</tr></thead><tbody>';
-		foreach ( $summary['by_page'] as $row ) {
-			$path = '(other)' === $row['path']
-				? '<span style="color:#8c8f94;">' . esc_html__( 'Another page (an archive, search or similar)', 'make-my-site-agent-ready' ) . '</span>'
-				: '<code>' . esc_html( $row['path'] ) . '</code>';
-			echo '<tr><td>' . wp_kses_post( $path ) . '</td><td>' . esc_html( number_format_i18n( $row['hits'] ) ) . '</td><td>' . esc_html( $row['assistants'] ) . '</td></tr>';
-		}
-		echo '</tbody></table>';
-
-		echo '</div>';
-		echo '</details>';
-	}
-
-	/**
 	 * Where a finding's action points, from the short form the findings use.
 	 *
 	 * Findings are computed without knowing about admin URLs, so they name a target
@@ -1025,6 +1010,471 @@ class MMSAR_Agent_Log_Page {
 	}
 
 	/**
+	 * The numbers, the chart and the two tables at the top of the Summary.
+	 *
+	 * @param array $ov MMSAR_Agent_Overview::get() result.
+	 * @return void
+	 */
+	private static function render_overview( $ov ) {
+		$t   = $ov['totals'];
+		$req = (int) $t['requests']['now'];
+
+		$tiles = array(
+			array(
+				'value' => number_format_i18n( $req ),
+				'label' => __( 'Bot requests', 'make-my-site-agent-ready' ),
+				'sub'   => self::change_text( $req, $t['requests']['previous'] ),
+				'hint'  => __( 'Requests from recognised bots, of every kind: AI, search engines, SEO tools and others. Spoofed requests are not included.', 'make-my-site-agent-ready' ),
+			),
+			array(
+				'value' => ( $req > 0 ? number_format_i18n( (int) round( 100 * $t['confirmed']['now'] / $req ) ) : '0' ) . '%',
+				'label' => __( 'Verified', 'make-my-site-agent-ready' ),
+				/* translators: 1: confirmed requests, 2: all bot requests */
+				'sub'   => sprintf( __( '%1$s of %2$s requests', 'make-my-site-agent-ready' ), number_format_i18n( (int) $t['confirmed']['now'] ), number_format_i18n( $req ) ),
+				'hint'  => __( 'Requests confirmed as coming from the bot they named, plus software someone runs on their own machine, such as Claude Code. The rest could not be checked, which is not the same as fake.', 'make-my-site-agent-ready' ),
+			),
+			array(
+				'value' => number_format_i18n( (int) $t['agents']['now'] ),
+				'label' => __( 'Named bots', 'make-my-site-agent-ready' ),
+				'sub'   => self::change_text( (int) $t['agents']['now'], $t['agents']['previous'] ),
+				'hint'  => __( 'Different bots that visited.', 'make-my-site-agent-ready' ),
+			),
+			array(
+				'value' => number_format_i18n( (int) $t['spoofed']['now'] ),
+				'label' => __( 'Spoofed', 'make-my-site-agent-ready' ),
+				'sub'   => self::change_text( (int) $t['spoofed']['now'], $t['spoofed']['previous'] ),
+				'hint'  => __( 'Requests that used a bot\'s name from an address that does not belong to it. Opens every Spoofed entry in the log.', 'make-my-site-agent-ready' ),
+				'alarm' => (int) $t['spoofed']['now'] > 0,
+				'url'   => add_query_arg(
+					self::filter_args( array( 'verdicts' => array( MMSAR_Agent_Log_Verify::FAILED ) ), array( 'view' => 'list' ) ),
+					admin_url( 'options-general.php' )
+				),
+			),
+		);
+		if ( ! empty( $t['referrals']['shown'] ) ) {
+			$tiles[] = array(
+				'value' => number_format_i18n( (int) $t['referrals']['now'] ),
+				'label' => __( 'Visitors sent by AI', 'make-my-site-agent-ready' ),
+				'sub'   => self::change_text( (int) $t['referrals']['now'], $t['referrals']['previous'] ),
+				'hint'  => __( 'People who clicked a link in an AI assistant and landed here. A floor: many assistant apps do not say where a visitor came from.', 'make-my-site-agent-ready' ),
+			);
+		}
+
+		echo '<div style="display:flex;flex-wrap:wrap;margin:1em 0 .4em;background:#fff;border:1px solid #c3c4c7;">';
+		foreach ( $tiles as $tile ) {
+			// A tile with somewhere to go is a link, styled like the identity tiles on the Logs tab.
+			$tag = empty( $tile['url'] ) ? 'div' : 'a';
+			printf(
+				'<%1$s%2$s class="mmsar-idtile" title="%3$s" style="flex:1 1 9rem;padding:.8rem 1.1rem;">',
+				esc_html( $tag ),
+				empty( $tile['url'] ) ? '' : ' href="' . esc_url( $tile['url'] ) . '"',
+				esc_attr( $tile['hint'] )
+			);
+			echo '<div style="font-size:.8rem;color:#50575e;">' . esc_html( $tile['label'] ) . '</div>';
+			echo '<div style="font-size:1.6rem;font-weight:600;line-height:1.3;' . ( ! empty( $tile['alarm'] ) ? 'color:#b3261e;' : '' ) . '">' . esc_html( $tile['value'] ) . '</div>';
+			echo '<div style="font-size:.78rem;color:#646970;min-height:1.2em;">' . esc_html( $tile['sub'] ) . '</div>';
+			echo '</' . esc_html( $tag ) . '>';
+		}
+		echo '</div>';
+		if ( empty( $ov['has_previous'] ) ) {
+			echo '<p class="description" style="margin:0 0 .3em;">' . esc_html__( 'The log doesn\'t reach back 60 days yet, so there is no comparison with the 30 days before.', 'make-my-site-agent-ready' ) . '</p>';
+		}
+		self::render_cache_note();
+
+		if ( isset( $ov['mix'] ) ) {
+			self::render_mix_chart( $ov['mix'] );
+		}
+
+		echo '<div style="display:flex;flex-wrap:wrap;gap:1em;margin:1em 0;">';
+		self::render_who_visited( $ov );
+		self::render_purposes( $ov['purposes'] );
+		echo '</div>';
+	}
+
+	/**
+	 * One line saying that cached visits never reach the log.
+	 *
+	 * A page a host or CDN serves from its cache is answered before WordPress runs, so nothing here
+	 * sees it. That is true for people, search engines and agents alike, and how much it hides
+	 * depends entirely on the host's caching, so the screen says so rather than leaving every count
+	 * to be read as the whole of the site's traffic (Miriam, 2026-11-02). On miriamschwab.me, HTML
+	 * pages and robots.txt come back from Cloudflare's cache on a repeat request, while the Markdown
+	 * files and llms.txt reach WordPress every time.
+	 *
+	 * @return void
+	 */
+	private static function render_cache_note() {
+		echo '<p class="description" style="margin:.3em 0 1em;">'
+			. esc_html__( 'Visits your hosting serves from its cache never reach WordPress, so they aren\'t logged. Depending on how your hosting handles caching, the log may show fewer visits than your site really gets, from people, search engines and agents alike.', 'make-my-site-agent-ready' )
+			. '</p>';
+	}
+
+	/**
+	 * "Up 19% on the 30 days before", or nothing to say.
+	 *
+	 * @param int      $now      Current value.
+	 * @param int|null $previous Previous value, or null without a previous period.
+	 * @return string
+	 */
+	private static function change_text( $now, $previous ) {
+		if ( null === $previous ) {
+			return '';
+		}
+		if ( $previous < 1 ) {
+			return $now > 0 ? __( 'None in the 30 days before', 'make-my-site-agent-ready' ) : '';
+		}
+		$pct = MMSAR_Agent_Overview::change( $now, $previous );
+		if ( 0 === $pct ) {
+			return __( 'About the same as the 30 days before', 'make-my-site-agent-ready' );
+		}
+		return $pct > 0
+			/* translators: %s: percentage */
+			? sprintf( __( 'Up %s%% on the 30 days before', 'make-my-site-agent-ready' ), number_format_i18n( $pct ) )
+			/* translators: %s: percentage */
+			: sprintf( __( 'Down %s%% on the 30 days before', 'make-my-site-agent-ready' ), number_format_i18n( abs( $pct ) ) );
+	}
+
+	/**
+	 * Series colours for the traffic mix, in MIX_GROUPS order.
+	 *
+	 * Slots 1, 3, 2 and 7 of the dataviz skill's reference palette, ordered so every pair that
+	 * touches in a stack passes its colour-blindness check (worst adjacent CVD Delta E 9.2, normal
+	 * vision 24.0, run with validate_palette.js). Aqua sits under 3:1 against white, so the groups
+	 * are always named in the legend and the numbers are in a table as well.
+	 *
+	 * @return array<string, string> Group => hex.
+	 */
+	private static function mix_colours() {
+		return array(
+			'people' => '#2a78d6',
+			'search' => '#1baf7a',
+			'ai'     => '#eb6834',
+			'other'  => '#6250d6',
+		);
+	}
+
+	/**
+	 * Everything the log saw, split into people, search and SEO, AI agents and other bots.
+	 *
+	 * A bar split by share for the whole period, which doubles as the legend, then the same split per
+	 * day as stacked bars, drawn on the server as SVG. No script and no chart library: the plugin keeps
+	 * admin JavaScript to what cannot be done otherwise. Each day has a native tooltip with every
+	 * group's count and a hit area the full height of the plot, and the numbers are in a table under
+	 * it. Today is drawn lighter, because it is not over.
+	 *
+	 * @param array $mix MMSAR_Agent_Overview mix: `groups`, `daily`, `totals`, `total`.
+	 * @return void
+	 */
+	private static function render_mix_chart( $mix ) {
+		$groups  = $mix['groups'];
+		$colours = self::mix_colours();
+		$total   = (int) $mix['total'];
+		$links   = array(
+			'people' => array( 'clients' => array( MMSAR_Agent_Log::CLIENT_BROWSER ) ),
+			'search' => array( 'crawlers' => array( 'search-engine', 'seo-tool' ) ),
+			'ai'     => array( 'crawlers' => array( 'ai-training', 'ai-search', 'ai-assistant' ) ),
+		);
+
+		echo '<div style="margin:1em 0;padding:.8rem 1.1rem;background:#fff;border:1px solid #c3c4c7;">';
+		echo '<h3 style="margin:0 0 .2rem;font-size:14px;">' . esc_html__( 'Who is visiting', 'make-my-site-agent-ready' ) . '</h3>';
+		echo '<p class="description" style="margin:0 0 .7rem;">' . esc_html__( 'Every request the log recorded in the last 30 days, in your site\'s timezone. Spoofed requests are left out. "People" means browsers, so an agent driving a real browser is counted there too.', 'make-my-site-agent-ready' ) . '</p>';
+
+		if ( $total < 1 ) {
+			echo '<p style="color:#646970;"><em>' . esc_html__( 'Nothing recorded in the last 30 days.', 'make-my-site-agent-ready' ) . '</em></p></div>';
+			return;
+		}
+
+		// The share bar. Segments under 1% still get a sliver so a group never disappears.
+		echo '<div style="display:flex;height:12px;border-radius:6px;overflow:hidden;gap:2px;background:#fff;">';
+		foreach ( $groups as $g ) {
+			$n = (int) $mix['totals'][ $g ];
+			if ( $n < 1 ) {
+				continue;
+			}
+			printf(
+				'<span title="%1$s" style="flex:%2$s 1 0;min-width:3px;background:%3$s;"></span>',
+				esc_attr( MMSAR_Agent_Overview::mix_label( $g ) . ': ' . number_format_i18n( $n ) ),
+				esc_attr( (string) $n ),
+				esc_attr( $colours[ $g ] )
+			);
+		}
+		echo '</div>';
+		echo '<div style="display:flex;flex-wrap:wrap;gap:.4rem 1.6rem;margin:.6rem 0 .4rem;">';
+		foreach ( $groups as $g ) {
+			$n     = (int) $mix['totals'][ $g ];
+			$label = esc_html( MMSAR_Agent_Overview::mix_label( $g ) );
+			if ( isset( $links[ $g ] ) ) {
+				$url   = add_query_arg( self::filter_args( $links[ $g ], array( 'view' => 'list' ) ), admin_url( 'options-general.php' ) );
+				$label = '<a href="' . esc_url( $url ) . '" style="text-decoration:none;">' . $label . '</a>';
+			}
+			echo '<span style="font-size:13px;white-space:nowrap;">'
+				. '<span style="display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px;background:' . esc_attr( $colours[ $g ] ) . ';"></span>'
+				. wp_kses_post( $label )
+				. ' <strong>' . esc_html( number_format_i18n( (int) round( 100 * $n / $total ) ) ) . '%</strong>'
+				. ' <span style="color:#646970;">(' . esc_html( number_format_i18n( $n ) ) . ')</span></span>';
+		}
+		echo '</div>';
+
+		$max = 0;
+		foreach ( $mix['daily'] as $counts ) {
+			$max = max( $max, array_sum( $counts ) );
+		}
+		$top = self::nice_ceiling( $max );
+
+		$w      = 1000;
+		$h      = 200;
+		$left   = 44;
+		$right  = 6;
+		$above  = 10;
+		$below  = 24;
+		$plot_w = $w - $left - $right;
+		$plot_h = $h - $above - $below;
+		$base   = $above + $plot_h;
+		$days   = array_keys( $mix['daily'] );
+		$count  = count( $days );
+		$slot   = $plot_w / max( 1, $count );
+		$bar    = max( 2, $slot - 2 );
+		$today  = end( $days );
+
+		printf(
+			'<svg class="mmsar-chart" viewBox="0 0 %1$d %2$d" width="100%%" role="img" aria-label="%3$s" style="display:block;font-family:inherit;">',
+			(int) $w,
+			(int) $h,
+			esc_attr__( 'Requests per day over the last 30 days, stacked by who made them. The same numbers are in the table below the chart.', 'make-my-site-agent-ready' )
+		);
+		foreach ( array( 0, 0.5, 1 ) as $f ) {
+			$y = $base - $f * $plot_h;
+			printf( '<line x1="%1$d" x2="%2$d" y1="%3$s" y2="%3$s" stroke="%4$s" stroke-width="1"/>', (int) $left, (int) ( $w - $right ), esc_attr( (string) round( $y, 1 ) ), 0.0 === (float) $f ? '#c3c4c7' : '#f0f0f1' );
+			printf( '<text x="%1$d" y="%2$s" text-anchor="end" font-size="11" fill="#646970">%3$s</text>', (int) ( $left - 6 ), esc_attr( (string) round( $y + 4, 1 ) ), esc_html( number_format_i18n( (int) round( $f * $top ) ) ) );
+		}
+
+		foreach ( $days as $i => $day ) {
+			$counts = $mix['daily'][ $day ];
+			$sum    = array_sum( $counts );
+			$x      = $left + $i * $slot + ( $slot - $bar ) / 2;
+			$label  = self::day_label( (string) $day );
+			$parts  = array();
+			foreach ( $groups as $g ) {
+				$parts[] = MMSAR_Agent_Overview::mix_label( $g ) . ' ' . number_format_i18n( (int) $counts[ $g ] );
+			}
+			/* translators: 1: date, 2: total requests, 3: per-group counts */
+			$tip = sprintf( __( '%1$s: %2$s requests (%3$s)', 'make-my-site-agent-ready' ), $label, number_format_i18n( $sum ), implode( ', ', $parts ) );
+			if ( $day === $today ) {
+				$tip .= ' ' . __( '(today so far)', 'make-my-site-agent-ready' );
+			}
+			echo '<g class="mmsar-bar"' . ( $day === $today ? ' opacity="0.45"' : '' ) . '><title>' . esc_html( $tip ) . '</title>';
+			printf( '<rect class="mmsar-hit" x="%1$s" y="%2$d" width="%3$s" height="%4$d" fill="transparent"/>', esc_attr( (string) round( $left + $i * $slot, 1 ) ), (int) $above, esc_attr( (string) round( $slot, 1 ) ), (int) $plot_h );
+
+			// Stacked from the baseline up. The top segment gets the rounded end; each segment leaves
+			// a 1px gap above the one below it, so neighbours never merge.
+			$present = array_values(
+				array_filter(
+					$groups,
+					static function ( $g ) use ( $counts ) {
+						return (int) $counts[ $g ] > 0;
+					}
+				)
+			);
+			$last    = count( $present ) - 1;
+			$y0      = $base;
+			foreach ( $present as $k => $g ) {
+				$hgt = $top > 0 ? $plot_h * (int) $counts[ $g ] / $top : 0;
+				$gap = $k > 0 && $hgt > 1.5 ? 1 : 0;
+				if ( $last === $k ) {
+					printf( '<path d="%1$s" fill="%2$s"/>', esc_attr( self::bar_path( $x, $y0 - $gap, $bar, max( 0.5, $hgt - $gap ) ) ), esc_attr( $colours[ $g ] ) );
+				} else {
+					printf( '<rect x="%1$s" y="%2$s" width="%3$s" height="%4$s" fill="%5$s"/>', esc_attr( (string) round( $x, 1 ) ), esc_attr( (string) round( $y0 - $hgt, 1 ) ), esc_attr( (string) round( $bar, 1 ) ), esc_attr( (string) round( max( 0.5, $hgt - $gap ), 1 ) ), esc_attr( $colours[ $g ] ) );
+				}
+				$y0 -= $hgt;
+			}
+			echo '</g>';
+			// A date under every seventh bar counted back from today, so today is always labelled.
+			if ( 0 === ( $count - 1 - $i ) % 7 ) {
+				$anchor = $i === $count - 1 ? 'end' : 'middle';
+				$tx     = $i === $count - 1 ? $x + $bar : $x + $bar / 2;
+				printf( '<text x="%1$s" y="%2$d" text-anchor="%3$s" font-size="11" fill="#646970">%4$s</text>', esc_attr( (string) round( $tx, 1 ) ), (int) ( $h - 6 ), esc_attr( $anchor ), esc_html( $label ) );
+			}
+		}
+		echo '</svg>';
+
+		if ( ! in_array( 'people', $groups, true ) ) {
+			echo '<p class="description" style="margin:.4rem 0 0;">';
+			printf(
+				/* translators: 1: setting name, 2: option label, 3: link to the settings page */
+				esc_html__( 'There is no People group because page views from people aren\'t being recorded. To include them, set %1$s to %2$s under %3$s.', 'make-my-site-agent-ready' ),
+				'<strong>' . esc_html__( 'Also log normal page views', 'make-my-site-agent-ready' ) . '</strong>',
+				'<strong>' . esc_html__( 'Every page view, including people', 'make-my-site-agent-ready' ) . '</strong>',
+				'<a href="' . esc_url( admin_url( 'options-general.php?page=make-my-site-agent-ready' ) ) . '">' . esc_html__( 'Settings > Agent-Ready', 'make-my-site-agent-ready' ) . '</a>'
+			);
+			echo '</p>';
+		}
+
+		echo '<details style="margin-top:.3rem;"><summary style="cursor:pointer;color:#2271b1;font-size:12px;">' . esc_html__( 'Show as a table', 'make-my-site-agent-ready' ) . '</summary>';
+		echo '<table class="widefat striped" style="margin-top:.4rem;max-width:44rem;"><thead><tr><th>' . esc_html__( 'Day', 'make-my-site-agent-ready' ) . '</th>';
+		foreach ( $groups as $g ) {
+			echo '<th style="text-align:right;">' . esc_html( MMSAR_Agent_Overview::mix_label( $g ) ) . '</th>';
+		}
+		echo '<th style="text-align:right;">' . esc_html__( 'Total', 'make-my-site-agent-ready' ) . '</th></tr></thead><tbody>';
+		foreach ( array_reverse( $days ) as $day ) {
+			echo '<tr><td>' . esc_html( self::day_label( (string) $day ) ) . '</td>';
+			foreach ( $groups as $g ) {
+				echo '<td style="text-align:right;">' . esc_html( number_format_i18n( (int) $mix['daily'][ $day ][ $g ] ) ) . '</td>';
+			}
+			echo '<td style="text-align:right;">' . esc_html( number_format_i18n( array_sum( $mix['daily'][ $day ] ) ) ) . '</td></tr>';
+		}
+		echo '</tbody></table></details>';
+		echo '</div>';
+	}
+
+	/**
+	 * The smallest 1, 2 or 5 times a power of ten at or above a value, so the axis reads in round
+	 * numbers. Even, so the halfway gridline is a whole number too.
+	 *
+	 * @param int $value Largest value plotted.
+	 * @return int
+	 */
+	private static function nice_ceiling( $value ) {
+		if ( $value <= 2 ) {
+			return 2;
+		}
+		$power = (int) pow( 10, (int) floor( log10( $value ) ) );
+		foreach ( array( 1, 2, 5, 10 ) as $step ) {
+			if ( $step * $power >= $value ) {
+				return $step * $power;
+			}
+		}
+		return 10 * $power;
+	}
+
+	/**
+	 * A bar standing on the baseline with its top corners rounded.
+	 *
+	 * @param float $x      Left edge.
+	 * @param float $base   Baseline y.
+	 * @param float $width  Bar width.
+	 * @param float $height Bar height.
+	 * @return string SVG path data.
+	 */
+	private static function bar_path( $x, $base, $width, $height ) {
+		$r   = min( 4, $width / 2, $height );
+		$top = $base - $height;
+		$f   = static function ( $v ) {
+			return (string) round( $v, 1 );
+		};
+		return 'M' . $f( $x ) . ',' . $f( $base ) . 'V' . $f( $top + $r )
+			. 'Q' . $f( $x ) . ',' . $f( $top ) . ' ' . $f( $x + $r ) . ',' . $f( $top )
+			. 'H' . $f( $x + $width - $r )
+			. 'Q' . $f( $x + $width ) . ',' . $f( $top ) . ' ' . $f( $x + $width ) . ',' . $f( $top + $r )
+			. 'V' . $f( $base ) . 'Z';
+	}
+
+	/**
+	 * A site-time day as a short date.
+	 *
+	 * @param string $day Y-m-d.
+	 * @return string
+	 */
+	private static function day_label( $day ) {
+		// date_i18n() formats the timestamp as given, so noon UTC on the day prints that day.
+		return date_i18n( 'M j', (int) strtotime( $day . ' 12:00:00 UTC' ) );
+	}
+
+	/**
+	 * The Who visited table: the busiest named bots in the last 30 days.
+	 *
+	 * @param array $ov MMSAR_Agent_Overview::get() result.
+	 * @return void
+	 */
+	private static function render_who_visited( $ov ) {
+		$styles = self::verdict_styles();
+		$pill   = array(
+			'verified'    => $styles[ MMSAR_Agent_Log_Verify::VERIFIED ],
+			'client'      => $styles[ MMSAR_Agent_Log_Verify::CLIENT ],
+			'partly'      => $styles[ MMSAR_Agent_Log_Verify::NODNS ],
+			'uncheckable' => $styles[ MMSAR_Agent_Log_Verify::UNVERIFIABLE ],
+			'unconfirmed' => $styles[ MMSAR_Agent_Log_Verify::UNCLAIMED ],
+		);
+
+		echo '<div style="flex:3 1 26rem;padding:.8rem 1.1rem;background:#fff;border:1px solid #c3c4c7;">';
+		echo '<h3 style="margin:0 0 .5rem;font-size:14px;">' . esc_html__( 'Who visited', 'make-my-site-agent-ready' ) . '</h3>';
+		if ( empty( $ov['agents'] ) ) {
+			echo '<p style="color:#646970;"><em>' . esc_html__( 'No recognised bots in the last 30 days.', 'make-my-site-agent-ready' ) . '</em></p></div>';
+			return;
+		}
+		$prev = ! empty( $ov['has_previous'] );
+		echo '<table style="width:100%;border-collapse:collapse;">';
+		echo '<thead><tr style="text-align:left;color:#50575e;font-size:12px;">';
+		echo '<th style="padding:.3rem .4rem .3rem 0;font-weight:400;">' . esc_html__( 'Bot', 'make-my-site-agent-ready' ) . '</th>';
+		echo '<th style="padding:.3rem .4rem;font-weight:400;">' . esc_html__( 'Identity', 'make-my-site-agent-ready' ) . '</th>';
+		echo '<th style="padding:.3rem 0 .3rem .4rem;font-weight:400;text-align:right;">' . esc_html__( 'Requests', 'make-my-site-agent-ready' ) . '</th>';
+		echo '</tr></thead><tbody>';
+		foreach ( $ov['agents'] as $a ) {
+			echo '<tr style="border-top:1px solid #f0f0f1;">';
+			echo '<td style="padding:.45rem .4rem .45rem 0;"><strong style="font-weight:600;">' . esc_html( $a['name'] ) . '</strong>'
+				. '<br><span style="font-size:11px;color:#646970;">' . esc_html( MMSAR_Agent_Log::crawler_category_label( $a['category'] ) ) . '</span></td>';
+			echo '<td style="padding:.45rem .4rem;"><span style="' . esc_attr( $pill[ $a['identity'] ] ) . 'display:inline-block;padding:1px 7px;border-radius:9px;font-size:11px;white-space:nowrap;">'
+				. esc_html( MMSAR_Agent_Overview::identity_label( $a['identity'] ) ) . '</span></td>';
+			echo '<td style="padding:.45rem 0 .45rem .4rem;text-align:right;white-space:nowrap;">' . esc_html( number_format_i18n( (int) $a['n'] ) );
+			if ( $prev ) {
+				$pct = MMSAR_Agent_Overview::change( (int) $a['n'], (int) $a['previous'] );
+				if ( null === $pct ) {
+					$note = __( 'new', 'make-my-site-agent-ready' );
+				} else {
+					$note = ( $pct > 0 ? '+' : '' ) . number_format_i18n( $pct ) . '%';
+				}
+				echo '<br><span style="font-size:11px;color:#646970;" title="' . esc_attr__( 'Change on the 30 days before', 'make-my-site-agent-ready' ) . '">' . esc_html( $note ) . '</span>';
+			}
+			echo '</td></tr>';
+		}
+		echo '</tbody></table>';
+
+		$all = add_query_arg(
+			self::filter_args( array( 'clients' => array( MMSAR_Agent_Log::CLIENT_CRAWLER ) ), array( 'view' => 'list' ) ),
+			admin_url( 'options-general.php' )
+		);
+		echo '<p style="margin:.6rem 0 0;font-size:12px;">';
+		if ( $ov['more_agents'] > 0 ) {
+			printf(
+				/* translators: %s: number of other bots */
+				esc_html( _n( '%s more bot.', '%s more bots.', (int) $ov['more_agents'], 'make-my-site-agent-ready' ) ),
+				esc_html( number_format_i18n( (int) $ov['more_agents'] ) )
+			);
+			echo ' ';
+		}
+		echo '<a href="' . esc_url( $all ) . '">' . esc_html__( 'See every bot request in the log', 'make-my-site-agent-ready' ) . ' &rarr;</a></p>';
+		echo '</div>';
+	}
+
+	/**
+	 * What the bots that visited are built for, as bars.
+	 *
+	 * @param array<string, int> $purposes Crawler category => requests, busiest first.
+	 * @return void
+	 */
+	private static function render_purposes( $purposes ) {
+		echo '<div style="flex:2 1 18rem;padding:.8rem 1.1rem;background:#fff;border:1px solid #c3c4c7;">';
+		echo '<h3 style="margin:0 0 .5rem;font-size:14px;">' . esc_html__( 'What they\'re built for', 'make-my-site-agent-ready' ) . '</h3>';
+		if ( ! $purposes ) {
+			echo '<p style="color:#646970;"><em>' . esc_html__( 'Nothing to show yet.', 'make-my-site-agent-ready' ) . '</em></p></div>';
+			return;
+		}
+		$max = max( $purposes );
+		foreach ( $purposes as $category => $n ) {
+			$url = add_query_arg( self::filter_args( array( 'crawlers' => array( $category ) ), array( 'view' => 'list' ) ), admin_url( 'options-general.php' ) );
+			$pct = $max > 0 ? max( 1, (int) round( 100 * $n / $max ) ) : 0;
+			echo '<div style="margin:0 0 .55rem;">';
+			echo '<div style="display:flex;justify-content:space-between;font-size:13px;">';
+			echo '<a href="' . esc_url( $url ) . '" style="text-decoration:none;">' . esc_html( MMSAR_Agent_Log::crawler_category_label( $category ) ) . '</a>';
+			echo '<span>' . esc_html( number_format_i18n( (int) $n ) ) . '</span>';
+			echo '</div>';
+			echo '<div style="height:6px;margin-top:3px;background:#f0f0f1;border-radius:3px;"><div style="height:6px;width:' . esc_attr( (string) $pct ) . '%;background:#2271b1;border-radius:3px;"></div></div>';
+			echo '</div>';
+		}
+		echo '<p class="description" style="margin:.6rem 0 0;font-size:12px;">' . esc_html__( 'Requests in the last 30 days, by what each bot\'s operator says it is for. Spoofed requests are not included.', 'make-my-site-agent-ready' ) . '</p>';
+		echo '</div>';
+	}
+
+	/**
 	 * The Summary view: what the last 30 days mean, as findings.
 	 *
 	 * @return void
@@ -1054,6 +1504,8 @@ class MMSAR_Agent_Log_Page {
 		) . '">' . esc_html__( 'Refresh', 'make-my-site-agent-ready' ) . '</a>';
 		echo '</p>';
 
+		self::render_overview( MMSAR_Agent_Overview::get( $fresh ) );
+
 		$titles = array(
 			'read'   => __( 'Am I being read?', 'make-my-site-agent-ready' ),
 			'cited'  => __( 'Am I being cited?', 'make-my-site-agent-ready' ),
@@ -1069,7 +1521,6 @@ class MMSAR_Agent_Log_Page {
 			$findings = isset( $insights['questions'][ $question ] ) ? $insights['questions'][ $question ] : array();
 			if ( ! $findings ) {
 				echo '<p style="color:#646970;"><em>' . esc_html( $empty[ $question ] ) . '</em></p>';
-				continue;
 			}
 			foreach ( $findings as $finding ) {
 				self::render_insight( $finding );
@@ -1117,11 +1568,6 @@ class MMSAR_Agent_Log_Page {
 		echo '<div class="wrap">';
 		echo '<h1>' . esc_html__( 'Agent Log', 'make-my-site-agent-ready' ) . '</h1>';
 		self::render_view_tabs( $view, $filters, $ip );
-
-		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Display-only notice after a nonce-checked redirect.
-		if ( isset( $_GET['mmsar_cleared'] ) ) {
-			echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Agent log cleared.', 'make-my-site-agent-ready' ) . '</p></div>';
-		}
 
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Display-only notice after a nonce-checked redirect.
 		if ( isset( $_GET['mmsar_rechecked'] ) ) {
@@ -1183,7 +1629,7 @@ class MMSAR_Agent_Log_Page {
 				echo ' ';
 				printf(
 					/* translators: %s: number of entries already recorded */
-					esc_html( _n( 'The %s entry already recorded is kept: switching the log off never deletes anything. It stays readable and exportable here until you clear it yourself.', 'The %s entries already recorded are kept: switching the log off never deletes anything. They stay readable and exportable here until you clear the log yourself.', $total, 'make-my-site-agent-ready' ) ),
+					esc_html( _n( 'The %s entry already recorded is kept: switching the log off never deletes anything. It stays readable and exportable here.', 'The %s entries already recorded are kept: switching the log off never deletes anything. They stay readable and exportable here.', $total, 'make-my-site-agent-ready' ) ),
 					'<strong>' . esc_html( number_format_i18n( $total ) ) . '</strong>'
 				);
 			}
@@ -1196,18 +1642,20 @@ class MMSAR_Agent_Log_Page {
 			return;
 		}
 
-		self::render_verification_panel();
-		self::render_referrals_panel();
-		self::render_retention_form( $total, $filters, $shown );
-		self::render_filter_bar( $filters, $shown, $total, $extra );
-
+		// Journeys get the filters and nothing else. Until 1.71.0-dev.2 they repeated the Logs tab's
+		// panels above and below the visits, which made the two tabs look the same until scrolled.
 		if ( 'journeys' === $view ) {
+			self::render_filter_bar( $filters, $shown, $total, $extra );
+			self::render_cache_note();
 			self::render_journeys( $filters, $ip, $extra );
-			self::render_notfound_panel( $filters );
-			self::render_clear_form( $total );
 			echo '</div>';
 			return;
 		}
+
+		self::render_verification_panel( $view, $filters, $ip );
+		self::render_export_form( $total, $filters );
+		self::render_filter_bar( $filters, $shown, $total, $extra, $total > 0 );
+		self::render_cache_note();
 
 		$pages   = max( 1, (int) ceil( $shown / self::PER_PAGE ) );
 		$paged   = self::current_page( $pages );
@@ -1221,7 +1669,7 @@ class MMSAR_Agent_Log_Page {
 					: __( 'Nothing recorded yet. Agent traffic is intermittent, so leave the log on and check back.', 'make-my-site-agent-ready' )
 			) . '</em></p>';
 			self::render_notfound_panel( $filters );
-			self::render_clear_form( $total );
+			self::render_log_settings();
 			echo '</div>';
 			return;
 		}
@@ -1297,7 +1745,7 @@ class MMSAR_Agent_Log_Page {
 		}
 
 		self::render_notfound_panel( $filters );
-		self::render_clear_form( $total );
+		self::render_log_settings();
 
 		echo '</div>';
 	}
@@ -1690,7 +2138,7 @@ class MMSAR_Agent_Log_Page {
 	}
 
 	/**
-	 * The two view tabs.
+	 * The view tabs, in the order of VIEWS.
 	 *
 	 * Filters are carried across, because they are a statement about which requests are interesting
 	 * and that does not stop being true when the shape of the display changes. The address filter
@@ -1704,8 +2152,8 @@ class MMSAR_Agent_Log_Page {
 	 */
 	private static function render_view_tabs( $view, $filters, $ip ) {
 		$tabs = array(
+			'list'     => __( 'Logs', 'make-my-site-agent-ready' ),
 			'summary'  => __( 'Summary', 'make-my-site-agent-ready' ),
-			'list'     => __( 'List', 'make-my-site-agent-ready' ),
 			'journeys' => __( 'Journeys', 'make-my-site-agent-ready' ),
 		);
 
@@ -1807,14 +2255,7 @@ class MMSAR_Agent_Log_Page {
 		$verdict = isset( $entry['verified'] ) ? (string) $entry['verified'] : '';
 		$label   = MMSAR_Agent_Log_Verify::label( $verdict );
 
-		$styles = array(
-			MMSAR_Agent_Log_Verify::VERIFIED     => 'background:#e6f4ea;color:#0a5c2e;border:1px solid #a8d5b8;',
-			MMSAR_Agent_Log_Verify::FAILED       => 'background:#fce8e6;color:#8a1c11;border:1px solid #f0a9a2;font-weight:600;',
-			MMSAR_Agent_Log_Verify::CLIENT       => 'background:#eef4fb;color:#1d4f7c;border:1px solid #b5cfe8;',
-			MMSAR_Agent_Log_Verify::UNVERIFIABLE => 'background:#fff4e5;color:#7a4a00;border:1px solid #f0d0a0;',
-			MMSAR_Agent_Log_Verify::NODNS        => 'background:#f0f0f1;color:#50575e;border:1px solid #dcdcde;',
-			MMSAR_Agent_Log_Verify::UNCLAIMED    => 'background:transparent;color:#8c8f94;border:1px solid #dcdcde;',
-		);
+		$styles = self::verdict_styles();
 		$style  = isset( $styles[ $verdict ] ) ? $styles[ $verdict ] : 'background:transparent;color:#8c8f94;border:1px dashed #dcdcde;';
 
 		$when  = isset( $entry['verified_at'] ) ? (string) $entry['verified_at'] : '';
@@ -1829,68 +2270,147 @@ class MMSAR_Agent_Log_Page {
 	}
 
 	/**
+	 * Badge colours per verdict, shared by the log's Identity column and the Summary's Who visited.
+	 *
+	 * @return array<string, string> Verdict => inline style.
+	 */
+	private static function verdict_styles() {
+		return array(
+			MMSAR_Agent_Log_Verify::VERIFIED     => 'background:#e6f4ea;color:#0a5c2e;border:1px solid #a8d5b8;',
+			MMSAR_Agent_Log_Verify::FAILED       => 'background:#fce8e6;color:#8a1c11;border:1px solid #f0a9a2;font-weight:600;',
+			MMSAR_Agent_Log_Verify::CLIENT       => 'background:#eef4fb;color:#1d4f7c;border:1px solid #b5cfe8;',
+			MMSAR_Agent_Log_Verify::UNVERIFIABLE => 'background:#fff4e5;color:#7a4a00;border:1px solid #f0d0a0;',
+			MMSAR_Agent_Log_Verify::NODNS        => 'background:#f0f0f1;color:#50575e;border:1px solid #dcdcde;',
+			MMSAR_Agent_Log_Verify::UNCLAIMED    => 'background:transparent;color:#8c8f94;border:1px solid #dcdcde;',
+		);
+	}
+
+	/**
+	 * What each verdict means, one sentence each, for the tiles' hover text.
+	 *
+	 * @return array<string, string> Verdict (or `pending`) => sentence.
+	 */
+	private static function verdict_hints() {
+		return array(
+			MMSAR_Agent_Log_Verify::VERIFIED     => __( 'The address belongs to the operator the user-agent named.', 'make-my-site-agent-ready' ),
+			MMSAR_Agent_Log_Verify::FAILED       => __( 'The user-agent was forged: the address does not belong to the operator it named. Never re-checked.', 'make-my-site-agent-ready' ),
+			MMSAR_Agent_Log_Verify::CLIENT       => __( 'Software running on a person\'s own machine, such as Claude Code fetching as Claude-User. Real agent traffic that no published method can confirm; its address is stored at network level.', 'make-my-site-agent-ready' ),
+			MMSAR_Agent_Log_Verify::UNVERIFIABLE => __( 'The operator publishes no way to check its crawler. This plugin had no way to check, which is not the same as the caller being suspicious.', 'make-my-site-agent-ready' ),
+			MMSAR_Agent_Log_Verify::UNCLAIMED    => __( 'The request did not claim to be a crawler this plugin knows, so there was nothing to check.', 'make-my-site-agent-ready' ),
+			MMSAR_Agent_Log_Verify::NODNS        => __( 'The address had no reverse DNS when it was checked. These retry themselves within a day.', 'make-my-site-agent-ready' ),
+			'pending'                            => __( 'Not checked yet. Opening this screen checks a few at a time; Verify now checks more.', 'make-my-site-agent-ready' ),
+		);
+	}
+
+	/**
 	 * The crawler-identity panel.
 	 *
-	 * Laid out as a headline, a row of counts and a short line per idea, rather than as consecutive
-	 * paragraphs. The earlier version said the same things and read as a block of text, so nothing
-	 * in it stood out, including the one number that should.
+	 * A headline, a row of counts and the buttons, with the explanations folded away. Until 1.71.0
+	 * the explanations were a bulleted list under the counts, one of which printed every crawler
+	 * name that can never be confirmed; on a busy log that was a paragraph of raw user-agents
+	 * pushing the table off the screen. Each count now explains itself on hover and is a link to
+	 * the rows it counts, which is also where those names are.
 	 *
+	 * @param string $view    Current view, carried by the buttons and the tile links.
+	 * @param array  $filters Current filter set, carried by the buttons.
+	 * @param string $ip      Current address filter, carried by the buttons.
 	 * @return void
 	 */
-	private static function render_verification_panel() {
+	private static function render_verification_panel( $view, $filters, $ip ) {
 		$summary = MMSAR_Agent_Log::get_verification_summary();
 		$counts  = $summary['counts'];
 		$pending = (int) $summary['pending'];
 		$failed  = isset( $counts[ MMSAR_Agent_Log_Verify::FAILED ] ) ? (int) $counts[ MMSAR_Agent_Log_Verify::FAILED ] : 0;
+		$hints   = self::verdict_hints();
 
 		$accent = $failed > 0 ? '#d63638' : '#72aee6';
 		echo '<div style="margin:1em 0;background:#fff;border:1px solid #c3c4c7;border-left:4px solid ' . esc_attr( $accent ) . ';">';
 
-		echo '<div style="padding:.9rem 1.1rem .2rem;">';
-		echo '<h2 style="margin:0 0 .4rem;font-size:1rem;">' . esc_html__( 'Crawler identity', 'make-my-site-agent-ready' ) . '</h2>';
-
+		echo '<div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:.6rem;padding:.8rem 1.1rem .7rem;">';
+		echo '<div>';
+		echo '<h2 style="margin:0 0 .25rem;font-size:1rem;">' . esc_html__( 'Crawler identity', 'make-my-site-agent-ready' ) . '</h2>';
+		echo '<p style="margin:0;">';
 		if ( $failed > 0 ) {
-			echo '<p style="margin:0 0 .2rem;font-size:1.05rem;">';
 			printf(
 				/* translators: %s: number of entries */
 				esc_html( _n( '%s entry claimed an AI crawler it is not.', '%s entries claimed an AI crawler they are not.', $failed, 'make-my-site-agent-ready' ) ),
 				'<strong style="color:#b3261e;">' . esc_html( number_format_i18n( $failed ) ) . '</strong>'
 			);
-			echo '</p>';
-			echo '<p class="description" style="margin:0 0 .6rem;">' . esc_html__( 'The user-agent was forged: the address does not belong to the operator it named.', 'make-my-site-agent-ready' ) . '</p>';
 		} else {
-			echo '<p style="margin:0 0 .6rem;">' . esc_html__( 'No forged crawler identities found so far.', 'make-my-site-agent-ready' ) . '</p>';
+			esc_html_e( 'No forged crawler identities found so far.', 'make-my-site-agent-ready' );
 		}
+		echo '</p>';
 		echo '</div>';
 
-		// The counts as a row of tiles. Same numbers, but each one readable on its own.
-		$tiles = array();
-		foreach ( MMSAR_Agent_Log_Verify::verdicts() as $verdict ) {
-			$tiles[ MMSAR_Agent_Log_Verify::label( $verdict ) ] = isset( $counts[ $verdict ] ) ? (int) $counts[ $verdict ] : 0;
-		}
-		if ( $pending > 0 ) {
-			$tiles[ MMSAR_Agent_Log_Verify::label( MMSAR_Agent_Log_Verify::PENDING ) ] = $pending;
-		}
-		echo '<div style="display:flex;flex-wrap:wrap;gap:0;border-top:1px solid #f0f0f1;">';
-		foreach ( $tiles as $label => $count ) {
-			echo '<div style="flex:1 1 7rem;padding:.6rem 1.1rem;border-right:1px solid #f0f0f1;">';
-			echo '<div style="font-size:1.25rem;font-weight:600;line-height:1.2;">' . esc_html( number_format_i18n( $count ) ) . '</div>';
-			echo '<div class="description" style="font-size:.78rem;">' . esc_html( $label ) . '</div>';
+		$recheckable = MMSAR_Agent_Log::count_recheckable();
+		if ( $pending > 0 || $recheckable > 0 ) {
+			echo '<div>';
+			if ( $pending > 0 ) {
+				echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '" style="display:inline-block;margin:0 .4rem 0 0;">';
+				echo '<input type="hidden" name="action" value="mmsar_verify_agent_log">';
+				wp_nonce_field( 'mmsar_verify_agent_log', 'mmsar_nonce' );
+				self::render_back_fields( $view, $filters, $ip );
+				submit_button( __( 'Verify now', 'make-my-site-agent-ready' ), 'secondary', 'submit', false );
+				echo '</form>';
+			}
+			if ( $recheckable > 0 ) {
+				echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '" style="display:inline-block;">';
+				echo '<input type="hidden" name="action" value="mmsar_recheck_agent_log">';
+				wp_nonce_field( 'mmsar_recheck_agent_log', 'mmsar_nonce' );
+				self::render_back_fields( $view, $filters, $ip );
+				submit_button(
+					sprintf(
+						/* translators: %s: number of entries that could be answered differently */
+						__( 'Re-check %s', 'make-my-site-agent-ready' ),
+						number_format_i18n( $recheckable )
+					),
+					'secondary',
+					'submit',
+					false
+				);
+				echo '</form>';
+			}
 			echo '</div>';
 		}
 		echo '</div>';
 
-		echo '<div style="padding:.7rem 1.1rem 1rem;border-top:1px solid #f0f0f1;">';
+		// The counts as a row of tiles, each a link to the rows it counts. A link replaces the
+		// identity filter and keeps the rest, so "Spoofed" from a filtered view stays filtered.
+		$tiles = array();
+		foreach ( MMSAR_Agent_Log_Verify::verdicts() as $verdict ) {
+			$tiles[ $verdict ] = isset( $counts[ $verdict ] ) ? (int) $counts[ $verdict ] : 0;
+		}
+		if ( $pending > 0 ) {
+			$tiles['pending'] = $pending;
+		}
+		echo '<div style="display:flex;flex-wrap:wrap;border-top:1px solid #f0f0f1;">';
+		foreach ( $tiles as $verdict => $count ) {
+			$key   = 'pending' === $verdict ? MMSAR_Agent_Log_Verify::PENDING : $verdict;
+			$args  = array_merge( $filters, array( 'verdicts' => array( $verdict ) ) );
+			$url   = add_query_arg( self::filter_args( $args, array( 'view' => $view ) ), admin_url( 'options-general.php' ) );
+			$class = array( $verdict ) === $filters['verdicts'] ? 'mmsar-idtile is-active' : 'mmsar-idtile';
+			printf(
+				'<a href="%1$s" class="%2$s" title="%3$s">',
+				esc_url( $url ),
+				esc_attr( $class ),
+				esc_attr( isset( $hints[ $verdict ] ) ? $hints[ $verdict ] : '' )
+			);
+			echo '<span style="display:block;font-size:1.25rem;font-weight:600;line-height:1.2;' . ( MMSAR_Agent_Log_Verify::FAILED === $verdict && $count > 0 ? 'color:#b3261e;' : '' ) . '">' . esc_html( number_format_i18n( $count ) ) . '</span>';
+			echo '<span class="description" style="display:block;font-size:.78rem;">' . esc_html( MMSAR_Agent_Log_Verify::label( $key ) ) . '</span>';
+			echo '</a>';
+		}
+		echo '</div>';
 
-		// One idea per line, each short enough to scan.
-		$notes   = array();
-		$notes[] = __( 'Unverifiable and No DNS mean this plugin had no way to check, not that the caller was suspicious.', 'make-my-site-agent-ready' );
-		$notes[] = __( 'No DNS entries retry themselves within a day. Verified and Spoofed are never re-checked.', 'make-my-site-agent-ready' );
-		$notes[] = __( 'User-run client means software running on a person\'s own machine, such as Claude Code fetching as Claude-User. It is real agent traffic that no published method can confirm, and its address is stored at network level.', 'make-my-site-agent-ready' );
+		// The longer explanations, folded away. Each one is a fact about the whole log rather
+		// than about one verdict, so it has no tile to hang off.
+		$notes = array();
+		foreach ( $hints as $verdict => $hint ) {
+			$key     = 'pending' === $verdict ? MMSAR_Agent_Log_Verify::PENDING : $verdict;
+			$notes[] = MMSAR_Agent_Log_Verify::label( $key ) . ': ' . $hint;
+		}
 
 		// Rows written before 1.47.0 stored every Claude-User request under the bare name, so Claude
-		// Code sessions from that period read as Spoofed and cannot be told apart now. Said here,
-		// beside the number it qualifies, rather than left for a reader to discover.
+		// Code sessions from that period read as Spoofed and cannot be told apart now.
 		$bare_claude_failed = MMSAR_Agent_Log::count_verdict_for_agent( 'Claude-User', MMSAR_Agent_Log_Verify::FAILED );
 		if ( $bare_claude_failed > 0 ) {
 			$notes[] = sprintf(
@@ -1903,10 +2423,10 @@ class MMSAR_Agent_Log_Page {
 		$uncheckable = MMSAR_Agent_Log::get_uncheckable_agents();
 		if ( $uncheckable ) {
 			$notes[] = sprintf(
-				/* translators: 1: number of entries, 2: comma-separated crawler names */
-				__( '%1$s entries can never be confirmed, because no operator publishes a way to check them (%2$s).', 'make-my-site-agent-ready' ),
+				/* translators: 1: number of entries, 2: number of distinct crawler names */
+				__( '%1$s Unverifiable entries, from %2$s crawler names, can never be confirmed, because no operator publishes a way to check them. The Unverifiable count above opens them.', 'make-my-site-agent-ready' ),
 				number_format_i18n( array_sum( $uncheckable ) ),
-				implode( ', ', array_keys( $uncheckable ) )
+				number_format_i18n( count( $uncheckable ) )
 			);
 		}
 
@@ -1928,89 +2448,54 @@ class MMSAR_Agent_Log_Page {
 			);
 		}
 
-		echo '<ul style="margin:0 0 .8rem;list-style:disc;padding-left:1.2rem;" class="description">';
+		echo '<details style="padding:.5rem 1.1rem .6rem;border-top:1px solid #f0f0f1;">';
+		echo '<summary style="cursor:pointer;color:#2271b1;">' . esc_html__( 'How identity is checked', 'make-my-site-agent-ready' ) . '</summary>';
+		echo '<ul style="margin:.5rem 0 .2rem;list-style:disc;padding-left:1.2rem;max-width:60rem;" class="description">';
 		foreach ( $notes as $note ) {
-			echo '<li style="margin:0 0 .2rem;">' . esc_html( $note ) . '</li>';
+			echo '<li style="margin:0 0 .25rem;">' . esc_html( $note ) . '</li>';
 		}
 		echo '</ul>';
+		echo '</details>';
 
-		$recheckable = MMSAR_Agent_Log::count_recheckable();
-		if ( $pending > 0 ) {
-			echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '" style="display:inline-block;margin:0 .5rem 0 0;">';
-			echo '<input type="hidden" name="action" value="mmsar_verify_agent_log">';
-			wp_nonce_field( 'mmsar_verify_agent_log', 'mmsar_nonce' );
-			submit_button( __( 'Verify now', 'make-my-site-agent-ready' ), 'secondary', 'submit', false );
-			echo '</form>';
-		}
-		if ( $recheckable > 0 ) {
-			echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '" style="display:inline-block;">';
-			echo '<input type="hidden" name="action" value="mmsar_recheck_agent_log">';
-			wp_nonce_field( 'mmsar_recheck_agent_log', 'mmsar_nonce' );
-			submit_button(
-				sprintf(
-					/* translators: %s: number of entries that could be answered differently */
-					__( 'Re-check %s', 'make-my-site-agent-ready' ),
-					number_format_i18n( $recheckable )
-				),
-				'secondary',
-				'submit',
-				false
-			);
-			echo '</form>';
-		}
-		echo '</div>';
 		echo '</div>';
 	}
 
 	/**
-	 * The retention control and the export buttons.
+	 * The export form, empty of buttons: they sit in the filter bar and point here with `form=`.
 	 *
-	 * Clear is deliberately not here any more. It used to sit inches from Export with no
-	 * confirmation of any kind, so a single mis-click destroyed the whole table. It now lives at the
-	 * very bottom of the screen, past the data, behind a typed confirmation.
+	 * A form cannot sit inside another, and the filter bar is a GET form while export is a
+	 * nonce-checked POST. So this one is printed beside it and its buttons are placed in the filter
+	 * bar's footer, next to the filters they mirror (1.71.0).
 	 *
 	 * @param int   $total   Entries in the whole log.
 	 * @param array $filters Current filter set, carried into the export so it can mirror the view.
-	 * @param int   $shown   Entries the current filter matches.
 	 * @return void
 	 */
-	private static function render_retention_form( $total, $filters = array(), $shown = 0 ) {
-		$limit = MMSAR_Agent_Log::get_limit();
-
-		echo '<form method="post" action="options.php" style="margin:1em 0;">';
-		settings_fields( 'mmsar_agent_log_group' );
-		echo '<label for="mmsar-log-limit"><strong>' . esc_html__( 'Entries to keep', 'make-my-site-agent-ready' ) . '</strong></label> ';
-		echo '<input type="number" min="0" step="1" id="mmsar-log-limit" name="' . esc_attr( MMSAR_Agent_Log::LIMIT_OPTION ) . '" value="' . esc_attr( (string) $limit ) . '" class="small-text"> ';
-		submit_button( __( 'Save', 'make-my-site-agent-ready' ), 'secondary', 'submit', false );
-		echo '<p class="description">';
-		esc_html_e( '0 keeps everything, which is the default and the right setting if the log is being used to answer a question about agent behaviour over time. Set a number to have the oldest entries dropped once the log passes it; entries are trimmed periodically rather than on every request, so the count can sit slightly above the limit between trims.', 'make-my-site-agent-ready' );
-		echo '</p>';
-		echo '</form>';
-
+	private static function render_export_form( $total, $filters ) {
 		if ( $total < 1 ) {
 			return;
 		}
-
-		echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '" style="margin:0 0 1.5em;">';
+		echo '<form id="mmsar-export-form" method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '" style="display:none;">';
 		echo '<input type="hidden" name="action" value="mmsar_export_agent_log">';
 		wp_nonce_field( 'mmsar_export_agent_log', 'mmsar_nonce' );
-
 		// The active filters ride along so "this view" means what the screen is showing.
-		foreach ( array(
-			'verdict' => 'verdicts',
-			'client'  => 'clients',
-			'surface' => 'categories',
-			'crawler' => 'crawlers',
-			'signal'  => 'signals',
-		) as $arg => $key ) {
-			foreach ( ( $filters[ $key ] ?? array() ) as $value ) {
-				printf( '<input type="hidden" name="%1$s[]" value="%2$s">', esc_attr( $arg ), esc_attr( $value ) );
-			}
-		}
+		self::render_hidden_filters( $filters );
+		echo '</form>';
+	}
 
+	/**
+	 * The export buttons, floated to the right of the filter bar's footer.
+	 *
+	 * @param array $filters Current filter set.
+	 * @param int   $shown   Entries the current filter matches.
+	 * @param int   $total   Entries in the whole log.
+	 * @return void
+	 */
+	private static function render_export_buttons( $filters, $shown, $total ) {
+		echo '<span style="float:right;" title="' . esc_attr__( 'CSV, timestamps in UTC. "Everything" includes browser page views even when the screen is hiding them.', 'make-my-site-agent-ready' ) . '">';
 		if ( self::filters_active( $filters ) ) {
 			printf(
-				'<button type="submit" name="mmsar_export_scope" value="view" class="button button-secondary">%s</button> ',
+				'<button type="submit" form="mmsar-export-form" name="mmsar_export_scope" value="view" class="button button-secondary">%s</button> ',
 				esc_html(
 					sprintf(
 						/* translators: %s: number of entries in the current view */
@@ -2021,7 +2506,7 @@ class MMSAR_Agent_Log_Page {
 			);
 		}
 		printf(
-			'<button type="submit" name="mmsar_export_scope" value="all" class="button button-secondary">%s</button>',
+			'<button type="submit" form="mmsar-export-form" name="mmsar_export_scope" value="all" class="button button-secondary">%s</button>',
 			esc_html(
 				sprintf(
 					/* translators: %s: total number of entries */
@@ -2030,72 +2515,32 @@ class MMSAR_Agent_Log_Page {
 				)
 			)
 		);
-		echo '<p class="description" style="margin-top:.4rem;">';
-		esc_html_e( 'CSV, timestamps in UTC. "Everything" includes browser page views even when the screen is hiding them.', 'make-my-site-agent-ready' );
-		echo '</p>';
-		echo '</form>';
+		echo '</span>';
 	}
 
 	/**
-	 * The clear control, at the very bottom and behind a typed confirmation.
+	 * The retention control, folded away at the bottom of the Logs tab.
 	 *
-	 * Two gates rather than one. A browser confirm() is easy to dismiss by reflex, and this log is
-	 * now months of data that cannot be recovered, so the word has to be typed and the submit button
-	 * is disabled until it matches. The confirm() is a second line for anyone who types it and then
-	 * changes their mind.
+	 * It is set once and rarely touched, so it no longer sits above the table (1.71.0). There is no
+	 * button to empty the log (removed in 1.71.0). The retention limit is how entries are dropped,
+	 * and uninstalling removes the table.
 	 *
-	 * @param int $total Entries in the log.
 	 * @return void
 	 */
-	private static function render_clear_form( $total ) {
-		if ( $total < 1 ) {
-			return;
-		}
+	private static function render_log_settings() {
+		$limit = MMSAR_Agent_Log::get_limit();
 
-		echo '<div style="margin:3em 0 1em;padding:1rem 1.2rem;border:1px solid #d63638;border-left-width:4px;background:#fff;max-width:44rem;">';
-		echo '<h2 style="margin:0 0 .3rem;font-size:1rem;color:#b3261e;">' . esc_html__( 'Delete the log', 'make-my-site-agent-ready' ) . '</h2>';
-		echo '<p class="description" style="margin:0 0 .8rem;">';
-		printf(
-			/* translators: %s: number of entries */
-			esc_html__( 'Permanently deletes all %s entries. There is no undo and no backup. Export first if there is any chance you will want this data.', 'make-my-site-agent-ready' ),
-			'<strong>' . esc_html( number_format_i18n( $total ) ) . '</strong>'
-		);
+		echo '<details style="margin:2em 0 1em;padding:.6rem 1.1rem;background:#fff;border:1px solid #c3c4c7;">';
+		echo '<summary style="cursor:pointer;font-weight:600;">' . esc_html__( 'Log settings', 'make-my-site-agent-ready' ) . '</summary>';
+		echo '<form method="post" action="options.php" style="margin:.8em 0 .2em;">';
+		settings_fields( 'mmsar_agent_log_group' );
+		echo '<label for="mmsar-log-limit"><strong>' . esc_html__( 'Entries to keep', 'make-my-site-agent-ready' ) . '</strong></label> ';
+		echo '<input type="number" min="0" step="1" id="mmsar-log-limit" name="' . esc_attr( MMSAR_Agent_Log::LIMIT_OPTION ) . '" value="' . esc_attr( (string) $limit ) . '" class="small-text"> ';
+		submit_button( __( 'Save', 'make-my-site-agent-ready' ), 'secondary', 'submit', false );
+		echo '<p class="description">';
+		esc_html_e( '0 keeps everything, which is the default and the right setting if the log is being used to answer a question about agent behaviour over time. Set a number to have the oldest entries dropped once the log passes it; entries are trimmed periodically rather than on every request, so the count can sit slightly above the limit between trims.', 'make-my-site-agent-ready' );
 		echo '</p>';
-
-		echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '" id="mmsar-clear-form">';
-		echo '<input type="hidden" name="action" value="mmsar_clear_agent_log">';
-		wp_nonce_field( 'mmsar_clear_agent_log', 'mmsar_nonce' );
-		echo '<label for="mmsar-clear-confirm">';
-		printf(
-			/* translators: %s: the word that must be typed, already translated */
-			esc_html__( 'Type %s to enable the button:', 'make-my-site-agent-ready' ),
-			'<code>' . esc_html_x( 'DELETE', 'confirmation word typed to clear the agent log', 'make-my-site-agent-ready' ) . '</code>'
-		);
-		echo '</label> ';
-		echo '<input type="text" id="mmsar-clear-confirm" name="mmsar_clear_confirm" value="" autocomplete="off" class="regular-text" style="width:9rem;"> ';
-		echo '<button type="submit" id="mmsar-clear-submit" class="button button-link-delete" disabled>' . esc_html__( 'Delete all entries', 'make-my-site-agent-ready' ) . '</button>';
 		echo '</form>';
-		echo '</div>';
-
-		// Admin-only inline script. The server checks the typed word too, so this is convenience
-		// rather than the guard.
-		?>
-		<script>
-		( function () {
-			var word  = <?php echo wp_json_encode( _x( 'DELETE', 'confirmation word typed to clear the agent log', 'make-my-site-agent-ready' ) ); ?>;
-			var msg   = <?php echo wp_json_encode( __( 'This permanently deletes every entry in the agent log. There is no undo. Continue?', 'make-my-site-agent-ready' ) ); ?>;
-			var input = document.getElementById( 'mmsar-clear-confirm' );
-			var btn   = document.getElementById( 'mmsar-clear-submit' );
-			var form  = document.getElementById( 'mmsar-clear-form' );
-			if ( ! input || ! btn || ! form ) { return; }
-			input.addEventListener( 'input', function () {
-				btn.disabled = ( input.value.trim() !== word );
-			} );
-			form.addEventListener( 'submit', function ( e ) {
-				if ( input.value.trim() !== word || ! window.confirm( msg ) ) { e.preventDefault(); }
-			} );
-		} )();
-		</script>
-		<?php
+		echo '</details>';
 	}
 }

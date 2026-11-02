@@ -2645,17 +2645,6 @@ class MMSAR_Agent_Log {
 	}
 
 	/**
-	 * Deletes every entry.
-	 *
-	 * @return void
-	 */
-	public static function clear() {
-		global $wpdb;
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Emptying this plugin's own table on explicit request.
-		$wpdb->query( $wpdb->prepare( 'DELETE FROM %i', self::table() ) );
-	}
-
-	/**
 	 * Drops rows beyond the retention limit, oldest first.
 	 *
 	 * @return void

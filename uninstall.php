@@ -40,6 +40,8 @@ delete_transient( 'mmsar_llms_full_txt' );
 delete_transient( 'mmsar_flush_needed' );
 delete_transient( 'mmsar_negotiation_check_pending' );
 delete_transient( 'mmsar_negotiation_check_notice' );
+delete_transient( 'mmsar_agent_insights' );
+delete_transient( 'mmsar_agent_overview' );
 
 global $wpdb;
 

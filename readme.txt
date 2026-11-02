@@ -4,7 +4,7 @@ Tags: markdown, llm, ai, llms-txt, agents
 Requires at least: 6.2
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.70.0
+Stable tag: 1.71.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -47,7 +47,7 @@ Every feature below can be switched off individually under Settings > Agent-Read
 * **Endpoints stay reachable** — If `robots.txt` disallows a path one of your published endpoints lives on (several SEO plugins disallow `/wp-json/` by default), an `Allow:` line for that individual endpoint is added above the rule blocking it. The endpoint stays reachable to agents that found it in your api-catalog, llms.txt or Agent Skills index; the rest of the REST API stays disallowed
 * **Deprecation/Sunset headers** — For surfaces you schedule for retirement (via a filter), responses carry `Deprecation` and `Sunset` headers so an agent is told a URL is going away before it does. Empty, and inactive, until you fill in a schedule
 * **Agent request log** — Optional (off by default). Records which agents fetch the surfaces above, robots.txt and your RSS and Atom feeds, and optionally page views, on its own screen at Settings > Agent Log, with filters, a Journeys view, CSV export, a dashboard widget and a read-only ability. Each entry's claimed crawler identity is checked against the operator's published IP ranges or forward-confirmed reverse DNS, a user-run client such as Claude Code is labelled as one instead of being called a forgery, and every recognised bot carries a category — AI training, AI search, AI assistant, search engine, SEO tool, monitoring, scanner or other — so AI traffic can be read apart from search and SEO traffic. An MCP call records which tool was used and what it asked for (a content type, a topic, the page it read), each stored only once it matches something on your site; the words agents search for are stored only if you switch that on. robots.txt and feeds are counted under surfaces of their own, never as page views or agent documents, so the comparison between the two stays honest. So are MCP and WebMCP calls, so the tools being used can be read apart from the files being fetched. Browser-shaped traffic, which looks like a person whether or not an agent is driving the browser, carries three signals: a Web Bot Auth signature and the operator it claims (recorded, not verified), a published cloud-provider network, and whether the request followed a link on the site. The cloud-network signal also covers scripts and other HTTP clients, telling a hosted service from one run on someone's own connection. A bot the log doesn't recognise yet is stored with its own name first when that name comes at the end of a browser-style user-agent, so it isn't cut off. An optional setting keeps every entry's full address and full user-agent for six months, so a misread visit can still be corrected.
-* **Agent Log Summary** — The Agent Log opens on what the last 30 days mean rather than on raw rows, organised as three questions: Am I being read? (who reads your Markdown, edited pages AI search hasn't re-read, and whether agents in the browser used your WebMCP tools), Am I being cited? (the pages AI assistants fetch to answer people, and the visitors they send), and What's broken or being ignored? (training crawlers reading despite your "no training", and standards agents looked for and didn't find). Each finding says what it means or what to do, links to the log rows behind it, and stays quiet when there is nothing worth saying. Forged crawler identities are never counted. Also on the dashboard widget and as a read-only ability for agents
+* **Agent Log Summary** — A Summary tab on the Agent Log shows the last 30 days in numbers (bot requests, share verified, Spoofed, visitors sent by AI, each against the 30 days before), a chart splitting each day's traffic into people, search and SEO, AI agents and other bots, the busiest bots and what they're built for. Below that it says what the traffic means, organised as three questions: Am I being read? (who reads your Markdown, edited pages AI search hasn't re-read, and whether agents in the browser used your WebMCP tools), Am I being cited? (the pages AI assistants fetch to answer people, and the visitors they send), and What's broken or being ignored? (training crawlers reading despite your "no training", and standards agents looked for and didn't find). Each finding says what it means or what to do, links to the log rows behind it, and stays quiet when there is nothing worth saying. Forged crawler identities are never counted. Also on the dashboard widget and as a read-only ability for agents
 * **YAML frontmatter** — Title, date, modified date, author, URL, markdown URL, content type, excerpt, meta description (from Yoast SEO, when it has one), categories, and tags. The excerpt and the description can each be switched off. A theme or plugin can add fields of its own with the `mmsar_frontmatter` filter
 * **Pre-generated** — Markdown is generated when posts are saved, so `.md` requests are instant
 * **Discoverable** — Adds `<link rel="alternate" type="text/markdown">` to page headers
@@ -201,7 +201,7 @@ For people, this is what it keeps:
 
 **You can choose to keep more, for six months.** Off by default. The setting "Keep full addresses for six months" stores every entry's full address and full user-agent, people's included, because a visit that was misread can't be checked again from a reduced address. After six months, the address on any entry not identified as a known crawler is reduced to its network, and every full user-agent is cleared. Switching it off doesn't shorten the six months for entries already stored. A full IP address is personal data, so say so in your privacy policy first.
 
-Recognised crawlers keep their full address, because verifying who they are needs it. The whole table is removed when you delete the plugin, and the Agent Log screen can clear it at any time. Suggested wording for your privacy policy, matching the options you have switched on, is under Settings > Privacy.
+Recognised crawlers keep their full address, because verifying who they are needs it. The whole table is removed when you delete the plugin, and "Entries to keep" on the Agent Log screen drops the oldest entries past a number you choose. Suggested wording for your privacy policy, matching the options you have switched on, is under Settings > Privacy.
 
 = Are pages marked noindex left out? =
 
@@ -239,11 +239,26 @@ Chrome and Microsoft Edge offer WebMCP as an origin trial. Ordinary visitors onl
 
 Each token is checked when you save: one for another site, another trial, or past its date is not kept. Tokens expire with the trial (currently March 2027), and Site Health warns you two weeks before yours does. In Chrome, DevTools > Application > WebMCP shows the tools a page registered and lets you run each one.
 
+= Why does the Agent Log show fewer visits than my site gets? =
+
+Because of caching. When your hosting or a CDN such as Cloudflare serves a page from its cache, WordPress never runs, so the plugin never sees the visit. That applies to people, search engines and AI agents alike. How much is missed depends on how your hosting caches: a page served fresh on every request is always logged, a page cached for hours mostly isn't. Files that aren't cached, often the Markdown versions and llms.txt, are logged every time. The log is a reliable picture of which agents come and what they ask for, but its count of total visits is a minimum. For total visitor numbers, use your analytics or your CDN's own statistics.
+
 = Why do AI referral counts look low? =
 
 They are a floor. Many AI apps open links without telling the site where the visitor came from, and only ChatGPT reliably tags its links with `utm_source`. Those visits look like direct visits and cannot be counted. Pages already in your cache pick up the counting script when the cache next refreshes, and a security plugin that blocks the REST API for visitors stops the count entirely.
 
 == Changelog ==
+
+= 1.71.0 - 2026-11-02 =
+* New: the Summary opens with the last 30 days in numbers: bot requests, the share verified, how many different bots, Spoofed requests and visitors sent by AI, each compared with the 30 days before once the log reaches back that far. Below them, "Who is visiting": everything the log recorded, split into people (browsers), search engines and SEO tools, AI agents, and other bots and scripts, as shares for the 30 days and as stacked bars per day. Then a "Who visited" table of the busiest bots with what each is for and whether it was verified, and "What they're built for", requests by kind of bot. Each kind and the Spoofed number link to the matching entries.
+* New: the Agent Log says that visits served from your hosting's cache aren't logged, so its counts may be lower than your real traffic. Also explained in the FAQ.
+* Changed: the Agent Log opens on its log of requests again, in a tab now called Logs (was List). The tabs read Logs, Summary, Journeys.
+* Changed: the Crawler identity box is shorter. Each count is now a link to the entries it counts and explains itself when you point at it, and the longer notes are under "How identity is checked". The list of every crawler name that can't be confirmed is gone; the Unverifiable count opens those entries.
+* Changed: on the Logs tab, Export sits at the bottom of the filters, and "Entries to keep" is under "Log settings" at the bottom of the page. The AI referrals panel is gone: the Summary's "People assistants send you" card and its "Visitors sent by AI" number show the same counts.
+* Changed: the Journeys tab shows only its filters and the visits. It used to repeat the Logs tab's identity, referrals, export and not-found panels.
+* Fixed: Verify now and Re-check bring you back to the tab and filters you pressed them on. They used to land on the Summary.
+* Fixed: deleting the plugin now also removes the Summary's cached results, which were left to expire on their own.
+* Removed: the "Delete the log" button. "Entries to keep" still drops the oldest entries past the number you set, and deleting the plugin removes the whole table.
 
 = 1.70.0 - 2026-11-01 =
 * New: WebMCP tools that have structured data now return it beside their text, so an agent in the browser gets the same search results, listings, and "about" details as an MCP client. Needs MCP Apps UI on.
