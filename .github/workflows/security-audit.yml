@@ -50,7 +50,7 @@ jobs:
 
       - name: Semgrep SAST (PHP security)
         run: |
-          pip install --quiet semgrep
+          pip install --quiet semgrep==1.183.0
           semgrep scan --config p/php --error --quiet --metrics off \
             --exclude vendor --exclude vendor-prefixed --exclude node_modules --exclude archive \
             .
