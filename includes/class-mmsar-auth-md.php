@@ -120,8 +120,12 @@ class MMSAR_Auth_Md {
 		$site_name = html_entity_decode( get_bloginfo( 'name' ), ENT_QUOTES | ENT_HTML5, 'UTF-8' );
 		$gated     = self::credentialed_endpoints();
 
-		$lines   = array();
-		$lines[] = '# Authentication for ' . $site_name;
+		$lines = array();
+		// The H1 names the file itself, as WorkOS's own AUTH.md does (`# auth.md`): scanners such as
+		// isitagentready.com identify an Auth.md document by its heading containing "auth.md"
+		// (GitHub issue #1). Until 1.72.0 this read "# Authentication for <site>", which was found
+		// but reported as missing the expected heading.
+		$lines[] = '# auth.md for ' . $site_name;
 		$lines[] = '';
 		$lines[] = '> How an agent gets access to this site. Short version: everything you can read is open, '
 			. 'and there are no API keys to obtain.';

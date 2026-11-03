@@ -24,6 +24,7 @@ require_once dirname( __DIR__ ) . '/includes/class-mmsar-indexnow.php';
 require_once dirname( __DIR__ ) . '/includes/class-mmsar-referrals.php';
 require_once dirname( __DIR__ ) . '/includes/class-mmsar-agent-insights.php';
 require_once dirname( __DIR__ ) . '/includes/class-mmsar-agent-overview.php';
+require_once dirname( __DIR__ ) . '/includes/class-mmsar-link-check.php';
 require_once dirname( __DIR__ ) . '/includes/class-mmsar-mcp-arguments.php';
 require_once dirname( __DIR__ ) . '/includes/class-mmsar-about.php';
 require_once dirname( __DIR__ ) . '/includes/class-mmsar-mcp-era.php';

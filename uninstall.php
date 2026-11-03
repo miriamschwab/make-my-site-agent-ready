@@ -29,6 +29,7 @@ delete_option( 'mmsar_agent_log_retain_full' );
 delete_option( 'mmsar_webmcp_tokens' );
 delete_option( 'mmsar_negotiation_check' );
 delete_option( 'mmsar_negotiation_reset_done' );
+delete_option( 'mmsar_link_check' );
 delete_option( 'mmsar_indexnow_key' );
 delete_option( 'mmsar_indexnow_last' );
 delete_option( 'mmsar_referrals' );
@@ -40,6 +41,8 @@ delete_transient( 'mmsar_llms_full_txt' );
 delete_transient( 'mmsar_flush_needed' );
 delete_transient( 'mmsar_negotiation_check_pending' );
 delete_transient( 'mmsar_negotiation_check_notice' );
+delete_transient( 'mmsar_link_check_pending' );
+delete_transient( 'mmsar_link_check_token' );
 delete_transient( 'mmsar_agent_insights' );
 delete_transient( 'mmsar_agent_overview' );
 

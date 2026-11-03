@@ -176,57 +176,92 @@ final class OverviewTest extends TestCase {
 	}
 
 	/**
-	 * Mix group cases.
+	 * Mix group cases: category, client type, verdict, expected group.
 	 */
 	public static function mix_groups(): array {
 		return array(
-			'AI training crawler'        => array( 'ai-training', 'crawler', 'ai' ),
-			'AI search'                  => array( 'ai-search', 'crawler', 'ai' ),
-			'user-run assistant'         => array( 'ai-assistant', 'http', 'ai' ),
-			'search engine'              => array( 'search-engine', 'crawler', 'search' ),
-			'SEO tool'                   => array( 'seo-tool', 'crawler', 'search' ),
-			'scanner'                    => array( 'scanner', 'crawler', 'other' ),
-			'monitoring'                 => array( 'monitoring', 'crawler', 'other' ),
-			'named bot in a browser'     => array( 'search-engine', 'browser', 'search' ),
-			'unrecognised browser'       => array( 'unrecognised', 'browser', 'people' ),
-			'unrecognised, empty'        => array( '', 'browser', 'people' ),
-			'unrecognised script'        => array( 'unrecognised', 'http', 'other' ),
-			'unrecognised crawler'       => array( '', 'crawler', 'other' ),
-			'client type not recorded'   => array( '', '', 'other' ),
+			'AI training crawler'           => array( 'ai-training', 'crawler', 'verified', 'agents' ),
+			'AI search'                     => array( 'ai-search', 'crawler', '', 'agents' ),
+			'user-run assistant'            => array( 'ai-assistant', 'http', 'client', 'agents' ),
+			'AI crawler that can\'t be checked' => array( 'ai-training', 'crawler', 'unverifiable', 'agents' ),
+			'spoofed AI crawler'            => array( 'ai-training', 'crawler', 'failed', 'rest' ),
+			'search engine'                 => array( 'search-engine', 'crawler', 'verified', 'known' ),
+			'SEO tool'                      => array( 'seo-tool', 'crawler', '', 'known' ),
+			'scanner'                       => array( 'scanner', 'crawler', '', 'known' ),
+			'monitoring'                    => array( 'monitoring', 'crawler', '', 'known' ),
+			'spoofed search engine'         => array( 'search-engine', 'crawler', 'failed', 'rest' ),
+			'named bot in a browser'        => array( 'search-engine', 'browser', '', 'known' ),
+			'unrecognised browser'          => array( 'unrecognised', 'browser', '', 'people' ),
+			'unrecognised, empty'           => array( '', 'browser', '', 'people' ),
+			'unrecognised script'           => array( 'unrecognised', 'http', '', 'rest' ),
+			'unrecognised crawler'          => array( '', 'crawler', '', 'rest' ),
+			'client type not recorded'      => array( '', '', '', 'rest' ),
 		);
 	}
 
 	#[DataProvider( 'mix_groups' )]
-	public function test_mix_group( string $category, string $client, string $expected ): void {
-		$this->assertSame( $expected, MMSAR_Agent_Overview::mix_group( $category, $client ) );
+	public function test_mix_group( string $category, string $client, string $verified, string $expected ): void {
+		$this->assertSame( $expected, MMSAR_Agent_Overview::mix_group( $category, $client, $verified ) );
 	}
 
 	public function test_mix_totals_by_day_and_group(): void {
 		$mix = array(
 			array( 'day' => self::TODAY, 'group' => 'people', 'n' => 10 ),
-			array( 'day' => self::TODAY, 'group' => 'ai', 'n' => 4 ),
-			array( 'day' => '2026-10-04', 'group' => 'search', 'n' => 3 ),
-			array( 'day' => '2026-10-03', 'group' => 'ai', 'n' => 99 ), // Before the period.
+			array( 'day' => self::TODAY, 'group' => 'agents', 'n' => 4 ),
+			array( 'day' => '2026-10-04', 'group' => 'known', 'n' => 3 ),
+			array( 'day' => self::TODAY, 'group' => 'rest', 'n' => 2 ),
+			array( 'day' => '2026-10-03', 'group' => 'agents', 'n' => 99 ), // Before the period.
 			array( 'day' => self::TODAY, 'group' => 'bogus', 'n' => 7 ),
 		);
 		$out = MMSAR_Agent_Overview::compute( array(), self::ctx( array( 'people_logged' => true ) ), $mix )['mix'];
-		$this->assertSame( array( 'people', 'search', 'ai', 'other' ), $out['groups'] );
-		$this->assertSame( 17, $out['total'] );
-		$this->assertSame( array( 'people' => 10, 'search' => 3, 'ai' => 4, 'other' => 0 ), $out['totals'] );
+		$this->assertSame( array( 'people', 'agents', 'known', 'rest' ), $out['groups'] );
+		$this->assertSame( 19, $out['total'] );
+		$this->assertSame( array( 'people' => 10, 'agents' => 4, 'known' => 3, 'rest' => 2 ), $out['totals'] );
 		$this->assertSame( 10, $out['daily'][ self::TODAY ]['people'] );
-		$this->assertSame( 3, $out['daily']['2026-10-04']['search'] );
+		$this->assertSame( 3, $out['daily']['2026-10-04']['known'] );
 		$this->assertCount( 30, $out['daily'] );
 	}
 
 	public function test_people_are_dropped_when_page_views_from_people_are_not_logged(): void {
 		$mix = array(
 			array( 'day' => self::TODAY, 'group' => 'people', 'n' => 2 ),
-			array( 'day' => self::TODAY, 'group' => 'ai', 'n' => 5 ),
+			array( 'day' => self::TODAY, 'group' => 'agents', 'n' => 5 ),
 		);
 		$out = MMSAR_Agent_Overview::compute( array(), self::ctx( array( 'people_logged' => false ) ), $mix )['mix'];
-		$this->assertSame( array( 'search', 'ai', 'other' ), $out['groups'] );
+		$this->assertSame( array( 'agents', 'known', 'rest' ), $out['groups'] );
 		$this->assertArrayNotHasKey( 'people', $out['totals'] );
 		$this->assertSame( 5, $out['total'] );
 	}
 
+	public function test_fetched_groups_surface_categories_with_robots_on_its_own(): void {
+		$fetched = array(
+			array( 'day' => self::TODAY, 'category' => 'docs', 'n' => 5 ),
+			array( 'day' => self::TODAY, 'category' => 'markdown', 'n' => 4 ),
+			array( 'day' => self::TODAY, 'category' => 'mcp', 'n' => 3 ),
+			array( 'day' => self::TODAY, 'category' => 'webmcp', 'n' => 1 ),
+			array( 'day' => self::TODAY, 'category' => 'robots', 'n' => 6 ),
+			array( 'day' => self::TODAY, 'category' => 'html', 'n' => 7 ),
+			array( 'day' => '2026-10-10', 'category' => 'feed', 'n' => 2 ),
+			array( 'day' => self::TODAY, 'category' => 'notfound', 'n' => 8 ),
+			array( 'day' => self::TODAY, 'category' => 'bogus', 'n' => 50 ),
+			array( 'day' => '2026-09-01', 'category' => 'html', 'n' => 50 ), // Before the period.
+		);
+		$out = MMSAR_Agent_Overview::compute( array(), self::ctx(), array(), $fetched )['fetched'];
+		$this->assertSame( array( 'files', 'robots', 'pages', 'notfound' ), $out['groups'] );
+		$this->assertSame( array( 'files' => 13, 'robots' => 6, 'pages' => 9, 'notfound' => 8 ), $out['totals'] );
+		$this->assertSame( 36, $out['total'] );
+		$this->assertSame( 2, $out['daily']['2026-10-10']['pages'] );
+	}
+
+	public function test_every_surface_category_has_a_fetch_group(): void {
+		foreach ( MMSAR_Agent_Log::categories() as $category ) {
+			$this->assertArrayHasKey( $category, MMSAR_Agent_Overview::FETCH_OF_CATEGORY, "Surface category {$category} needs a fetch group." );
+		}
+	}
+
+	public function test_agent_categories_are_real_crawler_categories(): void {
+		foreach ( MMSAR_Agent_Overview::AGENT_CATEGORIES as $category ) {
+			$this->assertContains( $category, MMSAR_Agent_Log::crawler_categories() );
+		}
+	}
 }

@@ -1084,6 +1084,9 @@ class MMSAR_Agent_Log_Page {
 		if ( isset( $ov['mix'] ) ) {
 			self::render_mix_chart( $ov['mix'] );
 		}
+		if ( isset( $ov['fetched'] ) ) {
+			self::render_fetch_chart( $ov['fetched'] );
+		}
 
 		echo '<div style="display:flex;flex-wrap:wrap;gap:1em;margin:1em 0;">';
 		self::render_who_visited( $ov );
@@ -1139,61 +1142,156 @@ class MMSAR_Agent_Log_Page {
 	 *
 	 * Slots 1, 3, 2 and 7 of the dataviz skill's reference palette, ordered so every pair that
 	 * touches in a stack passes its colour-blindness check (worst adjacent CVD Delta E 9.2, normal
-	 * vision 24.0, run with validate_palette.js). Aqua sits under 3:1 against white, so the groups
-	 * are always named in the legend and the numbers are in a table as well.
+	 * vision 24.0, run with validate_palette.js). Kept by position when the groups changed in
+	 * 1.72.0, so the validated pairs still touch in the same order. Aqua sits under 3:1 against
+	 * white, so the groups are always named in the legend and the numbers are in a table as well.
 	 *
 	 * @return array<string, string> Group => hex.
 	 */
 	private static function mix_colours() {
 		return array(
 			'people' => '#2a78d6',
-			'search' => '#1baf7a',
-			'ai'     => '#eb6834',
-			'other'  => '#6250d6',
+			'agents' => '#1baf7a',
+			'known'  => '#eb6834',
+			'rest'   => '#6250d6',
 		);
 	}
 
 	/**
-	 * Everything the log saw, split into people, search and SEO, AI agents and other bots.
+	 * Series colours for what agents fetched, in FETCH_GROUPS order (1.72.0).
 	 *
-	 * A bar split by share for the whole period, which doubles as the legend, then the same split per
-	 * day as stacked bars, drawn on the server as SVG. No script and no chart library: the plugin keeps
-	 * admin JavaScript to what cannot be done otherwise. Each day has a native tooltip with every
-	 * group's count and a hit area the full height of the plot, and the numbers are in a table under
-	 * it. Today is drawn lighter, because it is not over.
+	 * Slots 5, 6, 4 and 8 of the same palette, none shared with the traffic mix so the two charts
+	 * one above the other are never read as the same groups. Validated in this order: worst
+	 * adjacent CVD Delta E 15.3, normal vision 19.6. Magenta and yellow sit under 3:1 against
+	 * white, so again the legend names every group and there is a table.
+	 *
+	 * @return array<string, string> Group => hex.
+	 */
+	private static function fetch_colours() {
+		return array(
+			'files'    => '#e87ba4',
+			'robots'   => '#008300',
+			'pages'    => '#eda100',
+			'notfound' => '#e34948',
+		);
+	}
+
+	/**
+	 * Everything the log saw, split into people, identified agents, other known bots and the rest.
 	 *
 	 * @param array $mix MMSAR_Agent_Overview mix: `groups`, `daily`, `totals`, `total`.
 	 * @return void
 	 */
 	private static function render_mix_chart( $mix ) {
-		$groups  = $mix['groups'];
-		$colours = self::mix_colours();
-		$total   = (int) $mix['total'];
-		$links   = array(
-			'people' => array( 'clients' => array( MMSAR_Agent_Log::CLIENT_BROWSER ) ),
-			'search' => array( 'crawlers' => array( 'search-engine', 'seo-tool' ) ),
-			'ai'     => array( 'crawlers' => array( 'ai-training', 'ai-search', 'ai-assistant' ) ),
+		$labels = array();
+		foreach ( MMSAR_Agent_Overview::MIX_GROUPS as $g ) {
+			$labels[ $g ] = MMSAR_Agent_Overview::mix_label( $g );
+		}
+		$known = array_values( array_diff( MMSAR_Agent_Log::crawler_categories(), MMSAR_Agent_Overview::AGENT_CATEGORIES ) );
+
+		self::render_stacked_chart(
+			array(
+				'title'       => __( 'Who is visiting', 'make-my-site-agent-ready' ),
+				'description' => __( 'Every request the log recorded in the last 30 days, in your site\'s timezone. "People" means browsers, so an agent driving a real browser is counted there too. "Identified agents" named themselves as an AI crawler, AI search or AI assistant and were not caught using a name that isn\'t theirs; many can\'t be checked at all, which is not the same as fake. The last group is software that didn\'t say what it is, plus every Spoofed request.', 'make-my-site-agent-ready' ),
+				'aria'        => __( 'Requests per day over the last 30 days, stacked by who made them. The same numbers are in the table below the chart.', 'make-my-site-agent-ready' ),
+				'labels'      => $labels,
+				'colours'     => self::mix_colours(),
+				'links'       => array(
+					'people' => array( 'clients' => array( MMSAR_Agent_Log::CLIENT_BROWSER ) ),
+					'agents' => array( 'crawlers' => MMSAR_Agent_Overview::AGENT_CATEGORIES ),
+					'known'  => array( 'crawlers' => $known ),
+				),
+				'data'        => $mix,
+			)
 		);
 
+		if ( ! in_array( 'people', $mix['groups'], true ) && (int) $mix['total'] > 0 ) {
+			echo '<p class="description" style="margin:-.6rem 0 1em;">';
+			printf(
+				/* translators: 1: setting name, 2: option label, 3: link to the settings page */
+				esc_html__( 'There is no People group because page views from people aren\'t being recorded. To include them, set %1$s to %2$s under %3$s.', 'make-my-site-agent-ready' ),
+				'<strong>' . esc_html__( 'Also log normal page views', 'make-my-site-agent-ready' ) . '</strong>',
+				'<strong>' . esc_html__( 'Every page view, including people', 'make-my-site-agent-ready' ) . '</strong>',
+				'<a href="' . esc_url( admin_url( 'options-general.php?page=make-my-site-agent-ready' ) ) . '">' . esc_html__( 'Settings > Agent-Ready', 'make-my-site-agent-ready' ) . '</a>'
+			);
+			echo '</p>';
+		}
+	}
+
+	/**
+	 * What identified agents asked for: agent files, robots.txt, ordinary pages, or nothing (1.72.0).
+	 *
+	 * @param array $fetched MMSAR_Agent_Overview fetched: `groups`, `daily`, `totals`, `total`.
+	 * @return void
+	 */
+	private static function render_fetch_chart( $fetched ) {
+		$labels = array();
+		foreach ( MMSAR_Agent_Overview::FETCH_GROUPS as $g ) {
+			$labels[ $g ] = MMSAR_Agent_Overview::fetch_label( $g );
+		}
+		$agents = array( 'crawlers' => MMSAR_Agent_Overview::AGENT_CATEGORIES );
+
+		self::render_stacked_chart(
+			array(
+				'title'       => __( 'What agents fetched', 'make-my-site-agent-ready' ),
+				'description' => __( 'Requests from identified agents in the last 30 days, by what they asked for. Agent files are the ones made for them: llms.txt, the .md pages, the API catalog, auth.md, MCP and the rest. robots.txt has its own group: it isn\'t written for agents, but many start there, and your content signals live in it. Site pages are your ordinary pages and feeds.', 'make-my-site-agent-ready' ),
+				'aria'        => __( 'Requests per day from identified agents over the last 30 days, stacked by what they asked for. The same numbers are in the table below the chart.', 'make-my-site-agent-ready' ),
+				'labels'      => $labels,
+				'colours'     => self::fetch_colours(),
+				'links'       => array(
+					'files'    => $agents + array( 'categories' => array( MMSAR_Agent_Log::CAT_DOCS, MMSAR_Agent_Log::CAT_MARKDOWN, MMSAR_Agent_Log::CAT_MCP, MMSAR_Agent_Log::CAT_WEBMCP ) ),
+					'robots'   => $agents + array( 'categories' => array( MMSAR_Agent_Log::CAT_ROBOTS ) ),
+					'pages'    => $agents + array( 'categories' => array( MMSAR_Agent_Log::CAT_HTML, MMSAR_Agent_Log::CAT_FEED ) ),
+					'notfound' => $agents + array( 'categories' => array( MMSAR_Agent_Log::CAT_NOTFOUND ) ),
+				),
+				'empty'       => __( 'No identified agents in the last 30 days.', 'make-my-site-agent-ready' ),
+				'data'        => $fetched,
+			)
+		);
+	}
+
+	/**
+	 * A 30-day stacked bar chart with a share bar that doubles as the legend, and a table.
+	 *
+	 * A bar split by share for the whole period, then the same split per day as stacked bars, drawn
+	 * on the server as SVG. No script and no chart library: the plugin keeps admin JavaScript to
+	 * what cannot be done otherwise. Each day has a native tooltip with every group's count and a
+	 * hit area the full height of the plot, and the numbers are in a table under it. Today is drawn
+	 * lighter, because it is not over. Shared by the Summary's two charts since 1.72.0.
+	 *
+	 * @param array $chart `title`, `description`, `aria`, `labels` (group => label), `colours`
+	 *                     (group => hex), `links` (group => filter args, optional per group),
+	 *                     `empty` (optional), `data` (`groups`, `daily`, `totals`, `total`).
+	 * @return void
+	 */
+	private static function render_stacked_chart( array $chart ) {
+		$data    = $chart['data'];
+		$groups  = $data['groups'];
+		$labels  = $chart['labels'];
+		$colours = $chart['colours'];
+		$links   = $chart['links'];
+		$total   = (int) $data['total'];
+
 		echo '<div style="margin:1em 0;padding:.8rem 1.1rem;background:#fff;border:1px solid #c3c4c7;">';
-		echo '<h3 style="margin:0 0 .2rem;font-size:14px;">' . esc_html__( 'Who is visiting', 'make-my-site-agent-ready' ) . '</h3>';
-		echo '<p class="description" style="margin:0 0 .7rem;">' . esc_html__( 'Every request the log recorded in the last 30 days, in your site\'s timezone. Spoofed requests are left out. "People" means browsers, so an agent driving a real browser is counted there too.', 'make-my-site-agent-ready' ) . '</p>';
+		echo '<h3 style="margin:0 0 .2rem;font-size:14px;">' . esc_html( $chart['title'] ) . '</h3>';
+		echo '<p class="description" style="margin:0 0 .7rem;">' . esc_html( $chart['description'] ) . '</p>';
 
 		if ( $total < 1 ) {
-			echo '<p style="color:#646970;"><em>' . esc_html__( 'Nothing recorded in the last 30 days.', 'make-my-site-agent-ready' ) . '</em></p></div>';
+			$empty = isset( $chart['empty'] ) ? $chart['empty'] : __( 'Nothing recorded in the last 30 days.', 'make-my-site-agent-ready' );
+			echo '<p style="color:#646970;"><em>' . esc_html( $empty ) . '</em></p></div>';
 			return;
 		}
 
 		// The share bar. Segments under 1% still get a sliver so a group never disappears.
 		echo '<div style="display:flex;height:12px;border-radius:6px;overflow:hidden;gap:2px;background:#fff;">';
 		foreach ( $groups as $g ) {
-			$n = (int) $mix['totals'][ $g ];
+			$n = (int) $data['totals'][ $g ];
 			if ( $n < 1 ) {
 				continue;
 			}
 			printf(
 				'<span title="%1$s" style="flex:%2$s 1 0;min-width:3px;background:%3$s;"></span>',
-				esc_attr( MMSAR_Agent_Overview::mix_label( $g ) . ': ' . number_format_i18n( $n ) ),
+				esc_attr( $labels[ $g ] . ': ' . number_format_i18n( $n ) ),
 				esc_attr( (string) $n ),
 				esc_attr( $colours[ $g ] )
 			);
@@ -1201,8 +1299,8 @@ class MMSAR_Agent_Log_Page {
 		echo '</div>';
 		echo '<div style="display:flex;flex-wrap:wrap;gap:.4rem 1.6rem;margin:.6rem 0 .4rem;">';
 		foreach ( $groups as $g ) {
-			$n     = (int) $mix['totals'][ $g ];
-			$label = esc_html( MMSAR_Agent_Overview::mix_label( $g ) );
+			$n     = (int) $data['totals'][ $g ];
+			$label = esc_html( $labels[ $g ] );
 			if ( isset( $links[ $g ] ) ) {
 				$url   = add_query_arg( self::filter_args( $links[ $g ], array( 'view' => 'list' ) ), admin_url( 'options-general.php' ) );
 				$label = '<a href="' . esc_url( $url ) . '" style="text-decoration:none;">' . $label . '</a>';
@@ -1216,7 +1314,7 @@ class MMSAR_Agent_Log_Page {
 		echo '</div>';
 
 		$max = 0;
-		foreach ( $mix['daily'] as $counts ) {
+		foreach ( $data['daily'] as $counts ) {
 			$max = max( $max, array_sum( $counts ) );
 		}
 		$top = self::nice_ceiling( $max );
@@ -1230,7 +1328,7 @@ class MMSAR_Agent_Log_Page {
 		$plot_w = $w - $left - $right;
 		$plot_h = $h - $above - $below;
 		$base   = $above + $plot_h;
-		$days   = array_keys( $mix['daily'] );
+		$days   = array_keys( $data['daily'] );
 		$count  = count( $days );
 		$slot   = $plot_w / max( 1, $count );
 		$bar    = max( 2, $slot - 2 );
@@ -1240,7 +1338,7 @@ class MMSAR_Agent_Log_Page {
 			'<svg class="mmsar-chart" viewBox="0 0 %1$d %2$d" width="100%%" role="img" aria-label="%3$s" style="display:block;font-family:inherit;">',
 			(int) $w,
 			(int) $h,
-			esc_attr__( 'Requests per day over the last 30 days, stacked by who made them. The same numbers are in the table below the chart.', 'make-my-site-agent-ready' )
+			esc_attr( $chart['aria'] )
 		);
 		foreach ( array( 0, 0.5, 1 ) as $f ) {
 			$y = $base - $f * $plot_h;
@@ -1249,13 +1347,13 @@ class MMSAR_Agent_Log_Page {
 		}
 
 		foreach ( $days as $i => $day ) {
-			$counts = $mix['daily'][ $day ];
+			$counts = $data['daily'][ $day ];
 			$sum    = array_sum( $counts );
 			$x      = $left + $i * $slot + ( $slot - $bar ) / 2;
 			$label  = self::day_label( (string) $day );
 			$parts  = array();
 			foreach ( $groups as $g ) {
-				$parts[] = MMSAR_Agent_Overview::mix_label( $g ) . ' ' . number_format_i18n( (int) $counts[ $g ] );
+				$parts[] = $labels[ $g ] . ' ' . number_format_i18n( (int) $counts[ $g ] );
 			}
 			/* translators: 1: date, 2: total requests, 3: per-group counts */
 			$tip = sprintf( __( '%1$s: %2$s requests (%3$s)', 'make-my-site-agent-ready' ), $label, number_format_i18n( $sum ), implode( ', ', $parts ) );
@@ -1297,30 +1395,18 @@ class MMSAR_Agent_Log_Page {
 		}
 		echo '</svg>';
 
-		if ( ! in_array( 'people', $groups, true ) ) {
-			echo '<p class="description" style="margin:.4rem 0 0;">';
-			printf(
-				/* translators: 1: setting name, 2: option label, 3: link to the settings page */
-				esc_html__( 'There is no People group because page views from people aren\'t being recorded. To include them, set %1$s to %2$s under %3$s.', 'make-my-site-agent-ready' ),
-				'<strong>' . esc_html__( 'Also log normal page views', 'make-my-site-agent-ready' ) . '</strong>',
-				'<strong>' . esc_html__( 'Every page view, including people', 'make-my-site-agent-ready' ) . '</strong>',
-				'<a href="' . esc_url( admin_url( 'options-general.php?page=make-my-site-agent-ready' ) ) . '">' . esc_html__( 'Settings > Agent-Ready', 'make-my-site-agent-ready' ) . '</a>'
-			);
-			echo '</p>';
-		}
-
 		echo '<details style="margin-top:.3rem;"><summary style="cursor:pointer;color:#2271b1;font-size:12px;">' . esc_html__( 'Show as a table', 'make-my-site-agent-ready' ) . '</summary>';
 		echo '<table class="widefat striped" style="margin-top:.4rem;max-width:44rem;"><thead><tr><th>' . esc_html__( 'Day', 'make-my-site-agent-ready' ) . '</th>';
 		foreach ( $groups as $g ) {
-			echo '<th style="text-align:right;">' . esc_html( MMSAR_Agent_Overview::mix_label( $g ) ) . '</th>';
+			echo '<th style="text-align:right;">' . esc_html( $labels[ $g ] ) . '</th>';
 		}
 		echo '<th style="text-align:right;">' . esc_html__( 'Total', 'make-my-site-agent-ready' ) . '</th></tr></thead><tbody>';
 		foreach ( array_reverse( $days ) as $day ) {
 			echo '<tr><td>' . esc_html( self::day_label( (string) $day ) ) . '</td>';
 			foreach ( $groups as $g ) {
-				echo '<td style="text-align:right;">' . esc_html( number_format_i18n( (int) $mix['daily'][ $day ][ $g ] ) ) . '</td>';
+				echo '<td style="text-align:right;">' . esc_html( number_format_i18n( (int) $data['daily'][ $day ][ $g ] ) ) . '</td>';
 			}
-			echo '<td style="text-align:right;">' . esc_html( number_format_i18n( array_sum( $mix['daily'][ $day ] ) ) ) . '</td></tr>';
+			echo '<td style="text-align:right;">' . esc_html( number_format_i18n( array_sum( $data['daily'][ $day ] ) ) ) . '</td></tr>';
 		}
 		echo '</tbody></table></details>';
 		echo '</div>';

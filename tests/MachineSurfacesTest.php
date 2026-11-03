@@ -362,7 +362,7 @@ final class MachineSurfacesTest extends TestCase {
 
 	/**
 	 * The CASE is written out in every query that filters or groups by category, because each
-	 * statement has to be a fixed string. Five copies of one rule is only safe if they are the same
+	 * statement has to be a fixed string. Six copies of one rule is only safe if they are the same
 	 * rule, and category_patterns() only supplies the right values if every copy asks for them in
 	 * the same order.
 	 */
@@ -370,7 +370,7 @@ final class MachineSurfacesTest extends TestCase {
 		$source = (string) file_get_contents( dirname( __DIR__ ) . '/includes/class-mmsar-agent-log.php' );
 		preg_match_all( "/CASE WHEN surface .*?ELSE 'docs' END/s", $source, $m );
 
-		$this->assertCount( 5, $m[0], 'Five queries categorise surfaces; a sixth needs adding here and to this rule.' );
+		$this->assertCount( 6, $m[0], 'Six queries categorise surfaces; a seventh needs adding here and to this rule.' );
 		$normalised = array_unique( array_map( static fn( $c ) => preg_replace( '/\s+/', ' ', $c ), $m[0] ) );
 		$this->assertCount( 1, $normalised, 'Every copy of the category CASE should be identical.' );
 	}

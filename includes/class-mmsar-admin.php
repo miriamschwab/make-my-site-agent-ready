@@ -264,6 +264,9 @@ class MMSAR_Admin {
 		if ( '1' === $out['markdown_negotiation'] && ! mmsar_feature_enabled( 'markdown_negotiation' ) ) {
 			MMSAR_Negotiation_Check::schedule();
 		}
+		// Any feature change can add or remove a Link header, so the stored Link header check may no
+		// longer describe the site. Re-run it on the next request, once the new settings are live.
+		MMSAR_Link_Check::schedule();
 		// Enabling or disabling a feature adds or removes rewrite rules, which only take effect
 		// after a flush. Flagged through the shared helper so this path and the option hooks that
 		// catch non-Settings-API writes can never drift to different flags or lifetimes.
@@ -1114,6 +1117,27 @@ class MMSAR_Admin {
 			array( __CLASS__, 'render_negotiation_check_field' ),
 			'make-my-site-agent-ready',
 			'mmsar_negotiation'
+		);
+
+		// Link headers behind a page cache (1.72.0). No settings of its own: the section holds the
+		// self-check and, when a cache drops the headers, the lines to add them at server level.
+		add_settings_section(
+			'mmsar_link_check',
+			__( 'Link Headers and Page Caching', 'make-my-site-agent-ready' ),
+			array( __CLASS__, 'render_link_check_section' ),
+			'make-my-site-agent-ready',
+			array(
+				'before_section' => '<div id="mmsar-section-link-check">',
+				'after_section'  => '</div>',
+			)
+		);
+
+		add_settings_field(
+			'mmsar_link_check',
+			__( 'Check this site', 'make-my-site-agent-ready' ),
+			array( __CLASS__, 'render_link_check_field' ),
+			'make-my-site-agent-ready',
+			'mmsar_link_check'
 		);
 
 		// robots.txt settings.
@@ -2048,6 +2072,105 @@ class MMSAR_Admin {
 			);
 			echo '</p>';
 		}
+	}
+
+	/**
+	 * Intro copy for the Link header section.
+	 *
+	 * @return void
+	 */
+	public static function render_link_check_section() {
+		echo '<p>';
+		esc_html_e( 'Every page this plugin serves carries Link headers: short lines in the response, separate from the page itself, that point agents to your API catalog, llms.txt, auth.md and the other files. Agents and readiness checkers read them without having to parse the page.', 'make-my-site-agent-ready' );
+		echo '</p>';
+		echo '<p>';
+		esc_html_e( 'Some caching plugins save only the page to a file and serve that file without running WordPress. They don\'t save the headers, so only the first visitor after the cache is cleared gets them. Caches that store headers with the page, such as Cloudflare, are not affected. This check finds out which kind your site has.', 'make-my-site-agent-ready' );
+		echo '</p>';
+	}
+
+	/**
+	 * The Link header check: the last result, the lines to add when headers are dropped, and a button.
+	 *
+	 * @return void
+	 */
+	public static function render_link_check_field() {
+		$result = MMSAR_Link_Check::get_result();
+
+		echo '<p class="description">';
+		esc_html_e( 'Requests your homepage three times: once with a throwaway query string, which caches usually pass straight to WordPress, then twice as a normal visitor would. If the headers are on the first and missing from the last, a cache is dropping them. WordPress\'s Site Health screen also runs this check once a week.', 'make-my-site-agent-ready' );
+		echo '</p>';
+
+		if ( $result ) {
+			$status   = isset( $result['status'] ) ? $result['status'] : 'error';
+			$headings = array(
+				'pass'    => array( 'notice-success', __( 'The headers reach visitors, cached or not', 'make-my-site-agent-ready' ), __( 'The homepage carried every Link header both when WordPress built it and when it was served as a normal visitor gets it.', 'make-my-site-agent-ready' ) ),
+				'fail'    => array( 'notice-error', __( 'Your page cache drops the Link headers', 'make-my-site-agent-ready' ), __( 'WordPress sends the headers, but the homepage as a normal visitor gets it has none of them. Add them at server level with one of the options below, then run the check again.', 'make-my-site-agent-ready' ) ),
+				'partial' => array( 'notice-warning', __( 'Some Link headers go missing', 'make-my-site-agent-ready' ), __( 'The homepage as a normal visitor gets it is missing some of the headers WordPress sends. The missing ones are marked below.', 'make-my-site-agent-ready' ) ),
+				'none'    => array( 'notice-info', __( 'Nothing to check', 'make-my-site-agent-ready' ), __( 'The homepage sends none of this plugin\'s discovery Link headers, so there is nothing for a cache to drop. They come from the API Catalog, Agent Skills, OpenAPI, MCP, auth.md, NLWeb and llms.txt features.', 'make-my-site-agent-ready' ) ),
+				'error'   => array( 'notice-warning', __( 'Could not be checked', 'make-my-site-agent-ready' ), __( 'The site could not request its own homepage. That is usually a host blocking requests a site makes to itself, and says nothing either way about the headers.', 'make-my-site-agent-ready' ) ),
+			);
+
+			list( $class, $heading, $message ) = isset( $headings[ $status ] ) ? $headings[ $status ] : $headings['error'];
+
+			echo '<div class="notice ' . esc_attr( $class ) . ' inline" style="margin:12px 0;padding:8px 12px;">';
+			echo '<p><strong>' . esc_html( $heading ) . '</strong></p>';
+			echo '<p>' . esc_html( $message ) . '</p>';
+			if ( ! empty( $result['error'] ) ) {
+				echo '<p class="description">' . esc_html( $result['error'] ) . '</p>';
+			}
+			if ( ! empty( $result['details'] ) && is_array( $result['details'] ) ) {
+				echo '<p class="description">'
+					. esc_html__( 'WordPress-built request:', 'make-my-site-agent-ready' ) . ' ' . esc_html( (string) ( $result['details']['control'] ?? '' ) )
+					. ' &middot; ' . esc_html__( 'Normal request:', 'make-my-site-agent-ready' ) . ' ' . esc_html( (string) ( $result['details']['plain'] ?? '' ) )
+					. '</p>';
+			}
+			if ( ! empty( $result['time'] ) ) {
+				echo '<p class="description">';
+				printf(
+					/* translators: %s: human-readable time difference, e.g. "5 mins" */
+					esc_html__( 'Checked %s ago.', 'make-my-site-agent-ready' ),
+					esc_html( human_time_diff( (int) $result['time'] ) )
+				);
+				echo '</p>';
+			}
+			echo '</div>';
+
+			if ( ( 'fail' === $status || 'partial' === $status ) && ! empty( $result['links'] ) ) {
+				self::render_link_snippets( (array) $result['links'], (array) ( $result['missing'] ?? array() ) );
+			}
+		}
+
+		echo '<p><a class="button button-secondary" href="' . esc_url( MMSAR_Link_Check::run_url() ) . '">'
+			. esc_html__( 'Run the check', 'make-my-site-agent-ready' ) . '</a></p>';
+	}
+
+	/**
+	 * The lines that add the Link headers at server level, for whichever server the site runs on.
+	 *
+	 * @param string[] $links   The links the homepage should carry.
+	 * @param string[] $missing The ones a cached response did not.
+	 * @return void
+	 */
+	private static function render_link_snippets( array $links, array $missing ) {
+		$snippets = MMSAR_Link_Check::snippets( $links );
+		$pre      = 'white-space:pre-wrap;word-break:break-all;background:#f6f7f7;border:1px solid #dcdcde;padding:8px 10px;max-width:60rem;font-size:12px;';
+
+		echo '<p><strong>' . esc_html__( 'The headers your homepage should carry', 'make-my-site-agent-ready' ) . '</strong></p><ul style="margin-top:0;">';
+		foreach ( $links as $link ) {
+			$gone = in_array( $link, $missing, true );
+			echo '<li><code>' . esc_html( $link ) . '</code>' . ( $gone ? ' <em>' . esc_html__( '(missing from the cached page)', 'make-my-site-agent-ready' ) . '</em>' : '' ) . '</li>';
+		}
+		echo '</ul>';
+		echo '<p>' . esc_html__( 'Add them at server level, so they go out with every response, cached or not. Use the one that matches your setup, or send it to your host. If you switch a feature on or off later, run this check again: the lines change with it.', 'make-my-site-agent-ready' ) . '</p>';
+
+		echo '<p><strong>' . esc_html__( 'Apache (most shared hosting): add to the top of .htaccess', 'make-my-site-agent-ready' ) . '</strong></p>';
+		echo '<pre style="' . esc_attr( $pre ) . '">' . esc_html( $snippets['apache'] ) . '</pre>';
+		echo '<p><strong>' . esc_html__( 'nginx: add inside the site\'s server block, then reload nginx', 'make-my-site-agent-ready' ) . '</strong></p>';
+		echo '<pre style="' . esc_attr( $pre ) . '">' . esc_html( $snippets['nginx'] ) . '</pre>';
+		echo '<p class="description">' . esc_html__( 'Pages WordPress builds itself will then carry each link twice on nginx. That is harmless.', 'make-my-site-agent-ready' ) . '</p>';
+		echo '<p><strong>' . esc_html__( 'Cloudflare: a Response Header Transform Rule that adds a header named Link with this value', 'make-my-site-agent-ready' ) . '</strong></p>';
+		echo '<pre style="' . esc_attr( $pre ) . '">' . esc_html( $snippets['cloudflare'] ) . '</pre>';
+		echo '<p class="description">' . esc_html__( 'Choose Add, not Set: Set replaces the header WordPress sends, which would also drop each page\'s own Markdown link.', 'make-my-site-agent-ready' ) . '</p>';
 	}
 
 	/**

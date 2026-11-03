@@ -53,19 +53,47 @@ class MMSAR_Agent_Overview {
 
 	/**
 	 * The traffic mix's groups, in stacking order from the baseline up.
+	 *
+	 * Regrouped in 1.72.0 (Miriam, 2026-11-03) from people / search & SEO / AI / other bots, so
+	 * the chart answers who is legitimate: people; agents that named themselves (AI training, AI
+	 * search, AI assistants); other bots that named themselves (search engines, SEO tools,
+	 * scanners, monitoring and the rest); and everything else, which is unnamed scripts and
+	 * crawlers plus every Spoofed request. Spoofed requests were left out of this chart until then.
+	 *
+	 * Identified means named and not caught faking it, not verified: plenty of real AI crawlers
+	 * publish no way to check them, and putting those beside the spoofers would read "can't be
+	 * checked" as "fake", which the log never does.
 	 */
-	const MIX_GROUPS = array( 'people', 'search', 'ai', 'other' );
+	const MIX_GROUPS = array( 'people', 'agents', 'known', 'rest' );
 
 	/**
-	 * Which mix group a crawler category belongs to. Anything not listed, and anything a crawler
-	 * category does not name, is `other` (or `people`, for an unrecognised browser).
+	 * The crawler categories counted as identified agents. Every other recognised category is
+	 * `known`.
 	 */
-	const MIX_OF_CATEGORY = array(
-		'ai-training'   => 'ai',
-		'ai-search'     => 'ai',
-		'ai-assistant'  => 'ai',
-		'search-engine' => 'search',
-		'seo-tool'      => 'search',
+	const AGENT_CATEGORIES = array( 'ai-training', 'ai-search', 'ai-assistant' );
+
+	/**
+	 * What-agents-fetched groups, in stacking order from the baseline up (1.72.0).
+	 *
+	 * The robots.txt file is its own group (Miriam, 2026-11-03): it predates agents and is not written for
+	 * them, but many agents start there and it carries the content signals, so it is neither an
+	 * agent file nor an ordinary page.
+	 */
+	const FETCH_GROUPS = array( 'files', 'robots', 'pages', 'notfound' );
+
+	/**
+	 * Which fetch group a surface category belongs to. MCP and WebMCP calls count as agent files:
+	 * they are agent-facing surfaces, and splitting them out would leave a band too thin to read.
+	 */
+	const FETCH_OF_CATEGORY = array(
+		'docs'     => 'files',
+		'markdown' => 'files',
+		'mcp'      => 'files',
+		'webmcp'   => 'files',
+		'robots'   => 'robots',
+		'html'     => 'pages',
+		'feed'     => 'pages',
+		'notfound' => 'notfound',
 	);
 
 	/**
@@ -77,11 +105,13 @@ class MMSAR_Agent_Overview {
 	 * @param array $ctx  `today` (Y-m-d, site timezone), `has_previous` (bool: the log reaches back
 	 *                    over the whole previous period), `referrals` (`now`, `previous`, `shown`),
 	 *                    `people_logged` (bool: every page view is being recorded).
-	 * @param array $mix  The whole log over this period by site day and group: `day`, `group` (one
-	 *                    of MIX_GROUPS), `n`. Spoofed rows already left out by the loader.
-	 * @return array{totals: array, daily: array, agents: array, more_agents: int, purposes: array, has_previous: bool, mix: array}
+	 * @param array $mix     The whole log over this period by site day and group: `day`, `group`
+	 *                       (one of MIX_GROUPS), `n`, Spoofed rows included (in `rest`).
+	 * @param array $fetched Identified agents' requests this period by site day and surface
+	 *                       category: `day`, `category`, `n`. Spoofed rows left out by the loader.
+	 * @return array{totals: array, daily: array, agents: array, more_agents: int, purposes: array, has_previous: bool, mix: array, fetched: array}
 	 */
-	public static function compute( array $rows, array $ctx, array $mix = array() ) {
+	public static function compute( array $rows, array $ctx, array $mix = array(), array $fetched = array() ) {
 		$today = (string) $ctx['today'];
 		$days  = array();
 		for ( $i = self::WINDOW_DAYS - 1; $i >= 0; $i-- ) {
@@ -201,7 +231,31 @@ class MMSAR_Agent_Overview {
 			'purposes'     => $purposes,
 			'has_previous' => $has_previous,
 			'mix'          => self::compute_mix( $mix, $days, ! empty( $ctx['people_logged'] ) ),
+			'fetched'      => self::compute_fetched( $fetched, $days ),
 		);
+	}
+
+	/**
+	 * What identified agents fetched this period, split four ways, per day and in total.
+	 *
+	 * @param array    $fetched Rows of `day`, `category` (a surface category), `n`.
+	 * @param string[] $days    The period's days, oldest first.
+	 * @return array{groups: string[], daily: array<string, array<string, int>>, totals: array<string, int>, total: int}
+	 */
+	public static function compute_fetched( array $fetched, array $days ) {
+		$rows = array();
+		foreach ( $fetched as $r ) {
+			$category = (string) $r['category'];
+			if ( ! isset( self::FETCH_OF_CATEGORY[ $category ] ) ) {
+				continue;
+			}
+			$rows[] = array(
+				'day'   => (string) $r['day'],
+				'group' => self::FETCH_OF_CATEGORY[ $category ],
+				'n'     => (int) $r['n'],
+			);
+		}
+		return self::tally( $rows, $days, self::FETCH_GROUPS );
 	}
 
 	/**
@@ -219,10 +273,22 @@ class MMSAR_Agent_Overview {
 	 */
 	public static function compute_mix( array $mix, array $days, $people_logged ) {
 		$groups = $people_logged ? self::MIX_GROUPS : array_values( array_diff( self::MIX_GROUPS, array( 'people' ) ) );
+		return self::tally( $mix, $days, $groups );
+	}
+
+	/**
+	 * Rows of `day`, `group`, `n` summed per day and group, every day and group present.
+	 *
+	 * @param array    $rows   Rows; a day outside the period or an unknown group is skipped.
+	 * @param string[] $days   The period's days, oldest first.
+	 * @param string[] $groups The groups, in stacking order.
+	 * @return array{groups: string[], daily: array<string, array<string, int>>, totals: array<string, int>, total: int}
+	 */
+	private static function tally( array $rows, array $days, array $groups ) {
 		$zero   = array_fill_keys( $groups, 0 );
 		$daily  = array_fill_keys( $days, $zero );
 		$totals = $zero;
-		foreach ( $mix as $r ) {
+		foreach ( $rows as $r ) {
 			$day   = (string) $r['day'];
 			$group = (string) $r['group'];
 			if ( ! isset( $daily[ $day ] ) || ! isset( $zero[ $group ] ) ) {
@@ -240,20 +306,27 @@ class MMSAR_Agent_Overview {
 	}
 
 	/**
-	 * The mix group for a stored agent value and client type.
+	 * The mix group for a stored agent value, client type and verdict.
+	 *
+	 * The SQL in load_mix() applies the same rules in the same order; this is the reference the
+	 * tests hold them to.
 	 *
 	 * @param string $category    Crawler category of the agent, '' or `unrecognised` when none.
 	 * @param string $client_type Stored client type.
+	 * @param string $verified    Stored verdict.
 	 * @return string One of MIX_GROUPS.
 	 */
-	public static function mix_group( $category, $client_type ) {
-		if ( isset( self::MIX_OF_CATEGORY[ $category ] ) ) {
-			return self::MIX_OF_CATEGORY[ $category ];
+	public static function mix_group( $category, $client_type, $verified = '' ) {
+		if ( MMSAR_Agent_Log_Verify::FAILED === $verified ) {
+			return 'rest';
+		}
+		if ( in_array( $category, self::AGENT_CATEGORIES, true ) ) {
+			return 'agents';
 		}
 		if ( '' !== (string) $category && MMSAR_Agent_Log::CRAWLER_UNRECOGNISED !== $category ) {
-			return 'other';
+			return 'known';
 		}
-		return MMSAR_Agent_Log::CLIENT_BROWSER === $client_type ? 'people' : 'other';
+		return MMSAR_Agent_Log::CLIENT_BROWSER === $client_type ? 'people' : 'rest';
 	}
 
 	/**
@@ -266,12 +339,31 @@ class MMSAR_Agent_Overview {
 		switch ( $group ) {
 			case 'people':
 				return __( 'People (browsers)', 'make-my-site-agent-ready' );
-			case 'search':
-				return __( 'Search & SEO', 'make-my-site-agent-ready' );
-			case 'ai':
-				return __( 'AI agents', 'make-my-site-agent-ready' );
+			case 'agents':
+				return __( 'Identified agents', 'make-my-site-agent-ready' );
+			case 'known':
+				return __( 'Other known bots', 'make-my-site-agent-ready' );
 			default:
-				return __( 'Other bots & scripts', 'make-my-site-agent-ready' );
+				return __( 'Unidentified or spoofed', 'make-my-site-agent-ready' );
+		}
+	}
+
+	/**
+	 * Label for a fetch group.
+	 *
+	 * @param string $group One of FETCH_GROUPS.
+	 * @return string
+	 */
+	public static function fetch_label( $group ) {
+		switch ( $group ) {
+			case 'files':
+				return __( 'Agent files', 'make-my-site-agent-ready' );
+			case 'robots':
+				return __( 'robots.txt', 'make-my-site-agent-ready' );
+			case 'pages':
+				return __( 'Site pages', 'make-my-site-agent-ready' );
+			default:
+				return __( 'Not found', 'make-my-site-agent-ready' );
 		}
 	}
 
@@ -367,7 +459,7 @@ class MMSAR_Agent_Overview {
 		$offset = (int) wp_timezone()->getOffset( new DateTimeImmutable( 'now' ) );
 		$today  = gmdate( 'Y-m-d', time() + $offset );
 
-		$result            = self::compute( self::load_rows( $today, $offset ), self::load_context( $today, $offset ), self::load_mix( $today, $offset ) );
+		$result            = self::compute( self::load_rows( $today, $offset ), self::load_context( $today, $offset ), self::load_mix( $today, $offset ), self::load_fetched( $today, $offset ) );
 		$result['version'] = MMSAR_VERSION;
 		set_transient( self::CACHE_KEY, $result, HOUR_IN_SECONDS );
 		return $result;
@@ -438,12 +530,53 @@ class MMSAR_Agent_Overview {
 	}
 
 	/**
-	 * Every non-Spoofed request this period, by site day and mix group.
+	 * The UTC moment this period starts: midnight, site time, 29 days before today.
+	 *
+	 * @param string $today  Today, site time.
+	 * @param int    $offset Site offset from UTC in seconds.
+	 * @return string Stored datetime format.
+	 */
+	private static function period_start( $today, $offset ) {
+		return gmdate( 'Y-m-d H:i:s', strtotime( $today . ' 00:00:00 UTC' ) - ( self::WINDOW_DAYS - 1 ) * DAY_IN_SECONDS - $offset );
+	}
+
+	/**
+	 * MD5s of the agent values seen since a moment, sorted into identified agents and other known
+	 * bots. Unrecognised values are in neither: the queries decide those by client type.
+	 *
+	 * @param string $since Stored-format UTC datetime.
+	 * @return array{agents: string[], known: string[]}
+	 */
+	private static function named_lists( $since ) {
+		static $memo = array();
+		if ( isset( $memo[ $since ] ) ) {
+			return $memo[ $since ];
+		}
+		global $wpdb;
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Reading this plugin's own table; the result is cached for an hour.
+		$values = $wpdb->get_col( $wpdb->prepare( 'SELECT DISTINCT agent FROM %i WHERE logged_at >= %s', MMSAR_Agent_Log::table(), $since ) );
+		$lists  = array(
+			'agents' => array(),
+			'known'  => array(),
+		);
+		foreach ( (array) $values as $agent ) {
+			$group = self::mix_group( MMSAR_Agent_Log::crawler_category( $agent ), '' );
+			if ( isset( $lists[ $group ] ) ) {
+				$lists[ $group ][] = md5( $agent );
+			}
+		}
+		$memo[ $since ] = $lists;
+		return $lists;
+	}
+
+	/**
+	 * Every request this period, by site day and mix group.
 	 *
 	 * The table holds a row per request, people's page views included, so the grouping happens in
 	 * SQL: the distinct agent values are sorted into groups in PHP first, and the query matches each
-	 * row's agent against those lists by MD5, falling back to its client type. Only the per-day,
-	 * per-group counts come back.
+	 * row's agent against those lists by MD5, falling back to its client type. A Spoofed row goes
+	 * to `rest` before anything else, as in mix_group(). Only the per-day, per-group counts come
+	 * back.
 	 *
 	 * @param string $today  Today, site time.
 	 * @param int    $offset Site offset from UTC in seconds.
@@ -454,42 +587,27 @@ class MMSAR_Agent_Overview {
 			return array();
 		}
 		global $wpdb;
-		$table = MMSAR_Agent_Log::table();
-		$since = gmdate( 'Y-m-d H:i:s', strtotime( $today . ' 00:00:00 UTC' ) - ( self::WINDOW_DAYS - 1 ) * DAY_IN_SECONDS - $offset );
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Reading this plugin's own table; the result is cached for an hour.
-		$agents = $wpdb->get_col( $wpdb->prepare( 'SELECT DISTINCT agent FROM %i WHERE logged_at >= %s', $table, $since ) );
-		$lists  = array(
-			'ai'     => array(),
-			'search' => array(),
-			'other'  => array(),
-		);
-		foreach ( (array) $agents as $agent ) {
-			$category = MMSAR_Agent_Log::crawler_category( $agent );
-			if ( '' === $category || MMSAR_Agent_Log::CRAWLER_UNRECOGNISED === $category ) {
-				continue; // Unrecognised: the query decides by client type.
-			}
-			$lists[ self::mix_group( $category, '' ) ][] = md5( $agent );
-		}
+		$since = self::period_start( $today, $offset );
+		$lists = self::named_lists( $since );
 		// FIND_IN_SET against an empty list matches nothing, which is what an empty group should do.
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- As above.
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Reading this plugin's own table; the result is cached for an hour.
 		$rows = $wpdb->get_results(
 			$wpdb->prepare(
 				'SELECT DATE( DATE_ADD( logged_at, INTERVAL %d SECOND ) ) AS day,'
-				. ' CASE WHEN FIND_IN_SET( MD5( agent ), %s ) THEN %s WHEN FIND_IN_SET( MD5( agent ), %s ) THEN %s WHEN FIND_IN_SET( MD5( agent ), %s ) THEN %s WHEN client_type = %s THEN %s ELSE %s END AS grp,'
-				. ' COUNT(*) AS n FROM %i WHERE logged_at >= %s AND ( verified IS NULL OR verified <> %s ) GROUP BY day, grp',
+				. ' CASE WHEN verified = %s THEN %s WHEN FIND_IN_SET( MD5( agent ), %s ) THEN %s WHEN FIND_IN_SET( MD5( agent ), %s ) THEN %s WHEN client_type = %s THEN %s ELSE %s END AS grp,'
+				. ' COUNT(*) AS n FROM %i WHERE logged_at >= %s GROUP BY day, grp',
 				$offset,
-				implode( ',', $lists['ai'] ),
-				'ai',
-				implode( ',', $lists['search'] ),
-				'search',
-				implode( ',', $lists['other'] ),
-				'other',
+				MMSAR_Agent_Log_Verify::FAILED,
+				'rest',
+				implode( ',', $lists['agents'] ),
+				'agents',
+				implode( ',', $lists['known'] ),
+				'known',
 				MMSAR_Agent_Log::CLIENT_BROWSER,
 				'people',
-				'other',
-				$table,
-				$since,
-				MMSAR_Agent_Log_Verify::FAILED
+				'rest',
+				MMSAR_Agent_Log::table(),
+				$since
 			),
 			ARRAY_A
 		);
@@ -502,6 +620,21 @@ class MMSAR_Agent_Overview {
 			);
 		}
 		return $out;
+	}
+
+	/**
+	 * What identified agents fetched this period, by site day and surface category.
+	 *
+	 * @param string $today  Today, site time.
+	 * @param int    $offset Site offset from UTC in seconds.
+	 * @return array
+	 */
+	private static function load_fetched( $today, $offset ) {
+		if ( ! MMSAR_Agent_Log::table_exists() ) {
+			return array();
+		}
+		$since = self::period_start( $today, $offset );
+		return MMSAR_Agent_Log::daily_categories_for_agents( $since, $offset, self::named_lists( $since )['agents'] );
 	}
 
 	/**

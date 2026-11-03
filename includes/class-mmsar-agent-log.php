@@ -1892,6 +1892,69 @@ class MMSAR_Agent_Log {
 	}
 
 	/**
+	 * Requests from a set of agents by site day and surface category, Spoofed rows left out.
+	 *
+	 * Feeds the Summary's "What agents fetched" chart (1.72.0). The same CASE expression as every
+	 * other category query, so the chart and the filters can never disagree on what a category is.
+	 *
+	 * @param string   $since  Stored-format UTC datetime to count from.
+	 * @param int      $offset Site offset from UTC in seconds, so days are the site's days.
+	 * @param string[] $agents MD5s of the stored agent values to count.
+	 * @return array[] Rows of `day`, `category` and `n`.
+	 */
+	public static function daily_categories_for_agents( $since, $offset, array $agents ) {
+		global $wpdb;
+		if ( ! $agents || ! self::table_exists() ) {
+			return array();
+		}
+		$cat = self::category_patterns();
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- This plugin's own table; the caller caches the result for an hour.
+		$rows = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT DATE( DATE_ADD( logged_at, INTERVAL %d SECOND ) ) AS day,
+				       CASE WHEN surface = %s OR ( surface LIKE %s AND ( detail = %s OR detail LIKE %s ) ) THEN 'robots'
+				            WHEN surface = %s THEN 'feed'
+				            WHEN surface = %s THEN 'webmcp'
+				            WHEN surface = %s THEN 'mcp'
+				            WHEN surface LIKE %s THEN 'html'
+				            WHEN surface LIKE %s THEN 'markdown'
+				            WHEN surface LIKE %s THEN 'notfound'
+				            ELSE 'docs' END AS category,
+				       COUNT(*) AS n
+				FROM %i
+				WHERE logged_at >= %s AND FIND_IN_SET( MD5( agent ), %s ) > 0 AND ( verified IS NULL OR verified <> %s )
+				GROUP BY day, category",
+				(int) $offset,
+				$cat['robots'],
+				$cat['html'],
+				$cat['robots_legacy'],
+				$cat['robots_query'],
+				$cat['feed'],
+				$cat['webmcp'],
+				$cat['mcp'],
+				$cat['html'],
+				$cat['markdown'],
+				$cat['notfound'],
+				self::table(),
+				(string) $since,
+				implode( ',', $agents ),
+				MMSAR_Agent_Log_Verify::FAILED
+			),
+			ARRAY_A
+		);
+		$out  = array();
+		foreach ( (array) $rows as $r ) {
+			$out[] = array(
+				'day'      => (string) $r['day'],
+				'category' => (string) $r['category'],
+				'n'        => (int) $r['n'],
+			);
+		}
+		return $out;
+	}
+
+	/**
 	 * Paths that produced a 404, most-asked-for first.
 	 *
 	 * A count of 404s says agents are asking for something that is not there; only the paths say
@@ -2750,7 +2813,7 @@ class MMSAR_Agent_Log {
 	 * The values the category CASE compares against, in the order it asks for them.
 	 *
 	 * The CASE itself has to be a literal in every query that uses it — the statement must be a
-	 * fixed string — so it is written out five times and a test asserts the five are identical.
+	 * fixed string — so it is written out six times and a test asserts the six are identical.
 	 * What it compares against is defined once, here. The order the values are passed in is:
 	 * robots, html, robots_legacy, robots_query, feed, webmcp, mcp, html, markdown, notfound.
 	 *
@@ -3446,6 +3509,12 @@ class MMSAR_Agent_Log {
 		// the path is caller-supplied. Recording it a second time here would duplicate the row and,
 		// worse, put that unbounded path into this surface's throttle key.
 		if ( is_404() ) {
+			return;
+		}
+
+		// The Link header check requests the homepage three times; that is the site talking to
+		// itself, not a visitor.
+		if ( MMSAR_Link_Check::is_own_request() ) {
 			return;
 		}
 

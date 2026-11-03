@@ -2,6 +2,13 @@
 
 All notable changes to Make My Site Agent-Ready.
 
+## 1.72.0 — 2026-11-03
+
+- New: a Link header check under Settings > Agent-Ready, also in Site Health once a week. Some page caches (WP Rocket, WP Fastest Cache, Cache Enabler and similar) save only the page and drop the response headers, so agents and readiness checkers never see this plugin's Link headers. The check finds out, and when it happens gives you the lines to add them at server level for Apache, nginx or Cloudflare. Thanks to Henk van den Bor for the report ([#1](https://github.com/miriamschwab/make-my-site-agent-ready/issues/1)).
+- New: the Agent Log Summary has a second chart, "What agents fetched": requests from identified agents split into agent files, robots.txt, your ordinary pages and not found, per day for 30 days.
+- Changed: "Who is visiting" now splits traffic into People, Identified agents, Other known bots, and Unidentified or spoofed. Spoofed requests are now counted there, in the last group, instead of being left out.
+- Changed: `/auth.md` now opens with the heading "auth.md for <your site name>", the form readiness checkers look for.
+
 ## 1.71.1 — 2026-11-02
 
 - Changed: the Logs table is easier to read. Each time fits on one line ("Nov 2, 17:20", the full time on hover), the Accept detail sits on a smaller second line under Requested, the client is one word (Crawler, Browser, Script), signals appear under it instead of in a column of their own, and long details such as query strings are cut to the column with the whole value on hover.
