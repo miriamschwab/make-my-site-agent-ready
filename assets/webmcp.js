@@ -31,10 +31,32 @@
       .join('\n\n');
   }
 
-  // Where a tool has structured data, the agent gets it beside the text, under MCP's own name.
-  // Chrome passes an object to the agent as a JSON string. Everything else stays plain text.
+  // A failure, as an object rather than a string, so an agent can never read it as a result.
+  // `error` is the site's own message, unchanged: an unknown topic comes back with the topics that
+  // do exist, a rate limit with the wait. `code` is the JSON-RPC code, or null when there is none.
+  // `retryable` says whether the same call can work later: a rate limit (-32000), or a site that
+  // could not be reached or answered with a server error. `kind` says what failed:
+  //   tool     the tool ran and reported a problem with the call (MCP's isError). Not retryable as
+  //            it is, but the message says what to send instead, so the agent should change the
+  //            arguments and call again.
+  //   rpc      the server refused the call with a JSON-RPC error.
+  //   http     the site answered with something that is not JSON-RPC, such as an HTML error page.
+  //   network  the site could not be reached.
+  function failure(kind, message, code, retryable) {
+    return {
+      error: message || 'The site could not run this tool.',
+      code: typeof code === 'number' ? code : null,
+      retryable: retryable,
+      kind: kind
+    };
+  }
+
+  // A tool's result. Where a tool has structured data, the agent gets it beside the text, under
+  // MCP's own name; Chrome passes an object to the agent as a JSON string. A result the tool marked
+  // as an error is a failure like any other.
   function outputOf(result) {
-    var text = textOf(result) || (result && result.isError ? 'The site could not run this tool.' : '');
+    var text = textOf(result);
+    if (result && result.isError) return failure('tool', text, null, false);
     var data = result && result.structuredContent;
     return data && typeof data === 'object' ? { text: text, structuredContent: data } : text;
   }
@@ -59,18 +81,27 @@
       })
     }).then(function (response) {
       return response.json().catch(function () {
-        return { error: { message: 'The site answered with HTTP ' + response.status + ' and no result.' } };
+        // Not JSON-RPC at all, such as a host's HTML error page. Worth retrying only when the
+        // status says the site was busy or broken rather than that the request was wrong.
+        return {
+          bridgeFailure: failure(
+            'http',
+            'The site answered with HTTP ' + response.status + ' and no result.',
+            null,
+            response.status === 429 || response.status >= 500
+          )
+        };
       });
     }).then(function (message) {
-      // Errors are returned as text, never thrown. Chrome replaces a thrown error's message with a
-      // generic "invocation failed", and the site's own message is the useful part: an unknown
-      // topic comes back with the list of topics that do exist, a rate limit with the wait.
+      // Errors are returned, never thrown: Chrome replaces a thrown error's message with a generic
+      // "invocation failed", and the site's own message is the useful part.
+      if (message && message.bridgeFailure) return message.bridgeFailure;
       if (message && message.error) {
-        return message.error.message || 'The site could not run this tool.';
+        return failure('rpc', message.error.message, message.error.code, message.error.code === -32000);
       }
       return outputOf(message && message.result);
     }, function () {
-      return 'The site could not be reached, so the tool did not run.';
+      return failure('network', 'The site could not be reached, so the tool did not run.', null, true);
     });
   }
 

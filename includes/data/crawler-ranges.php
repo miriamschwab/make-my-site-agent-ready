@@ -36,7 +36,7 @@ return array(
 	// real desktop-chat and claude.ai fetches into accusations of forgery.
 	// Source: https://claude.com/crawling/bots.json.
 	'anthropic'          => array(
-		'captured' => '2026-10-31',
+		'captured' => '2026-11-10',
 		'v4'       => array(
 			'34.152.124.140/32',
 			'34.153.21.190/32',
@@ -64,18 +64,27 @@ return array(
 	// 160.79.106.x and read `failed`. Scoped to Claude-User because tool calls are what it is
 	// documented for; ClaudeBot from here stays `failed` (Anthropic withdrew 160.79.106.x/28 from its
 	// crawler list on 2026-10-20, so a crawler claiming it is not one).
+	//
+	// 2026-11-10: Anthropic added a second block, 153.61.208.0/20 (4,096 addresses), between the
+	// 2026-11-02 and 2026-11-09 watches; 2,048 -> 6,144 addresses, nothing withdrawn. No logged row
+	// was inside it on 2026-11-09. Only the Outbound section is read: the page's Inbound and
+	// Phased-out sections are other addresses.
 	// Source: https://platform.claude.com/docs/en/api/ip-addresses (Outbound IP addresses, IPv4).
 	'anthropic-outbound' => array(
-		'captured' => '2026-10-31',
+		'captured' => '2026-11-10',
 		'v4'       => array(
+			'153.61.208.0/20',
 			'160.79.104.0/21',
 		),
 		'v6'       => array(),
 	),
 	// OpenAI — GPTBot, OAI-SearchBot, ChatGPT-User.
+	//
+	// 2026-11-10: chatgpt-user.json (creationTime 2026-11-06) added 51.57.158.96/27; 73,776 -> 73,808
+	// addresses across the three files, nothing withdrawn.
 	// Source: https://openai.com/gptbot.json, https://openai.com/searchbot.json, https://openai.com/chatgpt-user.json.
 	'openai'             => array(
-		'captured' => '2026-10-31',
+		'captured' => '2026-11-10',
 		'v4'       => array(
 			'4.151.71.176/28',
 			'4.151.119.48/28',
@@ -210,6 +219,7 @@ return array(
 			'51.8.155.48/28',
 			'51.8.155.112/28',
 			'51.57.0.96/28',
+			'51.57.158.96/27',
 			'51.59.24.64/28',
 			'51.59.24.80/28',
 			'51.59.48.80/28',
@@ -369,7 +379,7 @@ return array(
 	// Perplexity — PerplexityBot, Perplexity-User.
 	// Source: https://www.perplexity.ai/perplexitybot.json, https://www.perplexity.ai/perplexity-user.json.
 	'perplexity'         => array(
-		'captured' => '2026-10-31',
+		'captured' => '2026-11-10',
 		'v4'       => array(
 			'3.222.232.239/32',
 			'3.224.62.45/32',
@@ -388,7 +398,7 @@ return array(
 	// they ever diverge, split this into two groups rather than unioning them.
 	// Source: https://duckduckgo.com/duckassistbot.json, https://duckduckgo.com/duckduckbot.json.
 	'duckduckgo'         => array(
-		'captured' => '2026-10-31',
+		'captured' => '2026-11-10',
 		'v4'       => array(
 			'4.144.148.23/32',
 			'4.144.182.50/32',
@@ -885,7 +895,7 @@ return array(
 	// reverse DNS — 35.198.113.100 has no PTR record. A single address is unusually narrow, so
 	// expect this one to churn: re-fetch at release time like the rest.
 	'linkup'             => array(
-		'captured' => '2026-10-31',
+		'captured' => '2026-11-10',
 		'v4'       => array(
 			'35.198.113.100/32',
 		),
@@ -893,7 +903,7 @@ return array(
 	),  // SeznamBot.
 	// Source: https://search.seznam.cz/ipranges/seznambot.json.
 	'seznam'             => array(
-		'captured' => '2026-10-31',
+		'captured' => '2026-11-10',
 		'v4'       => array(
 			'77.75.72.26/32',
 			'77.75.73.26/32',
@@ -994,7 +1004,7 @@ return array(
 	// MojeekBot.
 	// Source: https://www.mojeek.com/mojeekbot.json.
 	'mojeek'             => array(
-		'captured' => '2026-10-31',
+		'captured' => '2026-11-10',
 		'v4'       => array(
 			'5.102.173.64/28',
 		),
@@ -1003,7 +1013,7 @@ return array(
 	// SERankingBacklinksBot. Published as a list of bare addresses, stored here as /32s.
 	// Source: https://api.seranking.com/backlinks-bot-ips.
 	'seranking'          => array(
-		'captured' => '2026-10-31',
+		'captured' => '2026-11-10',
 		'v4'       => array(
 			'95.217.114.159/32',
 			'95.217.114.179/32',
@@ -1094,7 +1104,7 @@ return array(
 	// ShapBot.
 	// Source: https://docs.parallel.ai/resources/shapbot.json.
 	'parallel'           => array(
-		'captured' => '2026-10-31',
+		'captured' => '2026-11-10',
 		'v4'       => array(
 			'23.251.146.115/32',
 			'34.9.172.22/32',
@@ -1120,7 +1130,7 @@ return array(
 	// crawl.commoncrawl.org is IPv4-only by Common Crawl's own statement, so for an IPv6 caller
 	// this list is the only evidence there is.
 	'commoncrawl'        => array(
-		'captured' => '2026-10-31',
+		'captured' => '2026-11-10',
 		'v4'       => array(
 			'3.41.188.32/29',
 			'18.97.9.168/29',
@@ -1146,7 +1156,7 @@ return array(
 	// the /24 below. A regex over the page reads both as new prefixes, and bundling the first would
 	// verify Googlebot as YouBot. Caught 2026-10-21.
 	'youcom'             => array(
-		'captured' => '2026-10-31',
+		'captured' => '2026-11-10',
 		'v4'       => array(
 			'68.67.112.0/24',
 		),
@@ -1155,7 +1165,7 @@ return array(
 	// SofyaBot.
 	// Source: https://sofya.co/bot/ips.json.
 	'sofya'              => array(
-		'captured' => '2026-10-31',
+		'captured' => '2026-11-10',
 		'v4'       => array(
 			'159.195.72.86/32',
 			'159.195.250.248/32',
@@ -1173,7 +1183,7 @@ return array(
 	// bot), so no verdict could be reached on them. The IPv6 entries are the page's /64s, written
 	// compressed.
 	'xpanse'             => array(
-		'captured' => '2026-10-31',
+		'captured' => '2026-11-10',
 		'v4'       => array(
 			'35.203.210.0/23',
 			'144.86.173.0/24',
@@ -1196,7 +1206,7 @@ return array(
 	// Linkup precedent: a single published /32 is still the operator's only method.
 	// Source: https://knowngood.sh/bot/ips.json.
 	'knowngood'          => array(
-		'captured' => '2026-10-31',
+		'captured' => '2026-11-10',
 		'v4'       => array(
 			'3.216.221.135/32',
 		),
@@ -1205,7 +1215,7 @@ return array(
 	// Inoreader — feed fetcher. Plain text, one CIDR per line.
 	// Source: https://www.inoreader.com/.well-known/ip_list.txt.
 	'inoreader'          => array(
-		'captured' => '2026-10-31',
+		'captured' => '2026-11-10',
 		'v4'       => array(
 			'45.76.28.241/32',
 			'84.242.180.248/29',
@@ -1230,7 +1240,7 @@ return array(
 	// Drop anything appearing in that field. Caught 2026-10-21; the list itself was unchanged.
 	// Source: https://developer.amazon.com/amazonbot/searchbot-ip-addresses/.
 	'amazon-searchbot'   => array(
-		'captured' => '2026-10-31',
+		'captured' => '2026-11-10',
 		'v4'       => array(
 			'3.82.67.224/32',
 			'3.82.90.168/32',
@@ -2056,7 +2066,7 @@ return array(
 	// which third parties run on their own servers. Bundled on the Known Good precedent.
 	// Source: https://cl0q.com/bot/ips.json.
 	'cl0q'               => array(
-		'captured' => '2026-10-31',
+		'captured' => '2026-11-10',
 		'v4'       => array(
 			'143.110.230.182/32',
 		),
@@ -2067,7 +2077,7 @@ return array(
 	// precedent. The page's bot.alpost.ch is a forward record; the PTR is not documented and moved.
 	// Source: https://alpost.ch/en/bot/.
 	'alpost'             => array(
-		'captured' => '2026-10-31',
+		'captured' => '2026-11-10',
 		'v4'       => array(
 			'46.105.236.247/32',
 		),
@@ -2079,7 +2089,7 @@ return array(
 	// requests from outside the list have been robots.txt fetches.
 	// Source: https://cs.kakao.com/helps_html/1073213012.
 	'kakao'              => array(
-		'captured' => '2026-10-31',
+		'captured' => '2026-11-10',
 		'v4'       => array(
 			'121.53.90.224/27',
 			'121.53.91.224/27',
@@ -2104,6 +2114,286 @@ return array(
 			'211.249.246.136/32',
 			'211.249.246.152/32',
 			'211.249.246.168/32',
+		),
+		'v6'       => array(),
+	),
+	// HubSpot — HubSpot Crawler. Added 1.73.0.
+	//
+	// Only the entries HubSpot labels `service: "WEB_SCRAPING"` ("Web crawling and user-generated
+	// traffic"): 36 of the API's 99 entries on 2026-11-10, four /27s and 32 single addresses. The
+	// EMAIL, DNS and API entries are other HubSpot traffic and are deliberately left out. HubSpot says
+	// the ranges "may change over time". No reverse DNS on the addresses checked.
+	// Source: https://api.hubapi.com/meta/network-origins/2026-09/ip-ranges (service WEB_SCRAPING).
+	'hubspot'            => array(
+		'captured' => '2026-11-10',
+		'v4'       => array(
+			'3.125.72.185/32',
+			'3.125.100.85/32',
+			'3.125.129.244/32',
+			'3.126.39.79/32',
+			'3.126.163.49/32',
+			'3.126.182.232/32',
+			'3.127.29.218/32',
+			'3.127.31.193/32',
+			'3.127.53.179/32',
+			'3.127.84.21/32',
+			'3.127.178.149/32',
+			'18.156.57.155/32',
+			'18.157.153.160/32',
+			'18.157.207.111/32',
+			'18.157.238.182/32',
+			'18.157.252.152/32',
+			'18.158.38.39/32',
+			'18.158.189.225/32',
+			'18.159.93.15/32',
+			'18.159.128.28/32',
+			'18.159.155.92/32',
+			'18.159.199.77/32',
+			'18.159.231.78/32',
+			'18.159.234.92/32',
+			'18.184.24.22/32',
+			'18.184.86.102/32',
+			'18.185.234.1/32',
+			'18.192.136.149/32',
+			'18.192.141.124/32',
+			'18.192.172.225/32',
+			'18.192.252.214/32',
+			'18.193.15.23/32',
+			'54.174.58.224/27',
+			'216.157.40.64/27',
+			'216.157.41.64/27',
+			'216.157.42.64/27',
+		),
+		'v6'       => array(),
+	),
+	// Qihoo 360 — 360Spider. Added 1.73.0.
+	//
+	// The page lists six /24s written as wildcards (`a.b.c.*`), each converted to a /24. The only
+	// other address-shaped string on it, 140.0.0.0, is the Chrome version in the documented
+	// user-agent and is dropped. The page says the spider does not support nslookup, so there is no
+	// reverse DNS.
+	// Source: https://www.so.com/help/spider_ip.html.
+	'qihoo360'           => array(
+		'captured' => '2026-11-10',
+		'v4'       => array(
+			'42.236.10.0/24',
+			'42.236.12.0/24',
+			'42.236.17.0/24',
+			'42.236.101.0/24',
+			'180.153.236.0/24',
+			'180.163.220.0/24',
+		),
+		'v6'       => array(),
+	),
+	// River AI — RiverBot. Added 1.73.0. 100 single addresses, creationTime 2026-10-28. RiverBot
+	// also has a reverse-DNS suffix (bot.river.ai), so an address missing from this list falls
+	// through to that check; bundled as well by Miriam's choice (2026-11-10).
+	// Source: https://river.ai/riverbot.json.
+	'riverbot'           => array(
+		'captured' => '2026-11-10',
+		'v4'       => array(
+			'3.93.98.160/32',
+			'3.93.250.231/32',
+			'3.95.52.215/32',
+			'3.208.36.216/32',
+			'3.212.125.112/32',
+			'3.212.178.146/32',
+			'3.215.20.75/32',
+			'18.204.9.215/32',
+			'18.207.140.132/32',
+			'18.211.60.60/32',
+			'18.211.215.167/32',
+			'18.233.127.149/32',
+			'23.20.108.200/32',
+			'23.21.235.195/32',
+			'23.23.110.44/32',
+			'23.23.188.243/32',
+			'32.192.102.131/32',
+			'32.195.253.200/32',
+			'32.196.155.184/32',
+			'32.198.146.93/32',
+			'32.199.240.125/32',
+			'34.202.20.250/32',
+			'34.204.135.227/32',
+			'34.224.189.31/32',
+			'34.224.209.45/32',
+			'34.233.60.111/32',
+			'34.236.4.114/32',
+			'34.239.29.228/32',
+			'35.153.225.43/32',
+			'35.169.134.182/32',
+			'35.174.243.72/32',
+			'35.175.63.111/32',
+			'44.196.81.50/32',
+			'44.196.103.138/32',
+			'44.196.251.186/32',
+			'44.198.80.144/32',
+			'44.198.239.141/32',
+			'44.206.51.141/32',
+			'44.214.86.91/32',
+			'44.217.124.124/32',
+			'44.218.118.104/32',
+			'44.223.191.167/32',
+			'50.16.85.131/32',
+			'52.2.2.171/32',
+			'52.20.50.247/32',
+			'52.20.202.38/32',
+			'52.45.110.3/32',
+			'52.72.41.255/32',
+			'52.202.228.58/32',
+			'54.85.159.65/32',
+			'54.85.238.240/32',
+			'54.87.216.161/32',
+			'54.88.240.213/32',
+			'54.92.135.119/32',
+			'54.144.107.162/32',
+			'54.156.34.153/32',
+			'54.156.132.204/32',
+			'54.162.165.144/32',
+			'54.174.80.121/32',
+			'54.208.50.39/32',
+			'54.227.79.196/32',
+			'54.235.192.125/32',
+			'54.236.230.205/32',
+			'54.237.23.252/32',
+			'54.243.98.208/32',
+			'54.243.195.85/32',
+			'98.85.218.114/32',
+			'98.86.145.131/32',
+			'98.89.8.122/32',
+			'98.90.21.247/32',
+			'98.90.179.129/32',
+			'98.95.144.232/32',
+			'100.25.55.212/32',
+			'100.26.153.137/32',
+			'100.27.180.1/32',
+			'100.29.150.194/32',
+			'100.48.246.58/32',
+			'100.49.175.77/32',
+			'100.56.155.241/32',
+			'100.56.171.162/32',
+			'100.57.78.7/32',
+			'100.58.81.136/32',
+			'100.59.168.160/32',
+			'100.59.243.8/32',
+			'100.62.4.15/32',
+			'100.62.236.218/32',
+			'107.20.191.118/32',
+			'107.23.49.108/32',
+			'174.129.197.73/32',
+			'184.73.234.99/32',
+			'184.193.151.135/32',
+			'184.194.19.199/32',
+			'184.195.192.105/32',
+			'184.195.225.180/32',
+			'184.198.118.231/32',
+			'184.198.130.47/32',
+			'184.198.188.19/32',
+			'184.198.192.197/32',
+			'184.198.233.107/32',
+			'184.198.238.119/32',
+		),
+		'v6'       => array(),
+	),
+	// Lyrenth — AIWebIndex. Added 1.73.0. 22 single addresses, creationTime 2026-08-16. Also has a
+	// reverse-DNS suffix (lyrenth.com), as with RiverBot.
+	// Source: https://lyrenth.com/bot/ip-ranges.json.
+	'lyrenth'            => array(
+		'captured' => '2026-11-10',
+		'v4'       => array(
+			'46.224.73.201/32',
+			'46.225.147.220/32',
+			'49.13.94.158/32',
+			'138.201.157.96/32',
+			'142.132.225.162/32',
+			'152.53.93.229/32',
+			'159.69.116.231/32',
+			'159.69.189.54/32',
+			'168.119.98.242/32',
+			'178.104.212.30/32',
+			'178.105.9.229/32',
+			'178.105.66.244/32',
+			'178.105.70.116/32',
+			'178.105.121.172/32',
+			'178.105.146.59/32',
+			'178.105.195.233/32',
+			'178.105.197.214/32',
+			'178.105.200.108/32',
+			'178.105.207.129/32',
+			'178.105.210.26/32',
+			'178.105.220.145/32',
+			'178.105.223.90/32',
+		),
+		'v6'       => array(),
+	),
+	// Keenable — KeenableBot. Added 1.73.0. 30 single addresses, creationTime 2026-10-09. Keenable
+	// publishes a separate list for Keenable-User, which is not recognised yet and is not bundled.
+	//
+	// `since` is the list's creationTime, in UTC. Keenable's page says it published its address lists
+	// in October 2026, and KeenableBot crawled this site from other Google Cloud addresses before
+	// that: 38 requests from 2026-09-15 to 2026-10-08, none inside the list, while every request
+	// after the list's date is inside it. A list cannot judge a request made before it existed, so
+	// a miss on a request logged before `since` is withheld (`unverifiable`), never `failed`. See
+	// MMSAR_Agent_Log_Verify::list_since() and the decision on it (1.73.0-dev.3).
+	// Source: https://app.keenable.ai/bot/keenablebot.json.
+	'keenable'           => array(
+		'captured' => '2026-11-10',
+		'since'    => '2026-10-09 12:04:36',
+		'v4'       => array(
+			'34.16.102.59/32',
+			'34.42.223.8/32',
+			'34.56.36.185/32',
+			'34.56.228.200/32',
+			'34.56.241.78/32',
+			'34.67.139.73/32',
+			'34.123.210.130/32',
+			'34.123.250.241/32',
+			'34.132.128.17/32',
+			'34.134.69.125/32',
+			'35.188.69.123/32',
+			'35.188.92.138/32',
+			'35.188.220.150/32',
+			'35.194.39.138/32',
+			'35.202.6.174/32',
+			'35.202.16.77/32',
+			'35.202.30.16/32',
+			'35.222.239.11/32',
+			'35.232.42.235/32',
+			'35.255.22.29/32',
+			'35.255.138.62/32',
+			'104.154.246.94/32',
+			'104.197.111.254/32',
+			'104.198.209.18/32',
+			'130.211.118.157/32',
+			'136.65.199.196/32',
+			'136.71.4.21/32',
+			'136.71.136.76/32',
+			'136.113.235.86/32',
+			'136.116.172.161/32',
+		),
+		'v6'       => array(),
+	),
+	// Anthropic's hosted browser — Claude-Agent only. Added 1.73.0.
+	//
+	// Read from a SAIL file (application/sail+toml, draft-kelley-webbotauth-sail-00), parsed as TOML:
+	// the `Claude-Agent` service's prefix sets, here the one set `agentic-browser-use` (9 single IPv4
+	// addresses, no IPv6, `exclusive = true`; the service is `exhaustive = true`; file modified
+	// 2026-10-22). Kept apart from `anthropic` and `anthropic-outbound`, which are documented for
+	// other agents. The file says `expires_after = 3600`: Anthropic expects an hourly re-read, and a
+	// bundled copy goes stale faster than any other list here. Accepted by Miriam on 2026-11-10.
+	// Source: https://claude.com/.well-known/sail.
+	'anthropic-agent'    => array(
+		'captured' => '2026-11-10',
+		'v4'       => array(
+			'34.31.25.14/32',
+			'34.60.73.195/32',
+			'34.66.255.143/32',
+			'34.67.187.248/32',
+			'34.68.65.207/32',
+			'34.70.177.231/32',
+			'34.71.122.171/32',
+			'34.171.207.92/32',
+			'136.71.21.147/32',
 		),
 		'v6'       => array(),
 	),

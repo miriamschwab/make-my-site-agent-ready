@@ -29,7 +29,7 @@ class MMSAR_Agent_Log {
 	 * additive; rows before them read '' and NULL, which the readers treat as "unsigned" and "not
 	 * recorded" respectively.
 	 */
-	const DB_VERSION = 9;
+	const DB_VERSION = 10;
 
 	/**
 	 * How long a caller may go quiet before its next request counts as a new visit, in seconds.
@@ -512,6 +512,53 @@ class MMSAR_Agent_Log {
 		// Headline's company-sourcing crawler (https://headline.com/web-crawler). Guarded in
 		// AGENT_DISCLOSURES, because the name is generic. No verification method is published.
 		'ev-crawler',
+		// Added 1.73.0 from the agent-log-bot-watch reports of 2026-11-02 and 2026-11-09 and a
+		// fresh scan of the live log on 2026-11-10. Appended, for the ordering reason given above
+		// Googlebot.
+		//
+		// HubSpot's crawler (https://knowledge.hubspot.com/customer-agent/troubleshoot-customer-agent-content-source-errors),
+		// which fetches the pages a HubSpot customer adds as content sources for its AI customer
+		// agent. Verified by HubSpot's WEB_SCRAPING ranges; see the `hubspot` group in
+		// includes/data/crawler-ranges.php. `HubSpot DataHub` is a different name and is not
+		// matched by this one.
+		'HubSpot Crawler',
+		// Qihoo 360's search spider (https://www.so.com/help/spider_ip.html). Its token sits at the
+		// end of a full Edge user-agent, past character 80, so it is matched on the raw user-agent
+		// when the request is recorded; rows stored before this release were cut before the token
+		// and cannot be re-matched.
+		'360Spider',
+		// Google's Ads landing-page checker
+		// (https://developers.google.com/search/docs/crawling-indexing/google-special-case-crawlers).
+		// Covers AdsBot-Google-Mobile too, which contains it. Verified by reverse DNS.
+		'AdsBot-Google',
+		// TechLeads' technology profiler (https://techleads.fyi/bot). Recognise only.
+		'TechLeadsBot',
+		// River AI's training crawler (https://river.ai/bot). Verified by reverse DNS and by its
+		// published list.
+		'RiverBot',
+		// Lyrenth's AI-readable web index (https://lyrenth.com/bot). Covers AIWebIndex-Agent too.
+		// Guarded in AGENT_DISCLOSURES, because the name is generic.
+		'AIWebIndex',
+		// SeeMe AI's Baken index (https://baken.dev/bakenbot). Verified by reverse DNS. Its former
+		// name, InkaIndex, is deliberately not recognised (Miriam, 2026-11-10).
+		'BakenBot',
+		// AgentReady's audit tool (https://www.agentready.website/). Recognise only. Below
+		// `AgentReadyScanner` on purpose, since it is a substring of that name, and guarded in
+		// AGENT_DISCLOSURES so an AgentReadyScanner user-agent without Elementor's link is never
+		// stored as this one.
+		'AgentReady',
+		// RankZero's AI-search readiness reader (https://www.rankzero.io/docs/crawler). Recognise
+		// only.
+		'RankZeroBot',
+		// Keenable's search index for AI agents (https://keenable.ai/bot). Verified by its published
+		// list. Its sibling Keenable-User is not recognised yet (Miriam, 2026-11-10).
+		'KeenableBot',
+		// Anthropic's hosted browser, used for agentic browsing in products such as Claude Duet
+		// (https://support.claude.com/en/articles/18234133). It sends an ordinary Chrome user-agent
+		// with `Claude-Agent/1.0` added, and Anthropic says to match the token. Recognising it files
+		// the visit as a crawler rather than a browser, so it never counts as a person in the
+		// Summary. Verified by the SAIL file; see the `anthropic-agent` group.
+		'Claude-Agent',
 	);
 
 	/**
@@ -760,6 +807,24 @@ class MMSAR_Agent_Log {
 		// A venture capital firm looking for companies in home, job and team pages: deal sourcing,
 		// which none of the other tags describes.
 		'ev-crawler'                   => self::CRAWLER_OTHER,
+		// Added 1.73.0; categories as proposed in the 2026-11-02 and 2026-11-09 bot watches, except
+		// TechLeadsBot (Miriam, 2026-11-10).
+		// Fetches the pages a HubSpot customer adds to its AI customer agent: a customer-configured
+		// fetch, the same call as amazon-Quick-on-behalf-of.
+		'HubSpot Crawler'              => self::CRAWLER_AI_ASSISTANT,
+		'360Spider'                    => self::CRAWLER_SEARCH,
+		// Landing-page quality checks for Google Ads, the same call as meta-externalads.
+		'AdsBot-Google'                => self::CRAWLER_OTHER,
+		// Technology profiling for a sales-lead directory, the same call as BitMoversBot.
+		'TechLeadsBot'                 => self::CRAWLER_OTHER,
+		'RiverBot'                     => self::CRAWLER_AI_TRAINING,
+		'AIWebIndex'                   => self::CRAWLER_AI_SEARCH,
+		'BakenBot'                     => self::CRAWLER_AI_SEARCH,
+		'AgentReady'                   => self::CRAWLER_SCANNER,
+		'RankZeroBot'                  => self::CRAWLER_SCANNER,
+		'KeenableBot'                  => self::CRAWLER_AI_SEARCH,
+		// A browser Anthropic runs for a person who asked Claude to do something on the web.
+		'Claude-Agent'                 => self::CRAWLER_AI_ASSISTANT,
 	);
 
 	/**
@@ -834,6 +899,14 @@ class MMSAR_Agent_Log {
 		// sits inside the first 80 characters of the only form seen, which is 76 characters long,
 		// so every stored shape satisfies the guard.
 		'ev-crawler'        => 'headline.com',
+		// Added 1.73.0. Precautionary: a generic name. The domain sits inside the first 80
+		// characters of every documented form.
+		'AIWebIndex'        => 'lyrenth.com',
+		// Added 1.73.0. Required, not precautionary: `AgentReady` is a substring of
+		// `AgentReadyScanner`, so an AgentReadyScanner user-agent that fails its own guard would
+		// otherwise be stored under this name. The domain sits inside the first 80 characters of
+		// the only form seen.
+		'AgentReady'        => 'agentready.website',
 	);
 
 	/**
@@ -945,6 +1018,50 @@ class MMSAR_Agent_Log {
 		if ( $previous > 0 && $previous < 9 ) {
 			self::recheck_failed();
 		}
+		if ( $previous > 0 && $previous < 10 ) {
+			self::withhold_before_lists();
+		}
+	}
+
+	/**
+	 * Turns `failed` rows logged before their judging list existed into `unverifiable` (schema 10).
+	 *
+	 * One-time correction for 1.73.0-dev.3. Re-check deliberately never rewrites a `failed`, so rows
+	 * judged by 1.73.0-dev.2 against Keenable's list, from before Keenable published it, would stay
+	 * accused. apply_verdict() withholds those from now on; this applies the same rule to the rows
+	 * already written, and to nothing else: only `failed` rows of an agent whose list carries a date
+	 * (MMSAR_Agent_Log_Verify::list_since()), and only before that date.
+	 *
+	 * @return int Rows corrected.
+	 */
+	public static function withhold_before_lists() {
+		global $wpdb;
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- This plugin's own table.
+		$agents = $wpdb->get_col(
+			$wpdb->prepare( 'SELECT DISTINCT agent FROM %i WHERE verified = %s', self::table(), MMSAR_Agent_Log_Verify::FAILED )
+		);
+
+		$corrected = 0;
+		foreach ( (array) $agents as $agent ) {
+			$since = MMSAR_Agent_Log_Verify::list_since( (string) $agent );
+			if ( '' === $since ) {
+				continue;
+			}
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Annotating this plugin's own table.
+			$updated    = $wpdb->query(
+				$wpdb->prepare(
+					'UPDATE %i SET verified = %s, verified_at = %s WHERE agent = %s AND verified = %s AND logged_at < %s',
+					self::table(),
+					MMSAR_Agent_Log_Verify::UNVERIFIABLE,
+					current_time( 'mysql', true ),
+					(string) $agent,
+					MMSAR_Agent_Log_Verify::FAILED,
+					$since
+				)
+			);
+			$corrected += is_numeric( $updated ) ? (int) $updated : 0;
+		}
+		return $corrected;
 	}
 
 	/**
@@ -2072,7 +2189,56 @@ class MMSAR_Agent_Log {
 	 * @return int Rows updated.
 	 */
 	public static function apply_verdict( $ip, $agent, $verdict ) {
+		// A miss against a list that did not exist yet is no evidence (1.73.0-dev.3): rows logged
+		// before the list's date are withheld, the rest take the verdict. See list_since().
+		$since = MMSAR_Agent_Log_Verify::list_since( $agent );
+		if ( MMSAR_Agent_Log_Verify::FAILED === $verdict && '' !== $since ) {
+			return self::write_verdict( $ip, $agent, MMSAR_Agent_Log_Verify::verdict_for_row( $verdict, $since, '' ), 'before', $since )
+				+ self::write_verdict( $ip, $agent, $verdict, 'from', $since );
+		}
+		return self::write_verdict( $ip, $agent, $verdict, '', '' );
+	}
+
+	/**
+	 * Writes one verdict to the writable rows of an (ip, agent) pair, optionally bounded in time.
+	 *
+	 * @param string $ip      Stored address.
+	 * @param string $agent   Stored agent value.
+	 * @param string $verdict Verdict to store.
+	 * @param string $bound   '' for every row, 'before' or 'from' to split at $moment.
+	 * @param string $moment  UTC `Y-m-d H:i:s`, used with $bound.
+	 * @return int Rows updated.
+	 */
+	private static function write_verdict( $ip, $agent, $verdict, $bound, $moment ) {
 		global $wpdb;
+
+		if ( 'before' === $bound || 'from' === $bound ) {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Annotating this plugin's own table.
+			$updated = $wpdb->query(
+				$wpdb->prepare(
+					'UPDATE %i SET verified = %s, verified_at = %s
+					WHERE ip = %s AND agent = %s
+					  AND ( verified = %s
+					        OR ( verified = %s AND ( verified_at IS NULL OR verified_at < %s ) ) )
+					  AND ( ( %s = %s AND logged_at < %s ) OR ( %s = %s AND logged_at >= %s ) )',
+					self::table(),
+					mb_substr( (string) $verdict, 0, 12 ),
+					current_time( 'mysql', true ),
+					(string) $ip,
+					(string) $agent,
+					MMSAR_Agent_Log_Verify::PENDING,
+					MMSAR_Agent_Log_Verify::NODNS,
+					self::nodns_retry_cutoff(),
+					$bound,
+					'before',
+					$moment,
+					$bound,
+					'from',
+					$moment
+				)
+			);
+			return is_numeric( $updated ) ? (int) $updated : 0;
+		}
 
 		// Writable states are exactly two: never judged, and judged `nodns` long enough ago to be
 		// due another attempt. `verified`, `failed` and `unverifiable` are untouchable here, which
@@ -2176,7 +2342,7 @@ class MMSAR_Agent_Log {
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- This plugin's own table.
 		$rows = $wpdb->get_results(
 			$wpdb->prepare(
-				'SELECT DISTINCT ip, agent, verified FROM %i WHERE verified IN ( %s, %s )',
+				'SELECT ip, agent, verified, MAX( logged_at ) AS last_at FROM %i WHERE verified IN ( %s, %s ) GROUP BY ip, agent, verified',
 				self::table(),
 				MMSAR_Agent_Log_Verify::UNVERIFIABLE,
 				MMSAR_Agent_Log_Verify::UNCLAIMED
@@ -2205,6 +2371,14 @@ class MMSAR_Agent_Log {
 			}
 
 			if ( ! MMSAR_Agent_Log_Verify::has_method( $agent ) ) {
+				continue;
+			}
+
+			// Every row of this pair predates the list that would judge it, so the withheld verdict is
+			// the only one it can reach (1.73.0-dev.3). Offering it would put a count on screen that
+			// pressing could never clear.
+			$since = MMSAR_Agent_Log_Verify::list_since( $agent );
+			if ( '' !== $since && isset( $pair['last_at'] ) && (string) $pair['last_at'] < $since ) {
 				continue;
 			}
 

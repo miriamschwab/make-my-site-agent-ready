@@ -2152,7 +2152,7 @@ class MMSAR_Admin {
 	 * @return void
 	 */
 	private static function render_link_snippets( array $links, array $missing ) {
-		$snippets = MMSAR_Link_Check::snippets( $links );
+		$snippets = MMSAR_Link_Check::snippets( $links, MMSAR_Link_Check::network_scope() );
 		$pre      = 'white-space:pre-wrap;word-break:break-all;background:#f6f7f7;border:1px solid #dcdcde;padding:8px 10px;max-width:60rem;font-size:12px;';
 
 		echo '<p><strong>' . esc_html__( 'The headers your homepage should carry', 'make-my-site-agent-ready' ) . '</strong></p><ul style="margin-top:0;">';
@@ -2162,15 +2162,23 @@ class MMSAR_Admin {
 		}
 		echo '</ul>';
 		echo '<p>' . esc_html__( 'Add them at server level, so they go out with every response, cached or not. Use the one that matches your setup, or send it to your host. If you switch a feature on or off later, run this check again: the lines change with it.', 'make-my-site-agent-ready' ) . '</p>';
+		if ( '' !== $snippets['scope'] ) {
+			/* translators: %s: this site's host, plus its path on a subdirectory network. */
+			echo '<p>' . esc_html( sprintf( __( 'This site is part of a multisite network, so the lines below apply to %s only. Each site in the network has its own lines: run this check on each one.', 'make-my-site-agent-ready' ), $snippets['scope'] ) ) . '</p>';
+		}
 
 		echo '<p><strong>' . esc_html__( 'Apache (most shared hosting): add to the top of .htaccess', 'make-my-site-agent-ready' ) . '</strong></p>';
 		echo '<pre style="' . esc_attr( $pre ) . '">' . esc_html( $snippets['apache'] ) . '</pre>';
 		echo '<p><strong>' . esc_html__( 'nginx: add inside the site\'s server block, then reload nginx', 'make-my-site-agent-ready' ) . '</strong></p>';
 		echo '<pre style="' . esc_attr( $pre ) . '">' . esc_html( $snippets['nginx'] ) . '</pre>';
-		echo '<p class="description">' . esc_html__( 'Pages WordPress builds itself will then carry each link twice on nginx. That is harmless.', 'make-my-site-agent-ready' ) . '</p>';
+		echo '<p class="description">' . esc_html__( 'Pages WordPress builds itself will then carry each link twice on nginx, and may on Apache when PHP runs as mod_php. That is harmless.', 'make-my-site-agent-ready' ) . '</p>';
 		echo '<p><strong>' . esc_html__( 'Cloudflare: a Response Header Transform Rule that adds a header named Link with this value', 'make-my-site-agent-ready' ) . '</strong></p>';
 		echo '<pre style="' . esc_attr( $pre ) . '">' . esc_html( $snippets['cloudflare'] ) . '</pre>';
 		echo '<p class="description">' . esc_html__( 'Choose Add, not Set: Set replaces the header WordPress sends, which would also drop each page\'s own Markdown link.', 'make-my-site-agent-ready' ) . '</p>';
+		if ( '' !== $snippets['scope'] ) {
+			/* translators: %s: this site's host, plus its path on a subdirectory network. */
+			echo '<p class="description">' . esc_html( sprintf( __( 'On a network, give the rule a filter that matches %s only, or every site in the network gets these links.', 'make-my-site-agent-ready' ), $snippets['scope'] ) ) . '</p>';
+		}
 	}
 
 	/**

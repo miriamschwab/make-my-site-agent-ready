@@ -274,7 +274,10 @@ class MMSAR_Link_Check {
 	 * @return bool
 	 */
 	public static function is_sitewide( $link ) {
-		return ! preg_match( '/;\s*rel="?(alternate|canonical)"?/i', $link );
+		// `shortlink` too (1.73.0): core's `?p=<id>` link is per page, so a server line gave every
+		// page the homepage's shortlink and a post ended up with two (Henk van den Bor, issue #1).
+		// Core's `rel="https://api.w.org/"` link to wp-json/ is the same on every page and stays.
+		return ! preg_match( '/;\s*rel="?(alternate|canonical|shortlink)"?/i', $link );
 	}
 
 	/**
@@ -292,19 +295,52 @@ class MMSAR_Link_Check {
 	/**
 	 * Lines to add the links at server level, for Apache, nginx and Cloudflare.
 	 *
-	 * Apache's `Header merge` leaves a value alone when the response already carries it, so pages
-	 * WordPress builds itself do not get each link twice. nginx has no merge; there a page
-	 * WordPress builds gets the links twice, which is harmless.
+	 * Apache uses `Header always merge` (1.73.0). `merge` leaves a value alone when the response
+	 * already carries it, but only within the header table it acts on. Plain `Header` acts on the
+	 * `onsuccess` table, and on PHP-FPM, which is how most hosts run PHP, the headers PHP sends
+	 * reach Apache in the `always` table, so plain `merge` never saw them and every page WordPress
+	 * built itself carried each link twice. Henk van den Bor measured that on local and live
+	 * (issue #1, 2026-11-08), and `always merge` fixed it. Under mod_php, PHP's headers sit in the
+	 * `onsuccess` table instead, so there `always merge` may add the links a second time. That is
+	 * untested, and harmless: the same cost nginx has. nginx has no merge; there a page WordPress
+	 * builds gets the links twice.
+	 *
+	 * On a multisite network the lines are scoped to this site (1.73.0, also from issue #1), because
+	 * every site in a network shares one .htaccess and often one nginx server block. See
+	 * apache_condition() and network_scope().
 	 *
 	 * @param string[] $links Normalised links.
-	 * @return array{apache: string, nginx: string, cloudflare: string}
+	 * @param array    $scope This site's place in a network, from network_scope(). Empty or
+	 *                        `multisite` false for a single site.
+	 * @return array{apache: string, nginx: string, cloudflare: string, scope: string}
 	 */
-	public static function snippets( array $links ) {
+	public static function snippets( array $links, array $scope = array() ) {
+		$condition = self::apache_condition( $scope );
+		$indent    = '' === $condition ? "\t" : "\t\t";
+
 		$apache = array( '# BEGIN Make My Site Agent-Ready Link headers', '<IfModule mod_headers.c>' );
-		$nginx  = array( '# Make My Site Agent-Ready Link headers, inside the server block' );
+		if ( '' !== $condition ) {
+			$apache[] = "\t<If \"" . $condition . '">';
+		}
+		$nginx = array( '# Make My Site Agent-Ready Link headers, inside the server block' );
+		if ( ! empty( $scope['multisite'] ) ) {
+			$nginx = array( '# Make My Site Agent-Ready Link headers for ' . self::scope_label( $scope ) . ' only.' );
+			if ( '/' !== self::scope_path( $scope ) ) {
+				$nginx[] = '# Inside a `location ' . self::scope_path( $scope ) . '` block in the network\'s server block.';
+				$nginx[] = '# add_header in a location replaces any add_header lines it would inherit.';
+			} elseif ( ! empty( $scope['other_paths'] ) ) {
+				$nginx[] = '# Inside this site\'s server block, but the other sites on this host share it:';
+				$nginx[] = '# nginx cannot leave them out cleanly, so use the Apache or Cloudflare lines.';
+			} else {
+				$nginx[] = '# Inside the server block for ' . (string) $scope['host'] . ', not the network\'s other sites.';
+			}
+		}
 		foreach ( $links as $link ) {
-			$apache[] = '	Header merge Link "' . str_replace( '"', '\"', $link ) . '"';
+			$apache[] = $indent . 'Header always merge Link "' . str_replace( '"', '\"', $link ) . '"';
 			$nginx[]  = "add_header Link '" . str_replace( "'", '', $link ) . "' always;";
+		}
+		if ( '' !== $condition ) {
+			$apache[] = "\t</If>";
 		}
 		$apache[] = '</IfModule>';
 		$apache[] = '# END Make My Site Agent-Ready Link headers';
@@ -312,7 +348,107 @@ class MMSAR_Link_Check {
 			'apache'     => implode( "\n", $apache ),
 			'nginx'      => implode( "\n", $nginx ),
 			'cloudflare' => implode( ', ', $links ),
+			'scope'      => empty( $scope['multisite'] ) ? '' : self::scope_label( $scope ),
 		);
+	}
+
+	/**
+	 * The Apache expression that limits the lines to this site, or '' outside a network.
+	 *
+	 * Always the host. On a subdirectory network, where sites share a host, also the path: under
+	 * this site's path for a site that has one, and outside every other site's path for the site at
+	 * the root, which would otherwise hand its links to all the others. Matches what Henk van den Bor
+	 * ran on his network: one `<If "%{HTTP_HOST} == '…'">` inside `<IfModule mod_headers.c>`.
+	 *
+	 * @param array $scope From network_scope().
+	 * @return string
+	 */
+	public static function apache_condition( array $scope ) {
+		if ( empty( $scope['multisite'] ) || empty( $scope['host'] ) ) {
+			return '';
+		}
+		$parts = array( "%{HTTP_HOST} == '" . str_replace( array( "'", '"' ), '', (string) $scope['host'] ) . "'" );
+		$path  = self::scope_path( $scope );
+		if ( '/' !== $path ) {
+			$parts[] = '%{REQUEST_URI} =~ m#^' . self::path_pattern( $path ) . '(/|$)#';
+		} elseif ( ! empty( $scope['other_paths'] ) ) {
+			$alternatives = array_map( array( __CLASS__, 'path_pattern' ), (array) $scope['other_paths'] );
+			$parts[]      = '%{REQUEST_URI} !~ m#^(' . implode( '|', $alternatives ) . ')(/|$)#';
+		}
+		return implode( ' && ', $parts );
+	}
+
+	/**
+	 * A site path without its trailing slash, escaped for an Apache regular expression.
+	 *
+	 * @param string $path Path such as `/site2/`.
+	 * @return string
+	 */
+	private static function path_pattern( $path ) {
+		return preg_quote( rtrim( (string) $path, '/' ), '#' );
+	}
+
+	/**
+	 * This site's path in a scope, `/` when it has none.
+	 *
+	 * @param array $scope From network_scope().
+	 * @return string
+	 */
+	private static function scope_path( array $scope ) {
+		$path = isset( $scope['path'] ) ? '/' . trim( (string) $scope['path'], '/' ) . '/' : '/';
+		return '//' === $path ? '/' : $path;
+	}
+
+	/**
+	 * This site as host plus path, for the notes beside the lines.
+	 *
+	 * @param array $scope From network_scope().
+	 * @return string
+	 */
+	private static function scope_label( array $scope ) {
+		$path = self::scope_path( $scope );
+		return (string) $scope['host'] . ( '/' === $path ? '' : rtrim( $path, '/' ) );
+	}
+
+	/**
+	 * Where this site sits in its network, for snippets().
+	 *
+	 * The host and path come from the home URL, so a site mapped to its own domain is scoped by
+	 * that domain. `other_paths` lists the paths of the other sites that share this host, which is
+	 * only ever non-empty on a subdirectory network; up to 1,000 are read.
+	 *
+	 * @return array{multisite: bool, host: string, path: string, other_paths: string[]}
+	 */
+	public static function network_scope() {
+		$home  = wp_parse_url( home_url( '/' ) );
+		$host  = isset( $home['host'] ) ? strtolower( (string) $home['host'] ) . ( isset( $home['port'] ) ? ':' . (int) $home['port'] : '' ) : '';
+		$path  = isset( $home['path'] ) ? (string) $home['path'] : '/';
+		$scope = array(
+			'multisite'   => is_multisite(),
+			'host'        => $host,
+			'path'        => $path,
+			'other_paths' => array(),
+		);
+		if ( ! $scope['multisite'] || '' === $host ) {
+			return $scope;
+		}
+
+		$own = '/' . trim( $path, '/' ) . '/';
+		foreach ( get_sites(
+			array(
+				'number'   => 1000,
+				'domain'   => (string) $home['host'],
+				'archived' => 0,
+				'deleted'  => 0,
+			)
+		) as $site ) {
+			$other = '/' . trim( (string) $site->path, '/' ) . '/';
+			if ( '//' !== $other && $other !== $own ) {
+				$scope['other_paths'][] = $other;
+			}
+		}
+		$scope['other_paths'] = array_values( array_unique( $scope['other_paths'] ) );
+		return $scope;
 	}
 
 	/**

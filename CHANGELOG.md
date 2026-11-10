@@ -2,6 +2,16 @@
 
 All notable changes to Make My Site Agent-Ready.
 
+## 1.73.0 — 2026-11-10
+
+- New: eleven more bots are recognised in the Agent Log, each with a category. Verified by the addresses their operators publish: HubSpot Crawler (AI assistant), 360Spider (search engine), KeenableBot (AI search; its visits from before Keenable published its list, on 9 October 2026, read as can't be checked rather than Spoofed). Verified by reverse DNS: AdsBot-Google (other) and BakenBot (AI search). Verified by both: RiverBot (AI training) and AIWebIndex (AI search). Recognised only, since their operators publish no way to check them: TechLeadsBot (other), AgentReady and RankZeroBot (scanners). A recognised bot's address is stored in full rather than cut to its network, so it can be checked. Press Re-check on the Agent Log to give their earlier visits a verdict.
+- New: Claude-Agent, the browser Anthropic runs when a person asks Claude to do something on the web, is recognised and checked against the addresses Anthropic publishes for it. Its visits count as an AI assistant's, never as a person's page view, even though it looks like an ordinary Chrome. Anthropic updates that list often and the plugin ships a copy, so a Claude-Agent visit from a newer address reads Spoofed until the next update; Re-check corrects it then.
+- Changed: the published IP lists the Agent Log checks crawlers against are refreshed to 2026-11-10. Anthropic added a second address block for Claude connector calls, which now read as verified from either block, and OpenAI added one block for ChatGPT-User. Nothing was withdrawn.
+- Changed: WebMCP tools now return a failure as an object, with the site's message, the error code, whether trying again could work, and what kind of failure it was, so an agent can't mistake it for a result. That includes a call the tool itself turned down, such as a topic the site doesn't have, where the message still lists what to try instead. Results are unchanged.
+- Fixed: the Link header check's Apache lines use `Header always merge`. With plain `Header merge`, sites running PHP through PHP-FPM got every link twice on pages WordPress built itself. Thanks to Henk van den Bor ([#1](https://github.com/miriamschwab/make-my-site-agent-ready/issues/1)).
+- Fixed: on a multisite network, the Link header check's server lines now apply to the one site that ran the check: the Apache lines are wrapped in a condition on its host, and its path on a subdirectory network, and the nginx and Cloudflare instructions say how to do the same. Before, every site in the network got the links.
+- Fixed: the Link header check no longer includes the homepage's shortlink in the server lines. A shortlink is different on every page, so a post ended up with two.
+
 ## 1.72.0 — 2026-11-03
 
 - New: a Link header check under Settings > Agent-Ready, also in Site Health once a week. Some page caches (WP Rocket, WP Fastest Cache, Cache Enabler and similar) save only the page and drop the response headers, so agents and readiness checkers never see this plugin's Link headers. The check finds out, and when it happens gives you the lines to add them at server level for Apache, nginx or Cloudflare. Thanks to Henk van den Bor for the report ([#1](https://github.com/miriamschwab/make-my-site-agent-ready/issues/1)).

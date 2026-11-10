@@ -284,6 +284,28 @@ class MMSAR_Agent_Log_Verify {
 		// the Ahrefs reason above and to follow IbouBot, whose own list is unused: rDNS is proven
 		// here, and a stale bundled range turns a range miss on a PTR-less address into `failed`.
 		'ibou-search'           => array( 'ibou.io' ),
+		// Added 1.73.0. Each re-confirmed the two ways this map requires on 2026-11-10, on addresses
+		// from the live log, through 1.1.1.1.
+		//
+		// Google's special-case crawlers —
+		// https://developers.google.com/search/docs/crawling-indexing/google-special-case-crawlers,
+		// mask rate-limited-proxy-*.google.com. 2 of 2 logged addresses (74.125.151.102 and .103)
+		// reverse to rate-limited-proxy-….google.com and forward-confirm. googlebot.com is not
+		// documented for these crawlers and is not entered. Google's special-crawlers.json is not
+		// bundled, for the Ahrefs reason above.
+		'AdsBot-Google'         => array( 'google.com' ),
+		// River AI — https://river.ai/bot. 32.195.253.200 and 52.72.41.255 reverse to
+		// crawl-….bot.river.ai and forward-confirm. Its list is bundled as well (Miriam, 2026-11-10),
+		// so a range miss falls through to this suffix. The full host, not the bare domain.
+		'RiverBot'              => array( 'bot.river.ai' ),
+		// Lyrenth — https://lyrenth.com/bot ("forward-confirmed reverse DNS under lyrenth.com").
+		// 138.201.157.96 and 46.224.73.201 reverse to crawler-<n>.lyrenth.com and forward-confirm.
+		// Its list is bundled as well, as with RiverBot.
+		'AIWebIndex'            => array( 'lyrenth.com' ),
+		// SeeMe AI — https://baken.dev/bakenbot. 213.239.220.146 reverses to bakenbot.baken.dev and
+		// forward-confirms. The page lists one IPv4 and one IPv6 address, not as a file; rDNS covers
+		// them.
+		'BakenBot'              => array( 'baken.dev' ),
 	);
 
 	/**
@@ -360,6 +382,21 @@ class MMSAR_Agent_Log_Verify {
 		// live requests from outside them were robots.txt fetches, and read `failed` (Miriam,
 		// 2026-10-27).
 		'KakaoBot'              => 'kakao',
+		// Added 1.73.0. Every logged address for each name was inside its list on 2026-11-10:
+		// HubSpot Crawler 7 of 7, 360Spider 5 of 5, RiverBot 4 of 4, AIWebIndex 9 of 9, KeenableBot
+		// 15 of 15. HubSpot and 360 publish no reverse DNS; RiverBot and AIWebIndex have a suffix
+		// above too, so a miss here falls through to it.
+		'HubSpot Crawler'       => 'hubspot',
+		'360Spider'             => 'qihoo360',
+		'RiverBot'              => 'riverbot',
+		'AIWebIndex'            => 'lyrenth',
+		'KeenableBot'           => 'keenable',
+		// Claude-Agent has a group of its own, kept apart from `anthropic` and `anthropic-outbound`:
+		// Anthropic publishes it in a separate file (a SAIL file) for this one service, marked
+		// exhaustive, and neither of the others is documented for it. Anthropic expects the file to
+		// be re-read hourly; this plugin bundles it, so a new address reads `failed` until the next
+		// refresh, and Re-check turns those rows `verified` once it ships (Miriam, 2026-11-10).
+		'Claude-Agent'          => 'anthropic-agent',
 	);
 
 	/**
@@ -410,6 +447,55 @@ class MMSAR_Agent_Log_Verify {
 		 * @param array $ranges Operator group => range data.
 		 */
 		return (array) apply_filters( 'mmsar_agent_log_verify_ranges', self::$ranges );
+	}
+
+	/**
+	 * When the list that judges a claimed agent was first published, or '' when that does not apply.
+	 *
+	 * A published list says which addresses an operator uses now. It says nothing about a request
+	 * made before the list existed, when the operator may have crawled from other addresses: Keenable
+	 * did, and its earlier requests read `failed` against a list published weeks after them. So for
+	 * a range group that records its list's creation date as `since`, a miss on a request logged
+	 * before that moment is withheld rather than called a forgery (see apply_verdict()).
+	 *
+	 * Only for an agent judged by its list alone. One with a reverse-DNS suffix has a second,
+	 * date-independent method, and its `failed` comes from that, so it stands.
+	 *
+	 * @param string $agent Agent value as stored in the log.
+	 * @return string A UTC `Y-m-d H:i:s` moment, or ''.
+	 */
+	public static function list_since( $agent ) {
+		$claimed = self::claimed_operator_key( $agent );
+		if ( '' === $claimed || ! isset( self::VERIFY_RANGES[ $claimed ] ) ) {
+			return '';
+		}
+		$hosts = self::verify_hosts();
+		if ( ! empty( $hosts[ $claimed ] ) ) {
+			return '';
+		}
+		$ranges = self::verify_ranges();
+		$group  = self::VERIFY_RANGES[ $claimed ];
+		$since  = isset( $ranges[ $group ]['since'] ) ? (string) $ranges[ $group ]['since'] : '';
+		return 1 === preg_match( '/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/', $since ) ? $since : '';
+	}
+
+	/**
+	 * The verdict to store for one row, given the verdict for its address and when it was logged.
+	 *
+	 * Pure. A `failed` on a row logged before the judging list existed becomes `unverifiable`; every
+	 * other verdict is stored as it is. A `verified` stands whenever the row was logged: an address
+	 * on the operator's own list is evidence for the request, whatever its date.
+	 *
+	 * @param string $verdict   Verdict for the address.
+	 * @param string $since     From list_since(), '' when no date applies.
+	 * @param string $logged_at The row's UTC `Y-m-d H:i:s`.
+	 * @return string
+	 */
+	public static function verdict_for_row( $verdict, $since, $logged_at ) {
+		if ( self::FAILED === $verdict && '' !== (string) $since && (string) $logged_at < (string) $since ) {
+			return self::UNVERIFIABLE;
+		}
+		return (string) $verdict;
 	}
 
 	/**

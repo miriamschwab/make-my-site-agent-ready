@@ -223,7 +223,8 @@ final class BotWatchOctober15_Wpdb {
 	 * @return array[]
 	 */
 	public function get_results( $prepared ) {
-		return 0 === strpos( $prepared[0], 'SELECT DISTINCT ip, agent, verified' ) ? $this->pairs : array();
+		// 1.73.0-dev.3 groups the pairs to read each one's latest row; the pairs served are the same.
+		return 0 === strpos( $prepared[0], 'SELECT ip, agent, verified' ) ? $this->pairs : array();
 	}
 
 	/**
