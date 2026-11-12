@@ -2,6 +2,10 @@
 
 All notable changes to Make My Site Agent-Ready.
 
+## 1.73.1 — 2026-11-12
+
+- Fixed: search, list and about tools now also name their MCP Apps card under the flat `ui/resourceUri` key, which the official MCP Apps SDK writes beside `ui.resourceUri`, so hosts that read either key find the card.
+
 ## 1.73.0 — 2026-11-10
 
 - New: eleven more bots are recognised in the Agent Log, each with a category. Verified by the addresses their operators publish: HubSpot Crawler (AI assistant), 360Spider (search engine), KeenableBot (AI search; its visits from before Keenable published its list, on 9 October 2026, read as can't be checked rather than Spoofed). Verified by reverse DNS: AdsBot-Google (other) and BakenBot (AI search). Verified by both: RiverBot (AI training) and AIWebIndex (AI search). Recognised only, since their operators publish no way to check them: TechLeadsBot (other), AgentReady and RankZeroBot (scanners). A recognised bot's address is stored in full rather than cut to its network, so it can be checked. Press Re-check on the Agent Log to give their earlier visits a verdict.

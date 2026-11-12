@@ -947,15 +947,7 @@ class MMSAR_MCP {
 				if ( ! isset( $templates[ $tool['name'] ] ) ) {
 					continue;
 				}
-				$tools[ $index ]['_meta'] = array(
-					// MCP Apps (SEP-1865, 2026-01-26): `ui.resourceUri` is the whole binding. The
-					// `preferred` flag this used to carry is in no spec and no host reads it.
-					'ui'                    => array(
-						'resourceUri' => $templates[ $tool['name'] ],
-					),
-					// The OpenAI Apps SDK spelling of the same binding, kept for hosts still on it.
-					'openai/outputTemplate' => $templates[ $tool['name'] ],
-				);
+				$tools[ $index ]['_meta'] = self::ui_tool_meta( $templates[ $tool['name'] ] );
 			}
 		}
 
@@ -2498,6 +2490,27 @@ class MMSAR_MCP {
 	private static function contact_page_hint() {
 		$about = MMSAR_About::get();
 		return '' !== $about['contact_url'] ? $about['contact_url'] : home_url( '/' );
+	}
+
+	/**
+	 * The `_meta` that binds a tool to its card template, in every spelling a host may read.
+	 *
+	 * @param string $uri Template URI, fingerprinted.
+	 * @return array
+	 */
+	public static function ui_tool_meta( $uri ) {
+		return array(
+			// MCP Apps (SEP-1865, 2026-01-26): `ui.resourceUri` is the whole binding. The
+			// `preferred` flag this used to carry is in no spec and no host reads it.
+			'ui'                    => array(
+				'resourceUri' => $uri,
+			),
+			// The flat key from earlier MCP Apps drafts. The official SDK's registerAppTool()
+			// still writes it beside `ui.resourceUri`, so hosts built on that SDK may read it.
+			'ui/resourceUri'        => $uri,
+			// The OpenAI Apps SDK spelling of the same binding, kept for hosts still on it.
+			'openai/outputTemplate' => $uri,
+		);
 	}
 
 	/**

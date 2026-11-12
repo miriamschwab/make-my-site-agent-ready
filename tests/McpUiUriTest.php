@@ -27,6 +27,19 @@ final class McpUiUriTest extends TestCase {
 	}
 
 	/**
+	 * A tool names its template under the standard key, the SDK's flat key and the OpenAI key,
+	 * all with the same address.
+	 */
+	public function test_tool_meta_binds_every_spelling() {
+		$uri  = MMSAR_MCP::ui_template_uri( MMSAR_MCP::UI_RESULTS, 'x' );
+		$meta = MMSAR_MCP::ui_tool_meta( $uri );
+		$this->assertSame( array( 'resourceUri' => $uri ), $meta['ui'] );
+		$this->assertSame( $uri, $meta['ui/resourceUri'] );
+		$this->assertSame( $uri, $meta['openai/outputTemplate'] );
+		$this->assertCount( 3, $meta );
+	}
+
+	/**
 	 * Every form of an address leads back to its template.
 	 */
 	public function test_base_strips_fingerprint() {

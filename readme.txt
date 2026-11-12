@@ -4,7 +4,7 @@ Tags: markdown, llm, ai, llms-txt, agents
 Requires at least: 6.2
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.73.0
+Stable tag: 1.73.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -254,6 +254,10 @@ Run the check under Settings > Agent-Ready > Link Headers and Page Caching. If t
 They are a floor. Many AI apps open links without telling the site where the visitor came from, and only ChatGPT reliably tags its links with `utm_source`. Those visits look like direct visits and cannot be counted. Pages already in your cache pick up the counting script when the cache next refreshes, and a security plugin that blocks the REST API for visitors stops the count entirely.
 
 == Changelog ==
+
+= 1.73.1 - 2026-11-12 =
+
+* Fixed: search, list and about tools now also name their MCP Apps card under the flat `ui/resourceUri` key, which the official MCP Apps SDK writes beside `ui.resourceUri`, so hosts that read either key find the card.
 
 = 1.73.0 - 2026-11-10 =
 
