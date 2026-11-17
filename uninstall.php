@@ -36,6 +36,7 @@ delete_option( 'mmsar_referrals' );
 delete_option( 'mmsar_referrals_db_version' );
 delete_option( 'mmsar_decline_training' );
 delete_option( 'mmsar_decline_training_since' );
+delete_option( 'mmsar_meta_watch_stats' );
 delete_transient( 'llmmd_llms_txt' );
 delete_transient( 'mmsar_llms_full_txt' );
 delete_transient( 'mmsar_flush_needed' );

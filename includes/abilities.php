@@ -94,6 +94,54 @@ function mmsar_register_abilities() {
 		)
 	);
 
+	// The meta watcher's counts (1.74.0). Read-only. Exists so a refresh that keeps firing for
+	// nothing can be spotted from outside wp-admin, and the field named for the ignore list.
+	wp_register_ability(
+		'make-my-site-agent-ready/get-markdown-refresh-log',
+		array(
+			'label'               => __( 'Get Markdown Refresh Log', 'make-my-site-agent-ready' ),
+			'description'         => __( 'How often custom field changes made this site check and rebuild its Markdown versions over the last 14 days, per day and per field. Each check either rebuilt the Markdown (rebuilt: the field changed it, and the cached llms.txt files were cleared), found nothing different (unchanged: the field does not affect the Markdown, a candidate for the ignore list), or followed a post save in the same request (after_save: expected). contexts says which kind of request wrote the field (admin, ajax, rest, cli, cron, xmlrpc); ordinary page views are not watched. findings lists fields over the daily thresholds.', 'make-my-site-agent-ready' ),
+			'category'            => 'make-my-site-agent-ready',
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'enabled'    => array( 'type' => 'boolean' ),
+					'ignored'    => array(
+						'type'  => 'array',
+						'items' => array( 'type' => 'string' ),
+					),
+					'thresholds' => array( 'type' => 'object' ),
+					'days'       => array(
+						'type'        => 'object',
+						'description' => 'UTC date => checked, rebuilt, unchanged, after_save, flushes.',
+					),
+					'fields'     => array(
+						'type'        => 'array',
+						'items'       => array( 'type' => 'object' ),
+						'description' => 'Per field: totals over the kept days, contexts, last_seen, last_post. A check queued by several fields counts against each.',
+					),
+					'findings'   => array(
+						'type'  => 'array',
+						'items' => array( 'type' => 'object' ),
+					),
+				),
+			),
+			'permission_callback' => fn() => current_user_can( 'manage_options' ),
+			'execute_callback'    => function ( $input = null ) {
+				unset( $input );
+				return MMSAR_Meta_Watch::report();
+			},
+			'meta'                => array(
+				'mcp'         => array( 'public' => true ),
+				'annotations' => array(
+					'readonly'    => true,
+					'destructive' => false,
+					'idempotent'  => true,
+				),
+			),
+		)
+	);
+
 	// The Agent Log's Summary as data: the same findings, the same hourly cache. Read-only. Exists
 	// so an agent asked "what is happening with AI on my site" answers from the plugin's own reading
 	// of the log, thresholds and counting rules included, rather than re-deriving one from rows.

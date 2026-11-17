@@ -2,6 +2,12 @@
 
 All notable changes to Make My Site Agent-Ready.
 
+## 1.74.0 — 2026-11-17
+
+- Fixed: changing a custom field on a published post, without saving the post itself, now updates its Markdown version. This covers a field changed by code, an AI agent or the REST API. Before, the Markdown kept the old value until the post was next saved or Regenerate All was pressed. Each changed post is checked once at the end of the request, its Markdown is rebuilt only if it changed, housekeeping fields such as edit locks are ignored, and writes during ordinary page views (view counters and the like) are not watched.
+- New: a Site Health check and a read-only `get-markdown-refresh-log` ability count these refreshes per day and per field over 14 days. A field that keeps causing checks that change nothing is named, so it can be added to the new `mmsar_meta_watch_ignored_keys` filter. `mmsar_meta_watch_enabled` switches the refreshes off.
+- Fixed: an ampersand in a page's text now reaches its Markdown version, llms-full.txt and the MCP and WebMCP results as `&`, not `&amp;` ("Q&A" was coming out as "Q&amp;A"). Titles were already right. A `>` in the middle of a line, as in "File > Save", now comes through as `>` too. Text that looks like an HTML tag still stays escaped, so it can't turn into markup, and a `>` that would start a line stays escaped so it can't turn the text into a quote. Press Regenerate All under Settings > Agent-Ready to rebuild existing Markdown, or it updates as each post is saved.
+
 ## 1.73.1 — 2026-11-12
 
 - Fixed: search, list and about tools now also name their MCP Apps card under the flat `ui/resourceUri` key, which the official MCP Apps SDK writes beside `ui.resourceUri`, so hosts that read either key find the card.

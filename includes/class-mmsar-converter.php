@@ -465,7 +465,7 @@ class MMSAR_Converter {
 	 * @param mixed $html Html.
 	 * @return mixed Result.
 	 */
-	private static function html_to_markdown( $html ) {
+	public static function html_to_markdown( $html ) {
 		if ( empty( trim( $html ) ) ) {
 			return '';
 		}
@@ -485,6 +485,8 @@ class MMSAR_Converter {
 					'strip_placeholder_links' => true,
 				)
 			);
+			// Replaces the library's #text converter so body text keeps a plain `&` (1.74.0).
+			$converter->getEnvironment()->addConverter( new MMSAR_Text_Converter() );
 
 			$markdown = $converter->convert( $html );
 		} catch ( \Exception $e ) {

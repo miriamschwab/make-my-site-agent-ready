@@ -4,7 +4,7 @@ Tags: markdown, llm, ai, llms-txt, agents
 Requires at least: 6.2
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.73.1
+Stable tag: 1.74.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -49,7 +49,7 @@ Every feature below can be switched off individually under Settings > Agent-Read
 * **Agent request log** — Optional (off by default). Records which agents fetch the surfaces above, robots.txt and your RSS and Atom feeds, and optionally page views, on its own screen at Settings > Agent Log, with filters, a Journeys view, CSV export, a dashboard widget and a read-only ability. Each entry's claimed crawler identity is checked against the operator's published IP ranges or forward-confirmed reverse DNS, a user-run client such as Claude Code is labelled as one instead of being called a forgery, and every recognised bot carries a category — AI training, AI search, AI assistant, search engine, SEO tool, monitoring, scanner or other — so AI traffic can be read apart from search and SEO traffic. An MCP call records which tool was used and what it asked for (a content type, a topic, the page it read), each stored only once it matches something on your site; the words agents search for are stored only if you switch that on. robots.txt and feeds are counted under surfaces of their own, never as page views or agent documents, so the comparison between the two stays honest. So are MCP and WebMCP calls, so the tools being used can be read apart from the files being fetched. Browser-shaped traffic, which looks like a person whether or not an agent is driving the browser, carries three signals: a Web Bot Auth signature and the operator it claims (recorded, not verified), a published cloud-provider network, and whether the request followed a link on the site. The cloud-network signal also covers scripts and other HTTP clients, telling a hosted service from one run on someone's own connection. A visit from before an operator published its address list is marked as one that can't be checked, never as a forgery. A bot the log doesn't recognise yet is stored with its own name first when that name comes at the end of a browser-style user-agent, so it isn't cut off. An optional setting keeps every entry's full address and full user-agent for six months, so a misread visit can still be corrected.
 * **Agent Log Summary** — A Summary tab on the Agent Log shows the last 30 days in numbers (bot requests, share verified, Spoofed, visitors sent by AI, each against the 30 days before), a chart splitting each day's traffic into people, identified agents, other known bots, and unidentified or spoofed requests, a chart of what identified agents fetched (agent files, robots.txt, ordinary pages, not found), the busiest bots and what they're built for. Below that it says what the traffic means, organised as three questions: Am I being read? (who reads your Markdown, edited pages AI search hasn't re-read, and whether agents in the browser used your WebMCP tools), Am I being cited? (the pages AI assistants fetch to answer people, and the visitors they send), and What's broken or being ignored? (training crawlers reading despite your "no training", and standards agents looked for and didn't find). Each finding says what it means or what to do, links to the log rows behind it, and stays quiet when there is nothing worth saying. Forged crawler identities are never counted. Also on the dashboard widget and as a read-only ability for agents
 * **YAML frontmatter** — Title, date, modified date, author, URL, markdown URL, content type, excerpt, meta description (from Yoast SEO, when it has one), categories, and tags. The excerpt and the description can each be switched off. A theme or plugin can add fields of its own with the `mmsar_frontmatter` filter
-* **Pre-generated** — Markdown is generated when posts are saved, so `.md` requests are instant
+* **Pre-generated** — Markdown is generated when posts are saved, and when a post's custom field changes on its own (from code, an AI agent or the REST API), so `.md` requests are instant
 * **Discoverable** — Adds `<link rel="alternate" type="text/markdown">` to page headers
 * **Noindex respected** — A page your SEO plugin marks noindex is left out of llms.txt, llms-full.txt, the OKF indexes, MCP search and list, and NLWeb. Its own `.md` URL keeps working, like the page itself. Read from Yoast SEO and Rank Math; other plugins can answer through the `mmsar_post_is_noindex` filter. On by default, and can be switched off
 * **IndexNow** — Optional (off by default). Tells Bing, Yandex, Seznam, Naver and the other IndexNow engines when a page is published, changed or removed, so they recrawl it sooner. Bing's index is what ChatGPT search and Copilot answer from. Google does not take part. Skipped automatically when another plugin already submits. The only feature that contacts an outside service; see External services below
@@ -58,7 +58,7 @@ Every feature below can be switched off individually under Settings > Agent-Read
 
 **How it works:**
 
-1. When you save a post, the plugin converts it to markdown and stores it in post meta
+1. When you save a post, or one of its custom fields changes, the plugin converts it to markdown and stores it in post meta
 2. When someone requests `your-post.md`, the pre-generated markdown is served instantly
 3. The `/llms.txt` file lists all available markdown URLs organized by category, pointing to a section's own index when listing everything would make it too long
 4. The `/llms-full.txt` file concatenates the full content of all posts and pages
@@ -89,7 +89,7 @@ This is the only way the plugin can affect what a human visitor sees, which is w
 
 = Does this slow down my site? =
 
-No. On a normal page load the plugin adds a few `<link>` tags to the HTML head and `Link` headers to the response, one for each feature you have on, and no script unless you switch on WebMCP or AI referral counting. Markdown is pre-generated on post save, so `.md` requests serve directly from the database with no runtime conversion.
+No. On a normal page load the plugin adds a few `<link>` tags to the HTML head and `Link` headers to the response, one for each feature you have on, and no script unless you switch on WebMCP or AI referral counting. Markdown is pre-generated on post save, so `.md` requests serve directly from the database with no runtime conversion. When a custom field changes without a save, in wp-admin, through the REST API or from code, that post's Markdown is checked once at the end of the request, about a millisecond on a typical post, and stored only if it changed. Ordinary page views never trigger it.
 
 = What URL format does it use? =
 
@@ -175,7 +175,7 @@ Yes, with the `mmsar_frontmatter` filter. Return an array of extra fields and th
 
 Values can be a string, a number, true/false, or a flat list of strings. Keys must be lowercase letters, digits and underscores, starting with a letter. The plugin's own keys (title, date, modified, author, url, markdown_url, type, excerpt, description, categories, tags) cannot be changed or removed this way: a colliding key is ignored. Anything else that cannot be written safely, such as a nested array, is skipped. Line breaks in values become spaces. Your fields appear after the plugin's own, in the order you return them.
 
-Markdown is generated when a post is saved, so after adding or changing the filter, press **Regenerate All** under Settings > Agent-Ready to update existing posts.
+Markdown is generated when a post is saved, or when one of its custom fields changes on its own. After adding or changing the filter itself, press **Regenerate All** under Settings > Agent-Ready to update existing posts.
 
 = What does the agent log store about my visitors? (Privacy) =
 
@@ -249,11 +249,30 @@ Usually a page cache. The plugin adds its Link headers when WordPress builds a p
 
 Run the check under Settings > Agent-Ready > Link Headers and Page Caching. If the cache drops them, it shows the exact lines to add the headers at server level, for Apache (`.htaccess`), nginx or a Cloudflare rule. On a multisite network the lines apply to the site that ran the check only, so run it on each site. Site Health runs the same check once a week.
 
+= Site Health says a custom field is causing frequent Markdown checks. What should I do? =
+
+When a custom field on a published post changes, the plugin checks whether the post's Markdown changed and rebuilds it if so. It counts these checks per field. Site Health speaks up when one field causes 50 or more in a day.
+
+If the checks "changed nothing", the field doesn't affect the Markdown: some plugin is updating it often, a counter or a timestamp, say. Tell the plugin to ignore it:
+
+`add_filter( 'mmsar_meta_watch_ignored_keys', function( $keys ) {`
+`    $keys[] = 'the_field_name';`
+`    return $keys;`
+`} );`
+
+If they were rebuilds, the field really does change the Markdown that often, and each rebuild refreshes llms.txt and llms-full.txt. That is usually a field your theme adds to the frontmatter with the `mmsar_frontmatter` filter; consider leaving it out. The read-only `get-markdown-refresh-log` ability returns the full counts, and `mmsar_meta_watch_enabled` switches the checks off.
+
 = Why do AI referral counts look low? =
 
 They are a floor. Many AI apps open links without telling the site where the visitor came from, and only ChatGPT reliably tags its links with `utm_source`. Those visits look like direct visits and cannot be counted. Pages already in your cache pick up the counting script when the cache next refreshes, and a security plugin that blocks the REST API for visitors stops the count entirely.
 
 == Changelog ==
+
+= 1.74.0 - 2026-11-17 =
+
+* Fixed: changing a custom field on a published post, without saving the post itself, now updates its Markdown version. This covers a field changed by code, an AI agent or the REST API. Before, the Markdown kept the old value until the post was next saved or Regenerate All was pressed. Each changed post is checked once at the end of the request, its Markdown is rebuilt only if it changed, housekeeping fields such as edit locks are ignored, and writes during ordinary page views (view counters and the like) are not watched.
+* New: a Site Health check and a read-only `get-markdown-refresh-log` ability count these refreshes per day and per field over 14 days. A field that keeps causing checks that change nothing is named, so it can be added to the new `mmsar_meta_watch_ignored_keys` filter. `mmsar_meta_watch_enabled` switches the refreshes off.
+* Fixed: an ampersand in a page's text now reaches its Markdown version, llms-full.txt and the MCP and WebMCP results as `&`, not `&amp;` ("Q&A" was coming out as "Q&amp;A"). Titles were already right. A `>` in the middle of a line, as in "File > Save", now comes through as `>` too. Text that looks like an HTML tag still stays escaped, so it can't turn into markup, and a `>` that would start a line stays escaped so it can't turn the text into a quote. Press Regenerate All under Settings > Agent-Ready to rebuild existing Markdown, or it updates as each post is saved.
 
 = 1.73.1 - 2026-11-12 =
 

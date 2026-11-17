@@ -3,7 +3,7 @@
  * Plugin Name:       Make My Site Agent-Ready
  * Plugin URI:        https://miriamschwab.me/plugins/make-my-site-agent-ready
  * Description:       Makes your WordPress site ready for AI agents: .md URLs, llms.txt, llms-full.txt, an OpenAPI spec, a read-only MCP server, agent-recoverable 404s, security.txt, api-catalog, Agent Skills discovery, an OKF bundle, Link response headers, Content Signals, a TDMRep reservation header, optional JSON-LD structured data (merges into Yoast's own schema when active), and AI crawler rules in robots.txt.
- * Version:           1.73.1
+ * Version:           1.74.0
  * Author:            Miriam Schwab
  * Author URI:        https://miriamschwab.me
  * License:           GPL-2.0-or-later
@@ -19,7 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'MMSAR_VERSION', '1.73.1' );
+define( 'MMSAR_VERSION', '1.74.0' );
 define( 'MMSAR_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'MMSAR_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'MMSAR_PLUGIN_FILE', __FILE__ );
@@ -36,7 +36,9 @@ require_once MMSAR_PLUGIN_DIR . 'includes/class-mmsar-agent-log-attribution.php'
 require_once MMSAR_PLUGIN_DIR . 'includes/class-mmsar-agent-log-signals.php';
 require_once MMSAR_PLUGIN_DIR . 'includes/class-mmsar-agent-log-page.php';
 require_once MMSAR_PLUGIN_DIR . 'includes/class-mmsar-agent-log-widget.php';
+require_once MMSAR_PLUGIN_DIR . 'includes/class-mmsar-text-converter.php';
 require_once MMSAR_PLUGIN_DIR . 'includes/class-mmsar-converter.php';
+require_once MMSAR_PLUGIN_DIR . 'includes/class-mmsar-meta-watch.php';
 require_once MMSAR_PLUGIN_DIR . 'includes/class-mmsar-noindex.php';
 require_once MMSAR_PLUGIN_DIR . 'includes/class-mmsar-negotiation-check.php';
 require_once MMSAR_PLUGIN_DIR . 'includes/class-mmsar-link-check.php';
@@ -538,6 +540,7 @@ if ( mmsar_feature_enabled( 'indexnow' ) ) {
 }
 MMSAR_Negotiation_Check::init();
 MMSAR_Link_Check::init();
+MMSAR_Meta_Watch::init();
 MMSAR_Agent_Log::init();
 MMSAR_Agent_Log_Page::init();
 MMSAR_Agent_Log_Widget::init();
@@ -647,6 +650,9 @@ function mmsar_on_save_post( $post_id, $post ) {
 	}
 	$markdown = MMSAR_Converter::convert_post( $post_id );
 	mmsar_store_markdown( $post_id, $markdown );
+	// Field writes after this in the same request (REST saves meta after save_post) are checked
+	// again at shutdown; this tells the counts those checks were expected, not noise.
+	MMSAR_Meta_Watch::saved( $post_id );
 	// Every cached document, not just the two site-wide ones. The scoped `<section>/llms.txt`
 	// indexes list the same posts under the same `.md` addresses, and they were left out here until
 	// 1.32.0 — so renaming a post refreshed /llms.txt immediately while /writing/llms.txt could go
