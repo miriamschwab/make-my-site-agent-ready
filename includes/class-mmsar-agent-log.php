@@ -559,6 +559,51 @@ class MMSAR_Agent_Log {
 		// the visit as a crawler rather than a browser, so it never counts as a person in the
 		// Summary. Verified by the SAIL file; see the `anthropic-agent` group.
 		'Claude-Agent',
+		// Added 1.75.0. Google's hosted browsing agent, acting on a user's request
+		// (https://developers.google.com/crawling/docs/crawlers-fetchers/allow-google-agent). A
+		// Chrome user-agent with `compatible; Google-Agent` in it, so recognising it files the visit
+		// as an agent rather than a person. Verified by Google's user-triggered-agents.json; see the
+		// `google-agent` group. Its Web Bot Auth signature is recorded as a claim, never verified.
+		'Google-Agent',
+		// Added 1.75.0 from the 2026-11-16 bot watch. Google's Rich Results Test and Search Console
+		// URL inspection. The token sits at the end of the mobile user-agent, past character 80, so
+		// it is matched on the raw user-agent when the request is recorded; earlier rows were cut
+		// before it and cannot be re-matched (the 360Spider case). Verified by reverse DNS.
+		'Google-InspectionTool',
+		// Added 1.75.0. The retired Structured Data Testing Tool, still sent by Google's schema
+		// validator (Miriam, 2026-11-23). Verified by reverse DNS on google.com.
+		'Google-Structured-Data-Testing-Tool',
+		// Added 1.75.0 from the 2026-11-23 bot watch. Seobility's SEO crawler. Verified by its
+		// published list; see the `seobility` group.
+		'SeobilityBot',
+		// Added 1.75.0 from the 2026-11-23 bot watch, all recognise only: Kosto's outbound-link
+		// analytics, watr search's small-web index (its token is lowercase; matching ignores case),
+		// getwowlink's share-tag and contact-page reader, and Kaupr's commercial-website record.
+		// `Kaupr` covers the bare `Kaupr/1.0` form too. Kaupr's IP list covers only its web server,
+		// not the crawler, so it is not bundled (Miriam, 2026-11-23).
+		'KostoBot',
+		'watrsearch',
+		'getwowlink-prospector',
+		'Kaupr',
+		// Added 1.75.0 from the 2026-11-16 bot watch. DigitalPebble's research crawler for European
+		// language corpora; lowercase token. Recognise only (Miriam, 2026-11-23): DigitalPebble
+		// publishes a one-address list (https://ethicrawl.ai/crawler-ips.json), but both requests in
+		// this site's log came from a cloud address not on it, so the list is not bundled. Revisit if
+		// the list grows to cover the addresses it crawls from.
+		'ethicrawl',
+		// Added 1.75.0 from the 2026-11-16 bot watch, recognise only: LinkedIn's link-preview fetcher
+		// (LinkedIn documents no verification method), and TinEye's image search crawler, where
+		// `TinEye` covers TinEye-Web, TinEye-bot and TinEye-bot-live.
+		'LinkedInBot',
+		'TinEye',
+		// Added 1.75.0 from the 2026-10-29 bot watch, all recognise only (Miriam, 2026-11-23).
+		// T2 Industries' search crawler, guarded in AGENT_DISCLOSURES because the token is short;
+		// Convertlyft's on-demand site audit (its former name, SEO-Spider-Pro, is generic and retired,
+		// so it is not recognised); and InternetData.io's internet-wide scanner (its address list
+		// changes, so it is not bundled).
+		'T2Bot',
+		'ConvertlyftBot',
+		'InternetData.io',
 	);
 
 	/**
@@ -615,216 +660,238 @@ class MMSAR_Agent_Log {
 	 * storage. A test asserts that every AGENTS entry has a category here.
 	 */
 	const CRAWLER_CATEGORIES = array(
-		'ClaudeBot'                    => self::CRAWLER_AI_TRAINING,
-		'Claude-User'                  => self::CRAWLER_AI_ASSISTANT,
-		'Claude-SearchBot'             => self::CRAWLER_AI_SEARCH,
-		'Anthropic-AI'                 => self::CRAWLER_AI_TRAINING,
-		'GPTBot'                       => self::CRAWLER_AI_TRAINING,
-		'ChatGPT-User'                 => self::CRAWLER_AI_ASSISTANT,
-		'OAI-SearchBot'                => self::CRAWLER_AI_SEARCH,
-		'PerplexityBot'                => self::CRAWLER_AI_SEARCH,
-		'Perplexity-User'              => self::CRAWLER_AI_ASSISTANT,
+		'ClaudeBot'                           => self::CRAWLER_AI_TRAINING,
+		'Claude-User'                         => self::CRAWLER_AI_ASSISTANT,
+		'Claude-SearchBot'                    => self::CRAWLER_AI_SEARCH,
+		'Anthropic-AI'                        => self::CRAWLER_AI_TRAINING,
+		'GPTBot'                              => self::CRAWLER_AI_TRAINING,
+		'ChatGPT-User'                        => self::CRAWLER_AI_ASSISTANT,
+		'OAI-SearchBot'                       => self::CRAWLER_AI_SEARCH,
+		'PerplexityBot'                       => self::CRAWLER_AI_SEARCH,
+		'Perplexity-User'                     => self::CRAWLER_AI_ASSISTANT,
 		// A robots.txt control token rather than a crawler that visits; a row under it is a claim.
-		'Google-Extended'              => self::CRAWLER_AI_TRAINING,
+		'Google-Extended'                     => self::CRAWLER_AI_TRAINING,
 		// General-purpose crawler for Google product and research teams.
-		'GoogleOther'                  => self::CRAWLER_OTHER,
+		'GoogleOther'                         => self::CRAWLER_OTHER,
 		// Added 1.62.0. Fetches a URL a person added as a source to a Gemini Notebook.
-		'Google-GeminiNotebook'        => self::CRAWLER_AI_ASSISTANT,
-		'Google-NotebookLM'            => self::CRAWLER_AI_ASSISTANT,
-		'Gemini'                       => self::CRAWLER_AI_ASSISTANT,
+		'Google-GeminiNotebook'               => self::CRAWLER_AI_ASSISTANT,
+		'Google-NotebookLM'                   => self::CRAWLER_AI_ASSISTANT,
+		'Gemini'                              => self::CRAWLER_AI_ASSISTANT,
 		// Also a control token, like Google-Extended.
-		'Applebot-Extended'            => self::CRAWLER_AI_TRAINING,
-		'meta-externalagent'           => self::CRAWLER_AI_TRAINING,
-		'Bytespider'                   => self::CRAWLER_AI_TRAINING,
+		'Applebot-Extended'                   => self::CRAWLER_AI_TRAINING,
+		'meta-externalagent'                  => self::CRAWLER_AI_TRAINING,
+		'Bytespider'                          => self::CRAWLER_AI_TRAINING,
 		// An open dataset, used mostly for model training.
-		'CCBot'                        => self::CRAWLER_AI_TRAINING,
-		'cohere-ai'                    => self::CRAWLER_AI_TRAINING,
-		'DuckAssistBot'                => self::CRAWLER_AI_SEARCH,
+		'CCBot'                               => self::CRAWLER_AI_TRAINING,
+		'cohere-ai'                           => self::CRAWLER_AI_TRAINING,
+		'DuckAssistBot'                       => self::CRAWLER_AI_SEARCH,
 		// Amazon says it may train models; it also feeds Alexa answers.
-		'Amazonbot'                    => self::CRAWLER_AI_TRAINING,
-		'YouBot'                       => self::CRAWLER_AI_SEARCH,
+		'Amazonbot'                           => self::CRAWLER_AI_TRAINING,
+		'YouBot'                              => self::CRAWLER_AI_SEARCH,
 		// Builds a knowledge graph sold largely for AI use.
-		'Diffbot'                      => self::CRAWLER_AI_TRAINING,
-		'LinkupBot'                    => self::CRAWLER_AI_SEARCH,
+		'Diffbot'                             => self::CRAWLER_AI_TRAINING,
+		'LinkupBot'                           => self::CRAWLER_AI_SEARCH,
 		// Inferred: SSI publishes no crawler documentation.
-		'SSI-Nutch'                    => self::CRAWLER_AI_TRAINING,
-		'AhrefsBot'                    => self::CRAWLER_SEO,
-		'Barkrowler'                   => self::CRAWLER_SEO,
-		'SeznamBot'                    => self::CRAWLER_SEARCH,
-		'MojeekBot'                    => self::CRAWLER_SEARCH,
-		'SERankingBacklinksBot'        => self::CRAWLER_SEO,
-		'DuckDuckBot'                  => self::CRAWLER_SEARCH,
-		'PetalBot'                     => self::CRAWLER_SEARCH,
-		'ExaSearchBot'                 => self::CRAWLER_AI_SEARCH,
-		'ShapBot'                      => self::CRAWLER_AI_SEARCH,
-		'SofyaBot'                     => self::CRAWLER_AI_SEARCH,
-		'SemrushBot'                   => self::CRAWLER_SEO,
-		'MJ12bot'                      => self::CRAWLER_SEO,
-		'AwarioBot'                    => self::CRAWLER_MONITORING,
-		'Screaming Frog SEO Spider'    => self::CRAWLER_SEO,
+		'SSI-Nutch'                           => self::CRAWLER_AI_TRAINING,
+		'AhrefsBot'                           => self::CRAWLER_SEO,
+		'Barkrowler'                          => self::CRAWLER_SEO,
+		'SeznamBot'                           => self::CRAWLER_SEARCH,
+		'MojeekBot'                           => self::CRAWLER_SEARCH,
+		'SERankingBacklinksBot'               => self::CRAWLER_SEO,
+		'DuckDuckBot'                         => self::CRAWLER_SEARCH,
+		'PetalBot'                            => self::CRAWLER_SEARCH,
+		'ExaSearchBot'                        => self::CRAWLER_AI_SEARCH,
+		'ShapBot'                             => self::CRAWLER_AI_SEARCH,
+		'SofyaBot'                            => self::CRAWLER_AI_SEARCH,
+		'SemrushBot'                          => self::CRAWLER_SEO,
+		'MJ12bot'                             => self::CRAWLER_SEO,
+		'AwarioBot'                           => self::CRAWLER_MONITORING,
+		'Screaming Frog SEO Spider'           => self::CRAWLER_SEO,
 		// Indexes source code rather than general content.
-		'PublicWWWBot'                 => self::CRAWLER_SEARCH,
-		'mwmbl'                        => self::CRAWLER_SEARCH,
+		'PublicWWWBot'                        => self::CRAWLER_SEARCH,
+		'mwmbl'                               => self::CRAWLER_SEARCH,
 		// Also does general search-engine crawling.
-		'trendictionbot'               => self::CRAWLER_MONITORING,
-		'Pandalytics'                  => self::CRAWLER_OTHER,
+		'trendictionbot'                      => self::CRAWLER_MONITORING,
+		'Pandalytics'                         => self::CRAWLER_OTHER,
 		// On-demand, customer-triggered Vertex AI Agent fetches.
-		'Google-CloudVertexBot'        => self::CRAWLER_OTHER,
-		'OraBot'                       => self::CRAWLER_SCANNER,
-		'EtherdeckBot'                 => self::CRAWLER_SEARCH,
-		'LyonlBot'                     => self::CRAWLER_SEARCH,
-		'Miniflux'                     => self::CRAWLER_OTHER,
-		'FeedBurner'                   => self::CRAWLER_OTHER,
-		'Feedbin'                      => self::CRAWLER_OTHER,
-		'Twitterbot'                   => self::CRAWLER_OTHER,
-		'facebookexternalhit'          => self::CRAWLER_OTHER,
-		'Slackbot-LinkExpanding'       => self::CRAWLER_OTHER,
-		'Googlebot'                    => self::CRAWLER_SEARCH,
-		'Applebot'                     => self::CRAWLER_SEARCH,
-		'bingbot'                      => self::CRAWLER_SEARCH,
+		'Google-CloudVertexBot'               => self::CRAWLER_OTHER,
+		'OraBot'                              => self::CRAWLER_SCANNER,
+		'EtherdeckBot'                        => self::CRAWLER_SEARCH,
+		'LyonlBot'                            => self::CRAWLER_SEARCH,
+		'Miniflux'                            => self::CRAWLER_OTHER,
+		'FeedBurner'                          => self::CRAWLER_OTHER,
+		'Feedbin'                             => self::CRAWLER_OTHER,
+		'Twitterbot'                          => self::CRAWLER_OTHER,
+		'facebookexternalhit'                 => self::CRAWLER_OTHER,
+		'Slackbot-LinkExpanding'              => self::CRAWLER_OTHER,
+		'Googlebot'                           => self::CRAWLER_SEARCH,
+		'Applebot'                            => self::CRAWLER_SEARCH,
+		'bingbot'                             => self::CRAWLER_SEARCH,
 		// Added 1.46.0; confirmed per name by Miriam on 2026-09-22.
-		'CensysInspect'                => self::CRAWLER_SCANNER,
-		'Palo Alto Networks'           => self::CRAWLER_SCANNER,
-		'l9scan'                       => self::CRAWLER_SCANNER,
+		'CensysInspect'                       => self::CRAWLER_SCANNER,
+		'Palo Alto Networks'                  => self::CRAWLER_SCANNER,
+		'l9scan'                              => self::CRAWLER_SCANNER,
 		// Archival rather than AI, search or SEO.
-		'archive.org_bot'              => self::CRAWLER_OTHER,
-		'YandexBot'                    => self::CRAWLER_SEARCH,
+		'archive.org_bot'                     => self::CRAWLER_OTHER,
+		'YandexBot'                           => self::CRAWLER_SEARCH,
 		// Probes for agent cards rather than collecting content; the overlap with `ai-search` is
 		// real but it is discovery behaviour.
-		'AgentTrustBot'                => self::CRAWLER_SCANNER,
-		'fyndbot'                      => self::CRAWLER_SEARCH,
-		'TheWebReport'                 => self::CRAWLER_OTHER,
-		'ntu-sa-crawler'               => self::CRAWLER_OTHER,
+		'AgentTrustBot'                       => self::CRAWLER_SCANNER,
+		'fyndbot'                             => self::CRAWLER_SEARCH,
+		'TheWebReport'                        => self::CRAWLER_OTHER,
+		'ntu-sa-crawler'                      => self::CRAWLER_OTHER,
 		// Both from the operator's business and third-party descriptions; neither operator
 		// documents the bot itself.
-		'YaK'                          => self::CRAWLER_MONITORING,
-		'um-LN'                        => self::CRAWLER_MONITORING,
+		'YaK'                                 => self::CRAWLER_MONITORING,
+		'um-LN'                               => self::CRAWLER_MONITORING,
 		// Added 1.50.0.
-		'Qwantbot'                     => self::CRAWLER_SEARCH,
-		'DataForSeoBot'                => self::CRAWLER_SEO,
-		'LohiSoftBot'                  => self::CRAWLER_SEARCH,
+		'Qwantbot'                            => self::CRAWLER_SEARCH,
+		'DataForSeoBot'                       => self::CRAWLER_SEO,
+		'LohiSoftBot'                         => self::CRAWLER_SEARCH,
 		// A technology profiler (which software a site runs), sold as marketing intelligence by an
 		// SEO-tool company.
-		'PoweredByBot'                 => self::CRAWLER_SEO,
-		'DomainStatsBot'               => self::CRAWLER_SEO,
-		'QlyzeBot'                     => self::CRAWLER_SEO,
+		'PoweredByBot'                        => self::CRAWLER_SEO,
+		'DomainStatsBot'                      => self::CRAWLER_SEO,
+		'QlyzeBot'                            => self::CRAWLER_SEO,
 		// Overlaps with the backlink indexes; see the note in AGENTS.
-		'MapTheNetBot'                 => self::CRAWLER_OTHER,
+		'MapTheNetBot'                        => self::CRAWLER_OTHER,
 		// Fetches because a customer configured it, but ingests several levels deep and resyncs.
-		'amazon-Quick-on-behalf-of'    => self::CRAWLER_AI_ASSISTANT,
+		'amazon-Quick-on-behalf-of'           => self::CRAWLER_AI_ASSISTANT,
 		// Unconfirmed: the operator documents no crawler.
-		'Micro.blog'                   => self::CRAWLER_OTHER,
+		'Micro.blog'                          => self::CRAWLER_OTHER,
 		// Added 1.54.0; confirmed per name by Miriam on 2026-09-29.
 		// Checks whether an agent can read and use a site: the same job as OraBot.
-		'KnownGood-Verifier'           => self::CRAWLER_SCANNER,
+		'KnownGood-Verifier'                  => self::CRAWLER_SCANNER,
 		// Feed reader, with Feedbin.
-		'Inoreader'                    => self::CRAWLER_OTHER,
-		'CaelLabSearchSpider'          => self::CRAWLER_SEARCH,
-		'SEOJuice-SearchBot'           => self::CRAWLER_SEO,
+		'Inoreader'                           => self::CRAWLER_OTHER,
+		'CaelLabSearchSpider'                 => self::CRAWLER_SEARCH,
+		'SEOJuice-SearchBot'                  => self::CRAWLER_SEO,
 		// Overlaps with the SEO tools, but the operator describes a business-data index, not SEO
 		// analysis.
-		'Dataprovider.com'             => self::CRAWLER_OTHER,
-		'Feedly'                       => self::CRAWLER_OTHER,
+		'Dataprovider.com'                    => self::CRAWLER_OTHER,
+		'Feedly'                              => self::CRAWLER_OTHER,
 		// Feed reader. Unconfirmed: the operator documents no crawler.
-		'Miniroll'                     => self::CRAWLER_OTHER,
+		'Miniroll'                            => self::CRAWLER_OTHER,
 		// Archiving and search indexing, from an unnamed operator.
-		'Quest'                        => self::CRAWLER_OTHER,
+		'Quest'                               => self::CRAWLER_OTHER,
 		// Added 1.58.0; confirmed per name by Miriam on 2026-10-05.
-		'IbouBot'                      => self::CRAWLER_SEARCH,
-		'Baiduspider'                  => self::CRAWLER_SEARCH,
-		'coccocbot'                    => self::CRAWLER_SEARCH,
+		'IbouBot'                             => self::CRAWLER_SEARCH,
+		'Baiduspider'                         => self::CRAWLER_SEARCH,
+		'coccocbot'                           => self::CRAWLER_SEARCH,
 		// Searches downloadable files; also scans them for malware and NSFW images.
-		'FindFiles'                    => self::CRAWLER_SEARCH,
+		'FindFiles'                           => self::CRAWLER_SEARCH,
 		// Link previews, like Slackbot-LinkExpanding.
-		'Iframely'                     => self::CRAWLER_OTHER,
-		'crawl-engine'                 => self::CRAWLER_SEARCH,
+		'Iframely'                            => self::CRAWLER_OTHER,
+		'crawl-engine'                        => self::CRAWLER_SEARCH,
 		// Amazon has no classic web search engine, so the index feeds assistant answers.
-		'Amzn-SearchBot'               => self::CRAWLER_AI_SEARCH,
-		'IsonSearchBot'                => self::CRAWLER_SEARCH,
-		'Website-Toolkit'              => self::CRAWLER_SEO,
-		'LivelapBot'                   => self::CRAWLER_OTHER,
-		'RankMath Link Checker'        => self::CRAWLER_SEO,
-		'WPMU DEV Broken Link Checker' => self::CRAWLER_SEO,
-		'AgentReadyScanner'            => self::CRAWLER_SCANNER,
+		'Amzn-SearchBot'                      => self::CRAWLER_AI_SEARCH,
+		'IsonSearchBot'                       => self::CRAWLER_SEARCH,
+		'Website-Toolkit'                     => self::CRAWLER_SEO,
+		'LivelapBot'                          => self::CRAWLER_OTHER,
+		'RankMath Link Checker'               => self::CRAWLER_SEO,
+		'WPMU DEV Broken Link Checker'        => self::CRAWLER_SEO,
+		'AgentReadyScanner'                   => self::CRAWLER_SCANNER,
 		// Added 1.62.0; categories as proposed in the 2026-10-08 bot watch.
 		// Reads a page aloud to the person who asked; not an AI product.
-		'Google-Read-Aloud'            => self::CRAWLER_OTHER,
+		'Google-Read-Aloud'                   => self::CRAWLER_OTHER,
 		// Meta says it crawls to improve Meta AI search results and to cite pages in Meta AI's
 		// answers.
-		'meta-webindexer'              => self::CRAWLER_AI_SEARCH,
-		'meta-externalfetcher'         => self::CRAWLER_AI_ASSISTANT,
+		'meta-webindexer'                     => self::CRAWLER_AI_SEARCH,
+		'meta-externalfetcher'                => self::CRAWLER_AI_ASSISTANT,
 		// Advertising and business products.
-		'meta-externalads'             => self::CRAWLER_OTHER,
-		'SiteAuditBot'                 => self::CRAWLER_SEO,
-		'visionheight.com'             => self::CRAWLER_SCANNER,
+		'meta-externalads'                    => self::CRAWLER_OTHER,
+		'SiteAuditBot'                        => self::CRAWLER_SEO,
+		'visionheight.com'                    => self::CRAWLER_SCANNER,
 		// Added 1.63.0; categories as proposed in the 2026-10-13 bot watch.
-		'cl0q-crawler'                 => self::CRAWLER_SEARCH,
-		'cl0q-discovery'               => self::CRAWLER_SEARCH,
-		'cl0q-favicon'                 => self::CRAWLER_SEARCH,
+		'cl0q-crawler'                        => self::CRAWLER_SEARCH,
+		'cl0q-discovery'                      => self::CRAWLER_SEARCH,
+		'cl0q-favicon'                        => self::CRAWLER_SEARCH,
 		// Feeds the same cl0q index from someone else's server (Miriam, 2026-10-13).
-		'cl0q-node'                    => self::CRAWLER_SEARCH,
-		'SojournerBot'                 => self::CRAWLER_SEARCH,
-		'Sogou web spider'             => self::CRAWLER_SEARCH,
+		'cl0q-node'                           => self::CRAWLER_SEARCH,
+		'SojournerBot'                        => self::CRAWLER_SEARCH,
+		'Sogou web spider'                    => self::CRAWLER_SEARCH,
 		// A citation index for blogs: fetched text stays private, only metadata is published. Not
 		// AI and not general search, the same call as MapTheNetBot.
-		'CorpusBot'                    => self::CRAWLER_OTHER,
+		'CorpusBot'                           => self::CRAWLER_OTHER,
 		// Calls itself an educational crawler, for a search engine.
-		'AstraBot'                     => self::CRAWLER_SEARCH,
+		'AstraBot'                            => self::CRAWLER_SEARCH,
 		// Added 1.64.0. The operator calls it research; its link-graph and technology profiling
 		// sit close to seo-tool (PoweredByBot), but the whole is nearer Dataprovider.com (Miriam,
 		// 2026-10-15).
-		'BitMoversBot'                 => self::CRAWLER_OTHER,
+		'BitMoversBot'                        => self::CRAWLER_OTHER,
 		// Added 1.66.0; categories as proposed in the 2026-10-19 bot watch and confirmed per name
 		// by Miriam on 2026-10-21.
 		//
 		// ibou says it does not train AI models with the data, and classifies the crawler as Search.
-		'ibou-search'                  => self::CRAWLER_SEARCH,
+		'ibou-search'                         => self::CRAWLER_SEARCH,
 		// Collects pages for the Polias search index.
-		'PoliasBot'                    => self::CRAWLER_SEARCH,
+		'PoliasBot'                           => self::CRAWLER_SEARCH,
 		// Its own German-language index; stores title, description, visible text, a screenshot and
 		// publicly listed imprint details. No AI use documented either way.
-		'Vento9'                       => self::CRAWLER_SEARCH,
+		'Vento9'                              => self::CRAWLER_SEARCH,
 		// Fetched because a person asked, like ChatGPT-User and Claude-User, and not the crawler
 		// that feeds Exa's index — that is ExaSearchBot, which stays ai-search.
-		'ExaUser'                      => self::CRAWLER_AI_ASSISTANT,
+		'ExaUser'                             => self::CRAWLER_AI_ASSISTANT,
 		// Collects pages for the Alpost search, keeping only title, description and language. No
 		// AI use documented.
-		'AlpostBot'                    => self::CRAWLER_SEARCH,
+		'AlpostBot'                           => self::CRAWLER_SEARCH,
 		// Collects content "that may be used to train" ElevenLabs' generative AI models.
-		'ElevenlabsCrawler'            => self::CRAWLER_AI_TRAINING,
+		'ElevenlabsCrawler'                   => self::CRAWLER_AI_TRAINING,
 		// Fetches the pages a customer adds to an ElevenLabs agent's knowledge base, when they add
 		// and refresh them: a person's request, not a crawl.
-		'ElevenlabsBot'                => self::CRAWLER_AI_ASSISTANT,
+		'ElevenlabsBot'                       => self::CRAWLER_AI_ASSISTANT,
 		// Added 1.68.0; categories as proposed in the 2026-10-26 bot watch and confirmed per name
 		// by Miriam on 2026-10-27.
 		//
 		// Visits public pages "to build Kakao search results". No link-preview or AI use documented.
-		'KakaoBot'                     => self::CRAWLER_SEARCH,
+		'KakaoBot'                            => self::CRAWLER_SEARCH,
 		// A public-search pilot. No AI use documented.
-		'FusionDiscoverBot'            => self::CRAWLER_SEARCH,
+		'FusionDiscoverBot'                   => self::CRAWLER_SEARCH,
 		// Checks a fixed list of capability and policy paths and never crawls content pages.
-		'agenticweb-probe'             => self::CRAWLER_SCANNER,
+		'agenticweb-probe'                    => self::CRAWLER_SCANNER,
 		// A venture capital firm looking for companies in home, job and team pages: deal sourcing,
 		// which none of the other tags describes.
-		'ev-crawler'                   => self::CRAWLER_OTHER,
+		'ev-crawler'                          => self::CRAWLER_OTHER,
 		// Added 1.73.0; categories as proposed in the 2026-11-02 and 2026-11-09 bot watches, except
 		// TechLeadsBot (Miriam, 2026-11-10).
 		// Fetches the pages a HubSpot customer adds to its AI customer agent: a customer-configured
 		// fetch, the same call as amazon-Quick-on-behalf-of.
-		'HubSpot Crawler'              => self::CRAWLER_AI_ASSISTANT,
-		'360Spider'                    => self::CRAWLER_SEARCH,
+		'HubSpot Crawler'                     => self::CRAWLER_AI_ASSISTANT,
+		'360Spider'                           => self::CRAWLER_SEARCH,
 		// Landing-page quality checks for Google Ads, the same call as meta-externalads.
-		'AdsBot-Google'                => self::CRAWLER_OTHER,
+		'AdsBot-Google'                       => self::CRAWLER_OTHER,
 		// Technology profiling for a sales-lead directory, the same call as BitMoversBot.
-		'TechLeadsBot'                 => self::CRAWLER_OTHER,
-		'RiverBot'                     => self::CRAWLER_AI_TRAINING,
-		'AIWebIndex'                   => self::CRAWLER_AI_SEARCH,
-		'BakenBot'                     => self::CRAWLER_AI_SEARCH,
-		'AgentReady'                   => self::CRAWLER_SCANNER,
-		'RankZeroBot'                  => self::CRAWLER_SCANNER,
-		'KeenableBot'                  => self::CRAWLER_AI_SEARCH,
+		'TechLeadsBot'                        => self::CRAWLER_OTHER,
+		'RiverBot'                            => self::CRAWLER_AI_TRAINING,
+		'AIWebIndex'                          => self::CRAWLER_AI_SEARCH,
+		'BakenBot'                            => self::CRAWLER_AI_SEARCH,
+		'AgentReady'                          => self::CRAWLER_SCANNER,
+		'RankZeroBot'                         => self::CRAWLER_SCANNER,
+		'KeenableBot'                         => self::CRAWLER_AI_SEARCH,
 		// A browser Anthropic runs for a person who asked Claude to do something on the web.
-		'Claude-Agent'                 => self::CRAWLER_AI_ASSISTANT,
+		'Claude-Agent'                        => self::CRAWLER_AI_ASSISTANT,
+		// Added 1.75.0 (Miriam, 2026-11-23).
+		// Google's hosted browser, acting on a person's request.
+		'Google-Agent'                        => self::CRAWLER_AI_ASSISTANT,
+		// Fetches only when someone runs a Google testing tool on the page.
+		'Google-InspectionTool'               => self::CRAWLER_SEO,
+		'Google-Structured-Data-Testing-Tool' => self::CRAWLER_SEO,
+		'SeobilityBot'                        => self::CRAWLER_SEO,
+		'KostoBot'                            => self::CRAWLER_SEO,
+		// A small-web index; most searches also get an AI summary of its own results.
+		'watrsearch'                          => self::CRAWLER_SEARCH,
+		'getwowlink-prospector'               => self::CRAWLER_SEO,
+		// Records sites' technologies and the business contacts they publish.
+		'Kaupr'                               => self::CRAWLER_OTHER,
+		// Builds multilingual text corpora; the closest category is training.
+		'ethicrawl'                           => self::CRAWLER_AI_TRAINING,
+		// Link previews, like Twitterbot.
+		'LinkedInBot'                         => self::CRAWLER_OTHER,
+		// Reverse image search.
+		'TinEye'                              => self::CRAWLER_SEARCH,
+		'T2Bot'                               => self::CRAWLER_SEARCH,
+		'ConvertlyftBot'                      => self::CRAWLER_SEO,
+		'InternetData.io'                     => self::CRAWLER_SCANNER,
 	);
 
 	/**
@@ -878,8 +945,12 @@ class MMSAR_Agent_Log {
 		'crawl-engine'      => 'creasource.dev',
 		// Required by Miriam (2026-10-05): only the form carrying Elementor's repository link is
 		// recognised. It sits inside the first 80 characters of the user-agent, so the stored raw
-		// rows satisfy it too.
-		'AgentReadyScanner' => 'github.com/elementor',
+		// rows satisfy it too. Since 1.75.0 the scanner's newer link, elementor.com/checker, is
+		// accepted as well (Miriam, 2026-11-23): either one satisfies the guard.
+		'AgentReadyScanner' => array( 'github.com/elementor', 'elementor.com/checker' ),
+		// Added 1.75.0. Precautionary: a short token. The domain sits inside the first 80
+		// characters of the only form seen.
+		'T2Bot'             => 't2ind.com',
 		// Added 1.63.0. Required, not precautionary: `BeansLLM-CorpusBot/1.1
 		// (+https://scrape.beansllm.ai/bot; …)`, an unrelated bot on hold, sent 66 requests in the
 		// week before and contains the name. Unguarded, every one of its rows would be stored as
@@ -1065,6 +1136,73 @@ class MMSAR_Agent_Log {
 	}
 
 	/**
+	 * Turns `failed` rows whose claimed name no longer has any verification method into `unverifiable`.
+	 *
+	 * `failed` means a request was checked against a published list or a reverse-DNS convention and
+	 * did not match. If the plugin later drops that method for a name, nothing is left that the
+	 * verdict was measured against, and the honest reading is the one a new request gets: cannot
+	 * check. ethicrawl is the case (1.75.0-dev.2): its list was bundled in dev.1, its only two rows
+	 * read `failed` against it, and the list was then dropped because it did not cover them.
+	 *
+	 * Narrow on purpose. Only rows that claim a recognised name are touched, never a user-run client
+	 * (those get `client`, not `failed`, and a pre-1.47.0 row is left as it was), and never a name
+	 * that still has a method, so every forgery of a verifiable crawler keeps its verdict.
+	 *
+	 * @return int Rows changed.
+	 */
+	private static function withdraw_failed_without_method() {
+		global $wpdb;
+
+		$changed = 0;
+		foreach ( self::failed_agents_without_method() as $agent ) {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Annotating this plugin's own table.
+			$updated  = $wpdb->query(
+				$wpdb->prepare(
+					'UPDATE %i SET verified = %s, verified_at = %s WHERE agent = %s AND verified = %s',
+					self::table(),
+					MMSAR_Agent_Log_Verify::UNVERIFIABLE,
+					current_time( 'mysql', true ),
+					$agent,
+					MMSAR_Agent_Log_Verify::FAILED
+				)
+			);
+			$changed += is_numeric( $updated ) ? (int) $updated : 0;
+		}
+		return $changed;
+	}
+
+	/**
+	 * Stored agent values that hold `failed` rows although the name they claim has no method.
+	 *
+	 * Shared by the correction above and by count_recheckable(), which decides whether the
+	 * Re-check button is shown at all. Missing from that count in 1.75.0-dev.2, the button stayed
+	 * hidden on a log with nothing else to re-check, and the correction could never run.
+	 *
+	 * @return string[]
+	 */
+	private static function failed_agents_without_method() {
+		global $wpdb;
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- This plugin's own table.
+		$agents = $wpdb->get_col(
+			$wpdb->prepare(
+				'SELECT DISTINCT agent FROM %i WHERE verified = %s',
+				self::table(),
+				MMSAR_Agent_Log_Verify::FAILED
+			)
+		);
+
+		$found = array();
+		foreach ( (array) $agents as $agent ) {
+			$agent = (string) $agent;
+			if ( '' === MMSAR_Agent_Log_Verify::claimed_name( $agent ) || self::is_user_run_client( $agent ) || MMSAR_Agent_Log_Verify::has_method( $agent ) ) {
+				continue;
+			}
+			$found[] = $agent;
+		}
+		return $found;
+	}
+
+	/**
 	 * Turns `failed` rows whose address is inside the operator's published ranges into `verified`.
 	 *
 	 * `failed` is a conclusion, so the rest of Re-check leaves it alone. But it is the one verdict
@@ -1079,7 +1217,7 @@ class MMSAR_Agent_Log {
 	public static function recheck_failed() {
 		global $wpdb;
 
-		$corrected = 0;
+		$corrected = self::withdraw_failed_without_method();
 		foreach ( self::failed_pairs_in_ranges() as $pair ) {
 			// The verdict is cached per address for a week, so a new row from this address would
 			// otherwise read `failed` again.
@@ -2478,6 +2616,17 @@ class MMSAR_Agent_Log {
 				)
 			);
 		}
+		foreach ( self::failed_agents_without_method() as $agent ) {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- This plugin's own table; a cached count would be stale.
+			$total += (int) $wpdb->get_var(
+				$wpdb->prepare(
+					'SELECT COUNT(*) FROM %i WHERE verified = %s AND agent = %s',
+					self::table(),
+					MMSAR_Agent_Log_Verify::FAILED,
+					$agent
+				)
+			);
+		}
 		return $total + count( self::failed_pairs_in_ranges() );
 	}
 
@@ -3371,7 +3520,27 @@ class MMSAR_Agent_Log {
 		if ( ! isset( self::AGENT_DISCLOSURES[ $needle ] ) ) {
 			return true;
 		}
-		return false !== stripos( $ua, self::AGENT_DISCLOSURES[ $needle ] );
+		return self::carries_disclosure( $ua, self::AGENT_DISCLOSURES[ $needle ] );
+	}
+
+	/**
+	 * Whether a string carries one of a name's accepted disclosures.
+	 *
+	 * An AGENT_DISCLOSURES value is one string, or (since 1.75.0, for an operator that changed the
+	 * link it sends) a list of strings any one of which is enough. Shared with
+	 * MMSAR_Agent_Log_Verify, which applies the same guard to stored values.
+	 *
+	 * @param string          $haystack   User-agent or stored agent value.
+	 * @param string|string[] $disclosure Accepted disclosure, or a list of them.
+	 * @return bool
+	 */
+	public static function carries_disclosure( $haystack, $disclosure ) {
+		foreach ( (array) $disclosure as $one ) {
+			if ( '' !== (string) $one && false !== stripos( (string) $haystack, (string) $one ) ) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**

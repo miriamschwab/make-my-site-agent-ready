@@ -4,7 +4,7 @@ Tags: markdown, llm, ai, llms-txt, agents
 Requires at least: 6.2
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.74.0
+Stable tag: 1.75.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -115,6 +115,10 @@ On activation and when you regenerate manually, the plugin converts every publis
 
 Remaining posts are still converted on demand the first time their `.md`, `/llms.txt`, or `/llms-full.txt` is requested, and the result is cached from then on.
 
+= I run a multisite network. Do I press Regenerate All on every site? =
+
+Yes. Each site in a network keeps its own Markdown, llms.txt and llms-full.txt, and Regenerate All only rebuilds the site whose settings page you're on. When a changelog entry asks you to press Regenerate All, go to Settings > Agent-Ready on each site and press it there. On a site you skip, each post still updates the next time it's saved.
+
 = I made something else on my site agent-ready. Can I get it listed in these files? =
 
 Yes, and you don't need to write any code. Go to **Settings > Agent-Ready > Your Endpoints**, fill in the empty row with a name and the URL, tick which documents it should appear in, and save. It's then listed in `/.well-known/api-catalog`, `/llms.txt`, and the Agent Skills index together.
@@ -201,7 +205,7 @@ For people, this is what it keeps:
 
 **You can choose to keep more, for six months.** Off by default. The setting "Keep full addresses for six months" stores every entry's full address and full user-agent, people's included, because a visit that was misread can't be checked again from a reduced address. After six months, the address on any entry not identified as a known crawler is reduced to its network, and every full user-agent is cleared. Switching it off doesn't shorten the six months for entries already stored. A full IP address is personal data, so say so in your privacy policy first.
 
-Recognised crawlers keep their full address, because verifying who they are needs it. That includes Claude-Agent, the browser Anthropic runs when someone asks Claude to do something on the web: its address is one of Anthropic's servers, not the person's. The whole table is removed when you delete the plugin, and "Entries to keep" on the Agent Log screen drops the oldest entries past a number you choose. Suggested wording for your privacy policy, matching the options you have switched on, is under Settings > Privacy.
+Recognised crawlers keep their full address, because verifying who they are needs it. That includes Claude-Agent and Google-Agent, the browsers Anthropic and Google run when someone asks their assistant to do something on the web: the address is one of the operator's servers, not the person's. The whole table is removed when you delete the plugin, and "Entries to keep" on the Agent Log screen drops the oldest entries past a number you choose. Suggested wording for your privacy policy, matching the options you have switched on, is under Settings > Privacy.
 
 = Are pages marked noindex left out? =
 
@@ -267,6 +271,15 @@ If they were rebuilds, the field really does change the Markdown that often, and
 They are a floor. Many AI apps open links without telling the site where the visitor came from, and only ChatGPT reliably tags its links with `utm_source`. Those visits look like direct visits and cannot be counted. Pages already in your cache pick up the counting script when the cache next refreshes, and a security plugin that blocks the REST API for visitors stops the count entirely.
 
 == Changelog ==
+
+= 1.75.0 - 2026-11-23 =
+
+* New: Google-Agent, the browser Google runs when a person asks one of its agents to do something on the web, is recognised and checked against the addresses Google publishes for it (IPv4 and IPv6). Its visits count as an AI assistant's, never as a person's page view, even though it looks like an ordinary Chrome.
+* New: a ChatGPT connector calling your MCP server now reads as verified. OpenAI publishes a separate address list for connectors, GPT Actions and agentic commerce, and ChatGPT-User is now checked against it as well as against its crawler list. A crawler name such as GPTBot from one of those addresses still reads as Spoofed, because a connector address doesn't prove a crawler.
+* New: thirteen more bots are recognised in the Agent Log, each with a category. Verified by the addresses its operator publishes: SeobilityBot (SEO tool). Verified by reverse DNS: Google-InspectionTool, used by Google's Rich Results Test and URL inspection, and the older Google-Structured-Data-Testing-Tool name (both SEO tools). Recognised only, since there's no published way to check them: KostoBot, getwowlink-prospector and ConvertlyftBot (SEO tools), watrsearch, TinEye and T2Bot (search engines), Kaupr and LinkedInBot (other), InternetData.io (scanner), and ethicrawl (AI training), whose published address list doesn't cover the addresses it has crawled from. A recognised bot's address is stored in full rather than cut to its network. Press Re-check on the Agent Log to give their earlier visits a verdict.
+* Changed: Re-check now also clears a Spoofed verdict when the plugin no longer has any way to check the name it was given for, and marks it as can't be checked instead. A visit can only fail a check that still exists.
+* Changed: Elementor's agent-readiness scanner is recognised again from the link it now sends (elementor.com/checker), as well as the old one.
+* Changed: the published IP lists the Agent Log checks crawlers against are refreshed to 2026-11-23. Perplexity added eight addresses for PerplexityBot, and Anthropic added one for Claude-Agent; visits from them read Spoofed before and now verify. Alpost moved AlpostBot to a new address: visits from the new one now verify, and visits already verified from the old one keep their verdict.
 
 = 1.74.0 - 2026-11-17 =
 

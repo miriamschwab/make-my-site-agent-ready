@@ -2,6 +2,15 @@
 
 All notable changes to Make My Site Agent-Ready.
 
+## 1.75.0 — 2026-11-23
+
+- New: Google-Agent, the browser Google runs when a person asks one of its agents to do something on the web, is recognised and checked against the addresses Google publishes for it (IPv4 and IPv6). Its visits count as an AI assistant's, never as a person's page view, even though it looks like an ordinary Chrome.
+- New: a ChatGPT connector calling your MCP server now reads as verified. OpenAI publishes a separate address list for connectors, GPT Actions and agentic commerce, and ChatGPT-User is now checked against it as well as against its crawler list. A crawler name such as GPTBot from one of those addresses still reads as Spoofed, because a connector address doesn't prove a crawler.
+- New: thirteen more bots are recognised in the Agent Log, each with a category. Verified by the addresses its operator publishes: SeobilityBot (SEO tool). Verified by reverse DNS: Google-InspectionTool, used by Google's Rich Results Test and URL inspection, and the older Google-Structured-Data-Testing-Tool name (both SEO tools). Recognised only, since there's no published way to check them: KostoBot, getwowlink-prospector and ConvertlyftBot (SEO tools), watrsearch, TinEye and T2Bot (search engines), Kaupr and LinkedInBot (other), InternetData.io (scanner), and ethicrawl (AI training), whose published address list doesn't cover the addresses it has crawled from. A recognised bot's address is stored in full rather than cut to its network. Press Re-check on the Agent Log to give their earlier visits a verdict.
+- Changed: Re-check now also clears a Spoofed verdict when the plugin no longer has any way to check the name it was given for, and marks it as can't be checked instead. A visit can only fail a check that still exists.
+- Changed: Elementor's agent-readiness scanner is recognised again from the link it now sends (elementor.com/checker), as well as the old one.
+- Changed: the published IP lists the Agent Log checks crawlers against are refreshed to 2026-11-23. Perplexity added eight addresses for PerplexityBot, and Anthropic added one for Claude-Agent; visits from them read Spoofed before and now verify. Alpost moved AlpostBot to a new address: visits from the new one now verify, and visits already verified from the old one keep their verdict.
+
 ## 1.74.0 — 2026-11-17
 
 - Fixed: changing a custom field on a published post, without saving the post itself, now updates its Markdown version. This covers a field changed by code, an AI agent or the REST API. Before, the Markdown kept the old value until the post was next saved or Regenerate All was pressed. Each changed post is checked once at the end of the request, its Markdown is rebuilt only if it changed, housekeeping fields such as edit locks are ignored, and writes during ordinary page views (view counters and the like) are not watched.

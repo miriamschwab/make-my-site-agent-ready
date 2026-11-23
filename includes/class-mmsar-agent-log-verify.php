@@ -143,9 +143,9 @@ class MMSAR_Agent_Log_Verify {
 	 */
 	const VERIFY_HOSTS = array(
 		// Google — https://developers.google.com/search/docs/crawling-indexing/verifying-googlebot.
-		'GoogleOther'           => array( 'googlebot.com', 'google.com', 'googleusercontent.com' ),
-		'Google-Extended'       => array( 'googlebot.com', 'google.com', 'googleusercontent.com' ),
-		'Googlebot'             => array( 'googlebot.com', 'google.com' ),
+		'GoogleOther'                         => array( 'googlebot.com', 'google.com', 'googleusercontent.com' ),
+		'Google-Extended'                     => array( 'googlebot.com', 'google.com', 'googleusercontent.com' ),
+		'Googlebot'                           => array( 'googlebot.com', 'google.com' ),
 		// Google's user-triggered fetchers (1.62.0) —
 		// https://developers.google.com/crawling/docs/crawlers-fetchers/google-user-triggered-fetchers.
 		// Google documents two masks for them, `google-proxy-*.google.com` (user-owned) and
@@ -155,24 +155,24 @@ class MMSAR_Agent_Log_Verify {
 		// 74.125.208.227 reverse to google-proxy-<octets>.google.com and forward-confirm. The
 		// matching range file (user-triggered-fetchers-google.json) holds all four but is not
 		// bundled, for the reason given at AhrefsBot.
-		'Google-GeminiNotebook' => array( 'google.com', 'googleusercontent.com' ),
-		'Google-NotebookLM'     => array( 'google.com', 'googleusercontent.com' ),
-		'Google-Read-Aloud'     => array( 'google.com', 'googleusercontent.com' ),
+		'Google-GeminiNotebook'               => array( 'google.com', 'googleusercontent.com' ),
+		'Google-NotebookLM'                   => array( 'google.com', 'googleusercontent.com' ),
+		'Google-Read-Aloud'                   => array( 'google.com', 'googleusercontent.com' ),
 		// Apple — https://support.apple.com/en-us/119829.
-		'Applebot-Extended'     => array( 'applebot.apple.com' ),
-		'Applebot'              => array( 'applebot.apple.com' ),
+		'Applebot-Extended'                   => array( 'applebot.apple.com' ),
+		'Applebot'                            => array( 'applebot.apple.com' ),
 		// Amazon — https://developer.amazon.com/amazonbot.
-		'Amazonbot'             => array( 'crawl.amazonbot.amazon' ),
+		'Amazonbot'                           => array( 'crawl.amazonbot.amazon' ),
 		// Microsoft — https://www.bing.com/webmasters/help/verifying-bingbot-2195837f.
-		'bingbot'               => array( 'search.msn.com' ),
+		'bingbot'                             => array( 'search.msn.com' ),
 		// Perplexity documents both methods; the range data below covers it as well.
-		'PerplexityBot'         => array( 'perplexity.ai', 'perplexity.com' ),
-		'Perplexity-User'       => array( 'perplexity.ai', 'perplexity.com' ),
+		'PerplexityBot'                       => array( 'perplexity.ai', 'perplexity.com' ),
+		'Perplexity-User'                     => array( 'perplexity.ai', 'perplexity.com' ),
 		// Ahrefs — https://ahrefs.com/robot/. Confirmed 2026-09-14 on two addresses from this site's
 		// log: proxy-de002-cip10.ahrefs.net and proxy-de009-cip8.ahrefs.net, both forward-confirmed.
 		// Ahrefs also publishes a range API; it is deliberately not bundled, because a stale range
 		// file turns a range miss on a PTR-less address into `failed`, and rDNS is proven here.
-		'AhrefsBot'             => array( 'ahrefs.com', 'ahrefs.net' ),
+		'AhrefsBot'                           => array( 'ahrefs.com', 'ahrefs.net' ),
 		// Common Crawl — https://commoncrawl.org/ccbot. Documents both methods, so CCBot is in
 		// VERIFY_RANGES too and the range is tested first. Confirmed 2026-09-14 against three
 		// addresses from the published list: 18.97.14.84, 18.97.9.170 and 3.41.188.34 all resolve
@@ -180,11 +180,11 @@ class MMSAR_Agent_Log_Verify {
 		// plainly that CCBot has no reverse DNS over IPv6, which is why the range group carries a
 		// v6 prefix and why resolve_verdict()'s range-first order is load-bearing here rather than
 		// incidental: an IPv6 caller is settled by the range or not at all.
-		'CCBot'                 => array( 'crawl.commoncrawl.org' ),
+		'CCBot'                               => array( 'crawl.commoncrawl.org' ),
 		// Babbar — https://www.babbar.tech/crawler. Confirmed 2026-09-14: c187.babbar.eu and
 		// c188.babbar.eu, both forward-confirmed. Its range file dates from 2024-10 and is not used,
 		// for the same reason as Ahrefs'.
-		'Barkrowler'            => array( 'babbar.eu' ),
+		'Barkrowler'                          => array( 'babbar.eu' ),
 		// Huawei — https://aspiegel.com/petalbot. Documents forward-confirmed reverse DNS as the
 		// check and publishes no ranges, so this suffix list is the only evidence a PetalBot row
 		// can be settled by. **Both suffixes are documented**, and the live one is the newer:
@@ -194,7 +194,7 @@ class MMSAR_Agent_Log_Verify {
 		// registered under, and dropping the older suffix would fail a caller Huawei still vouches
 		// for. This closes the 1.41.0 open item, which recorded the suffix as aspiegel.com alone;
 		// the address that finally arrived was under the other one.
-		'PetalBot'              => array( 'petalsearch.com', 'aspiegel.com' ),
+		'PetalBot'                            => array( 'petalsearch.com', 'aspiegel.com' ),
 		// You.com — https://you.com/docs/youbot. Documents both methods, so YouBot is in
 		// VERIFY_RANGES too and the range is tested first. The published hostname pattern is
 		// `youbot-{octets}.search.you.com`; confirmed 2026-09-14 on 68.67.112.111 from this site's
@@ -205,48 +205,48 @@ class MMSAR_Agent_Log_Verify {
 		// also claimed YouBot, resolves to googleusercontent.com, and additionally claimed
 		// cohere-ai in the same window. Before this entry both rows read `unverifiable` and were
 		// indistinguishable. They no longer are.
-		'YouBot'                => array( 'search.you.com' ),
+		'YouBot'                              => array( 'search.you.com' ),
 		// Added 1.46.0. Each confirmed the two ways this map requires.
 		//
 		// Censys — https://about.censys.io/. Censys documents the scanning and publishes subnets
 		// for opt-out, but names no rDNS convention on that page; the suffix is what three live
 		// addresses from this site's log resolved to and forward-confirmed (bot-watch, 2026-09-18).
 		// Weaker footing than an operator-documented suffix, noted here for that reason.
-		'CensysInspect'         => array( 'censys-scanner.com' ),
+		'CensysInspect'                       => array( 'censys-scanner.com' ),
 		// LeakIX — https://leakix.net/about. Confirmed 2026-09-22 on 165.227.39.235 and
 		// 209.97.180.8 from this site's log: c53df711d7.scan.leakix.org and
 		// a0d8574844.scan.leakix.org, both forward-confirmed.
-		'l9scan'                => array( 'leakix.org' ),
+		'l9scan'                              => array( 'leakix.org' ),
 		// Internet Archive — https://archive.org/details/archive.org_bot. Confirmed on the one
 		// address in this site's log, k8s-worker-711100.ca.archive.org, forward-confirmed
 		// (bot-watch, 2026-09-18).
-		'archive.org_bot'       => array( 'archive.org' ),
+		'archive.org_bot'                     => array( 'archive.org' ),
 		// Yandex — https://yandex.com/support/webmaster/en/robot-workings/check-yandex-robots, which
 		// documents all three. Confirmed 2026-09-22 on four addresses from this site's log —
 		// 213.180.203.245, 87.250.224.245, 87.250.224.248 and 95.108.213.163 — each reversing to
 		// *.spider.yandex.com and forward-confirming. yandex.net and yandex.ru are unexercised
 		// here and rest on the documentation, like bingbot above.
-		'YandexBot'             => array( 'yandex.com', 'yandex.net', 'yandex.ru' ),
+		'YandexBot'                           => array( 'yandex.com', 'yandex.net', 'yandex.ru' ),
 		// Added 1.50.0. Each confirmed the two ways this map requires, re-checked 2026-09-24.
 		//
 		// Qwant — https://help.qwant.com/bot/. Confirmed on 194.187.171.138 and 194.187.171.164:
 		// qwantbot-138-171-187-194.qwant.com and qwantbot-164-171-187-194.qwant.com, both
 		// forward-confirmed.
-		'Qwantbot'              => array( 'qwant.com' ),
+		'Qwantbot'                            => array( 'qwant.com' ),
 		// DataForSEO — https://dataforseo.com/dataforseo-bot, which documents the mask
 		// crawling-gateway-*.dataforseo.com. Confirmed on 136.243.228.198:
 		// crawling-gateway-136-243-228-198.dataforseo.com, forward-confirmed. The same page
 		// publishes IPv4 /29s and IPv6 /64s; they are deliberately not bundled, for the Ahrefs
 		// reason above, since rDNS is proven here.
-		'DataForSeoBot'         => array( 'dataforseo.com' ),
+		'DataForSeoBot'                       => array( 'dataforseo.com' ),
 		// LohiSoft — https://lohisoft.com/bot. Confirmed on 79.139.58.98: crawler1.bot.lohisoft.com,
 		// forward-confirmed. The documented suffix is bot.lohisoft.com, and the bare domain is not
 		// used: it would accept any host the operator names under lohisoft.com.
-		'LohiSoftBot'           => array( 'bot.lohisoft.com' ),
+		'LohiSoftBot'                         => array( 'bot.lohisoft.com' ),
 		// Keywords Everywhere — https://poweredby.keywordseverywhere.com/bot, which lists crawl2,
 		// crawl4 and crawl5. Confirmed on 172.235.150.244: crawl5.poweredby.keywordseverywhere.com,
 		// forward-confirmed.
-		'PoweredByBot'          => array( 'poweredby.keywordseverywhere.com' ),
+		'PoweredByBot'                        => array( 'poweredby.keywordseverywhere.com' ),
 		// Added 1.58.0. Each confirmed the two ways this map requires on 2026-10-05, against every
 		// full address the live log held for the name, not a sample. Through public resolvers: the
 		// local one timed out on almost everything that day, which reads like missing records.
@@ -254,26 +254,26 @@ class MMSAR_Agent_Log_Verify {
 		// Ibou — https://ibou.io/iboubot.html. 46 of 46 addresses, c###.ibou.io, all
 		// forward-confirmed. Its range file (one /24, dated 2025-07-25) is not used, for the Ahrefs
 		// reason above.
-		'IbouBot'               => array( 'ibou.io' ),
+		'IbouBot'                             => array( 'ibou.io' ),
 		// Baidu — http://help.baidu.com/question?prod_id=99&class=0&id=3001, which names both
 		// suffixes. 9 of 9 addresses, *.crawl.baidu.com, forward-confirmed. baidu.jp is unexercised
 		// here and rests on the documentation, like bingbot above.
-		'Baiduspider'           => array( 'baidu.com', 'baidu.jp' ),
+		'Baiduspider'                         => array( 'baidu.com', 'baidu.jp' ),
 		// Cốc Cốc — https://coccoc.com/search/console/coc-coc-robots ("hostname must end with
 		// '.coccoc.com'"). 9 of 9 addresses, bot-*.coccoc.com, forward-confirmed.
-		'coccocbot'             => array( 'coccoc.com' ),
+		'coccocbot'                           => array( 'coccoc.com' ),
 		// FindFiles — https://findfiles.net/en/bot. The one address, 65.21.31.180, reverses to
 		// bot.findfiles.net and forward-confirms. The full host, not the bare domain, as with
 		// LohiSoftBot.
-		'FindFiles'             => array( 'bot.findfiles.net' ),
+		'FindFiles'                           => array( 'bot.findfiles.net' ),
 		// Iframely — https://iframely.com/docs/allowlisting, which documents this, IP lists and
 		// Web Bot Auth. 2 of 2 full addresses, web-*.iframely.com, forward-confirmed; the third row
 		// is stored at network precision. The IP lists are not bundled, since rDNS is proven.
-		'Iframely'              => array( 'iframely.com' ),
+		'Iframely'                            => array( 'iframely.com' ),
 		// creasource.dev — https://abuse.creasource.dev/, which documents FCrDNS for one dedicated
 		// address. 146.59.197.253 reverses to crawler.creasource.dev and forward-confirms; the other
 		// row is stored at network precision. The full host, not the bare domain.
-		'crawl-engine'          => array( 'crawler.creasource.dev' ),
+		'crawl-engine'                        => array( 'crawler.creasource.dev' ),
 		// Added 1.66.0 — https://www.ibou.com/crawlers.html, which documents the suffix as
 		// "ibou.io (forward-confirmed)" and tells a verifier to resolve the hostname back and check
 		// it returns the address it started from. Re-checked 2026-10-21 against ibou's own published
@@ -283,7 +283,7 @@ class MMSAR_Agent_Log_Verify {
 		// Nothing in the /24 resolves anywhere else. The range file is deliberately not bundled, for
 		// the Ahrefs reason above and to follow IbouBot, whose own list is unused: rDNS is proven
 		// here, and a stale bundled range turns a range miss on a PTR-less address into `failed`.
-		'ibou-search'           => array( 'ibou.io' ),
+		'ibou-search'                         => array( 'ibou.io' ),
 		// Added 1.73.0. Each re-confirmed the two ways this map requires on 2026-11-10, on addresses
 		// from the live log, through 1.1.1.1.
 		//
@@ -293,19 +293,26 @@ class MMSAR_Agent_Log_Verify {
 		// reverse to rate-limited-proxy-….google.com and forward-confirm. googlebot.com is not
 		// documented for these crawlers and is not entered. Google's special-crawlers.json is not
 		// bundled, for the Ahrefs reason above.
-		'AdsBot-Google'         => array( 'google.com' ),
+		'AdsBot-Google'                       => array( 'google.com' ),
 		// River AI — https://river.ai/bot. 32.195.253.200 and 52.72.41.255 reverse to
 		// crawl-….bot.river.ai and forward-confirm. Its list is bundled as well (Miriam, 2026-11-10),
 		// so a range miss falls through to this suffix. The full host, not the bare domain.
-		'RiverBot'              => array( 'bot.river.ai' ),
+		'RiverBot'                            => array( 'bot.river.ai' ),
 		// Lyrenth — https://lyrenth.com/bot ("forward-confirmed reverse DNS under lyrenth.com").
 		// 138.201.157.96 and 46.224.73.201 reverse to crawler-<n>.lyrenth.com and forward-confirm.
 		// Its list is bundled as well, as with RiverBot.
-		'AIWebIndex'            => array( 'lyrenth.com' ),
+		'AIWebIndex'                          => array( 'lyrenth.com' ),
 		// SeeMe AI — https://baken.dev/bakenbot. 213.239.220.146 reverses to bakenbot.baken.dev and
 		// forward-confirms. The page lists one IPv4 and one IPv6 address, not as a file; rDNS covers
 		// them.
-		'BakenBot'              => array( 'baken.dev' ),
+		'BakenBot'                            => array( 'baken.dev' ),
+		// Added 1.75.0. Google's testing tools. Google-InspectionTool is one of Google's common
+		// crawlers and verifies as Googlebot does: both logged addresses (2026-11-12) reversed to
+		// crawl-….googlebot.com and forward-confirmed on 2026-11-23. The retired Structured Data
+		// Testing Tool name's one logged address (2026-11-17) reversed to google-proxy-….google.com
+		// and forward-confirmed the same day, so it gets google.com only.
+		'Google-InspectionTool'               => array( 'googlebot.com', 'google.com' ),
+		'Google-Structured-Data-Testing-Tool' => array( 'google.com' ),
 	);
 
 	/**
@@ -317,7 +324,11 @@ class MMSAR_Agent_Log_Verify {
 	 * A hit here verifies; a miss changes nothing, the agent's main group still decides.
 	 */
 	const EXTRA_RANGES = array(
-		'Claude-User' => array( 'anthropic-outbound' ),
+		'Claude-User'  => array( 'anthropic-outbound' ),
+		// Added 1.75.0 (Miriam, 2026-11-23). OpenAI's connector range, the counterpart of the line
+		// above: a ChatGPT connector calling this site's MCP server comes from it. GPTBot and
+		// OAI-SearchBot are deliberately absent, so a crawler claim from a connector address fails.
+		'ChatGPT-User' => array( 'openai-outbound' ),
 	);
 
 	/**
@@ -397,6 +408,13 @@ class MMSAR_Agent_Log_Verify {
 		// be re-read hourly; this plugin bundles it, so a new address reads `failed` until the next
 		// refresh, and Re-check turns those rows `verified` once it ships (Miriam, 2026-11-10).
 		'Claude-Agent'          => 'anthropic-agent',
+		// Added 1.75.0. Google-Agent has a group of its own for the same reason as Claude-Agent: Google
+		// documents user-triggered-agents.json for this one agent, and its other files for others.
+		'Google-Agent'          => 'google-agent',
+		// Added 1.75.0. Range-only, no reverse DNS documented. The one logged address was inside
+		// Seobility's list on 2026-11-23. ethicrawl is deliberately absent: its one-address list
+		// did not cover the address its only two logged requests came from (Miriam, 2026-11-23, dev.2).
+		'SeobilityBot'          => 'seobility',
 	);
 
 	/**
@@ -990,7 +1008,7 @@ class MMSAR_Agent_Log_Verify {
 		$required = MMSAR_Agent_Log::AGENT_DISCLOSURES;
 		foreach ( $required as $needle => $disclosure ) {
 			if ( 0 === strcasecmp( $needle, $name ) ) {
-				return false !== stripos( $agent, $disclosure );
+				return MMSAR_Agent_Log::carries_disclosure( $agent, $disclosure );
 			}
 		}
 		return true;

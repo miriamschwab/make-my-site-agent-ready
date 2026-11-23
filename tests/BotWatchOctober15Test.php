@@ -228,6 +228,16 @@ final class BotWatchOctober15_Wpdb {
 	}
 
 	/**
+	 * The distinct `failed` agents read (1.75.0-dev.3): this log has none.
+	 *
+	 * @param array{0:string,1:array} $prepared Prepared query.
+	 * @return string[]
+	 */
+	public function get_col( $prepared ) {
+		return array();
+	}
+
+	/**
 	 * A per-agent count: seven rows, the live figure.
 	 *
 	 * @param array{0:string,1:array} $prepared Prepared query.

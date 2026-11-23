@@ -77,6 +77,15 @@ final class ListSinceSqliteWpdb {
 	}
 
 	/**
+	 * @param string $sql Prepared query.
+	 * @return string|null
+	 */
+	public function get_var( $sql ) {
+		$v = $this->pdo->query( $sql )->fetchColumn();
+		return false === $v ? null : (string) $v;
+	}
+
+	/**
 	 * Seeds a row.
 	 *
 	 * @param string $logged_at UTC time.
@@ -220,6 +229,45 @@ final class ListSinceTest extends TestCase {
 	 * Re-check does not offer withheld pre-list rows, which it could never change, and a full
 	 * reset-and-judge cycle leaves them withheld.
 	 */
+	/**
+	 * Re-check withdraws `failed` from a name that no longer has a method, and only from it (1.75.0-dev.2).
+	 *
+	 * ethicrawl's list was bundled in dev.1 and dropped in dev.2, leaving its two rows `failed` with
+	 * nothing to have failed against. Forgeries of names that still have a method keep their verdict,
+	 * as do unclaimed raw rows and every other verdict.
+	 */
+	public function test_recheck_withdraws_failed_without_method(): void {
+		$raw = 'ethicrawl/0.1 (Ethical crawler respecting robots and AI directives; https://ethi';
+		$this->db->add( '2026-11-11 21:13:55', $raw, '198.51.100.7', 'failed' );
+		$this->db->add( '2026-11-11 21:13:56', $raw, '198.51.100.7', 'failed' );
+		$this->db->add( '2026-11-12 10:00:00', 'GPTBot', '198.51.100.8', 'failed' );
+		$this->db->add( '2026-11-12 10:00:01', 'Claude-User', '198.51.100.9', 'failed' );
+		$this->db->add( '2026-11-12 10:00:02', 'KostoBot', '198.51.100.10', 'unverifiable' );
+		$this->db->add( '2026-11-12 10:00:03', 'Mozilla/5.0', '198.51.100.11', 'failed' );
+		$this->db->add( '2026-11-12 10:00:04', 'ethicrawl', '198.51.100.12', 'verified' );
+
+		$this->assertFalse( MMSAR_Agent_Log_Verify::has_method( 'ethicrawl' ) );
+		// The two rows count as re-checkable, so the button that runs this is shown (missed in dev.2).
+		$before = MMSAR_Agent_Log::count_recheckable();
+		$this->assertGreaterThanOrEqual( 2, $before );
+		$this->assertSame( 2, MMSAR_Agent_Log::recheck_failed() );
+		$this->assertSame( $before - 2, MMSAR_Agent_Log::count_recheckable() );
+		$this->assertSame(
+			array(
+				'2026-11-11 21:13:55' => 'unverifiable',
+				'2026-11-11 21:13:56' => 'unverifiable',
+				'2026-11-12 10:00:00' => 'failed',
+				'2026-11-12 10:00:01' => 'failed',
+				'2026-11-12 10:00:02' => 'unverifiable',
+				'2026-11-12 10:00:03' => 'failed',
+				'2026-11-12 10:00:04' => 'verified',
+			),
+			$this->db->verdicts()
+		);
+		// Idempotent: a second pass changes nothing.
+		$this->assertSame( 0, MMSAR_Agent_Log::recheck_failed() );
+	}
+
 	public function test_recheck_leaves_withheld_rows_alone(): void {
 		$this->db->add( '2026-09-15 07:42:01', self::RAW, self::OLD_IP, 'unverifiable' );
 		$this->db->add( '2026-09-16 07:42:01', 'TechLeadsBot', '65.109.16.46', 'unverifiable' );

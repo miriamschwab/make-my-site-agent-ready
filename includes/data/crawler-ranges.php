@@ -36,7 +36,7 @@ return array(
 	// real desktop-chat and claude.ai fetches into accusations of forgery.
 	// Source: https://claude.com/crawling/bots.json.
 	'anthropic'          => array(
-		'captured' => '2026-11-10',
+		'captured' => '2026-11-23',
 		'v4'       => array(
 			'34.152.124.140/32',
 			'34.153.21.190/32',
@@ -71,7 +71,7 @@ return array(
 	// Phased-out sections are other addresses.
 	// Source: https://platform.claude.com/docs/en/api/ip-addresses (Outbound IP addresses, IPv4).
 	'anthropic-outbound' => array(
-		'captured' => '2026-11-10',
+		'captured' => '2026-11-23',
 		'v4'       => array(
 			'153.61.208.0/20',
 			'160.79.104.0/21',
@@ -84,7 +84,7 @@ return array(
 	// addresses across the three files, nothing withdrawn.
 	// Source: https://openai.com/gptbot.json, https://openai.com/searchbot.json, https://openai.com/chatgpt-user.json.
 	'openai'             => array(
-		'captured' => '2026-11-10',
+		'captured' => '2026-11-23',
 		'v4'       => array(
 			'4.151.71.176/28',
 			'4.151.119.48/28',
@@ -377,10 +377,15 @@ return array(
 		'v6'       => array(),
 	),
 	// Perplexity — PerplexityBot, Perplexity-User.
+	//
+	// 2026-11-23: perplexitybot.json (creationTime 2026-11-18) added eight single addresses, one AWS
+	// /29 (3.41.218.160/29 here); 23 -> 31 single addresses across the two files, nothing withdrawn.
+	// They reverse to generic amazonaws.com names, so only this list covers them.
 	// Source: https://www.perplexity.ai/perplexitybot.json, https://www.perplexity.ai/perplexity-user.json.
 	'perplexity'         => array(
-		'captured' => '2026-11-10',
+		'captured' => '2026-11-23',
 		'v4'       => array(
+			'3.41.218.160/29',
 			'3.222.232.239/32',
 			'3.224.62.45/32',
 			'18.97.1.228/32',
@@ -398,7 +403,7 @@ return array(
 	// they ever diverge, split this into two groups rather than unioning them.
 	// Source: https://duckduckgo.com/duckassistbot.json, https://duckduckgo.com/duckduckbot.json.
 	'duckduckgo'         => array(
-		'captured' => '2026-11-10',
+		'captured' => '2026-11-23',
 		'v4'       => array(
 			'4.144.148.23/32',
 			'4.144.182.50/32',
@@ -895,7 +900,7 @@ return array(
 	// reverse DNS — 35.198.113.100 has no PTR record. A single address is unusually narrow, so
 	// expect this one to churn: re-fetch at release time like the rest.
 	'linkup'             => array(
-		'captured' => '2026-11-10',
+		'captured' => '2026-11-23',
 		'v4'       => array(
 			'35.198.113.100/32',
 		),
@@ -903,7 +908,7 @@ return array(
 	),  // SeznamBot.
 	// Source: https://search.seznam.cz/ipranges/seznambot.json.
 	'seznam'             => array(
-		'captured' => '2026-11-10',
+		'captured' => '2026-11-23',
 		'v4'       => array(
 			'77.75.72.26/32',
 			'77.75.73.26/32',
@@ -1004,7 +1009,7 @@ return array(
 	// MojeekBot.
 	// Source: https://www.mojeek.com/mojeekbot.json.
 	'mojeek'             => array(
-		'captured' => '2026-11-10',
+		'captured' => '2026-11-23',
 		'v4'       => array(
 			'5.102.173.64/28',
 		),
@@ -1013,7 +1018,7 @@ return array(
 	// SERankingBacklinksBot. Published as a list of bare addresses, stored here as /32s.
 	// Source: https://api.seranking.com/backlinks-bot-ips.
 	'seranking'          => array(
-		'captured' => '2026-11-10',
+		'captured' => '2026-11-23',
 		'v4'       => array(
 			'95.217.114.159/32',
 			'95.217.114.179/32',
@@ -1104,7 +1109,7 @@ return array(
 	// ShapBot.
 	// Source: https://docs.parallel.ai/resources/shapbot.json.
 	'parallel'           => array(
-		'captured' => '2026-11-10',
+		'captured' => '2026-11-23',
 		'v4'       => array(
 			'23.251.146.115/32',
 			'34.9.172.22/32',
@@ -1130,7 +1135,7 @@ return array(
 	// crawl.commoncrawl.org is IPv4-only by Common Crawl's own statement, so for an IPv6 caller
 	// this list is the only evidence there is.
 	'commoncrawl'        => array(
-		'captured' => '2026-11-10',
+		'captured' => '2026-11-23',
 		'v4'       => array(
 			'3.41.188.32/29',
 			'18.97.9.168/29',
@@ -1156,7 +1161,7 @@ return array(
 	// the /24 below. A regex over the page reads both as new prefixes, and bundling the first would
 	// verify Googlebot as YouBot. Caught 2026-10-21.
 	'youcom'             => array(
-		'captured' => '2026-11-10',
+		'captured' => '2026-11-23',
 		'v4'       => array(
 			'68.67.112.0/24',
 		),
@@ -1165,7 +1170,7 @@ return array(
 	// SofyaBot.
 	// Source: https://sofya.co/bot/ips.json.
 	'sofya'              => array(
-		'captured' => '2026-11-10',
+		'captured' => '2026-11-23',
 		'v4'       => array(
 			'159.195.72.86/32',
 			'159.195.250.248/32',
@@ -1183,7 +1188,7 @@ return array(
 	// bot), so no verdict could be reached on them. The IPv6 entries are the page's /64s, written
 	// compressed.
 	'xpanse'             => array(
-		'captured' => '2026-11-10',
+		'captured' => '2026-11-23',
 		'v4'       => array(
 			'35.203.210.0/23',
 			'144.86.173.0/24',
@@ -1206,7 +1211,7 @@ return array(
 	// Linkup precedent: a single published /32 is still the operator's only method.
 	// Source: https://knowngood.sh/bot/ips.json.
 	'knowngood'          => array(
-		'captured' => '2026-11-10',
+		'captured' => '2026-11-23',
 		'v4'       => array(
 			'3.216.221.135/32',
 		),
@@ -1215,7 +1220,7 @@ return array(
 	// Inoreader — feed fetcher. Plain text, one CIDR per line.
 	// Source: https://www.inoreader.com/.well-known/ip_list.txt.
 	'inoreader'          => array(
-		'captured' => '2026-11-10',
+		'captured' => '2026-11-23',
 		'v4'       => array(
 			'45.76.28.241/32',
 			'84.242.180.248/29',
@@ -1240,7 +1245,7 @@ return array(
 	// Drop anything appearing in that field. Caught 2026-10-21; the list itself was unchanged.
 	// Source: https://developer.amazon.com/amazonbot/searchbot-ip-addresses/.
 	'amazon-searchbot'   => array(
-		'captured' => '2026-11-10',
+		'captured' => '2026-11-23',
 		'v4'       => array(
 			'3.82.67.224/32',
 			'3.82.90.168/32',
@@ -2066,20 +2071,24 @@ return array(
 	// which third parties run on their own servers. Bundled on the Known Good precedent.
 	// Source: https://cl0q.com/bot/ips.json.
 	'cl0q'               => array(
-		'captured' => '2026-11-10',
+		'captured' => '2026-11-23',
 		'v4'       => array(
 			'143.110.230.182/32',
 		),
 		'v6'       => array(),
 	),
 	// Alpost — AlpostBot. One address, stated on the bot page as the only one it "connects only
-	// from" (page dated 15.10.2026; re-read 2026-10-23, unchanged). Bundled on the Known Good
-	// precedent. The page's bot.alpost.ch is a forward record; the PTR is not documented and moved.
+	// from". Bundled on the Known Good precedent. The page's bot.alpost.ch is a forward record; the
+	// PTR is not documented and moved.
+	//
+	// 2026-11-23: Alpost moved to a new address (page "Last updated 13.11.2026"; bot.alpost.ch
+	// resolves to it). The old one is withdrawn and now reverses to mx2.alpost.ch. The 28 AlpostBot
+	// rows from the old address stay `verified`: Re-check never reopens a verified row.
 	// Source: https://alpost.ch/en/bot/.
 	'alpost'             => array(
-		'captured' => '2026-11-10',
+		'captured' => '2026-11-23',
 		'v4'       => array(
-			'46.105.236.247/32',
+			'5.39.30.111/32',
 		),
 		'v6'       => array(),
 	),
@@ -2089,7 +2098,7 @@ return array(
 	// requests from outside the list have been robots.txt fetches.
 	// Source: https://cs.kakao.com/helps_html/1073213012.
 	'kakao'              => array(
-		'captured' => '2026-11-10',
+		'captured' => '2026-11-23',
 		'v4'       => array(
 			'121.53.90.224/27',
 			'121.53.91.224/27',
@@ -2125,7 +2134,7 @@ return array(
 	// the ranges "may change over time". No reverse DNS on the addresses checked.
 	// Source: https://api.hubapi.com/meta/network-origins/2026-09/ip-ranges (service WEB_SCRAPING).
 	'hubspot'            => array(
-		'captured' => '2026-11-10',
+		'captured' => '2026-11-23',
 		'v4'       => array(
 			'3.125.72.185/32',
 			'3.125.100.85/32',
@@ -2174,7 +2183,7 @@ return array(
 	// reverse DNS.
 	// Source: https://www.so.com/help/spider_ip.html.
 	'qihoo360'           => array(
-		'captured' => '2026-11-10',
+		'captured' => '2026-11-23',
 		'v4'       => array(
 			'42.236.10.0/24',
 			'42.236.12.0/24',
@@ -2190,7 +2199,7 @@ return array(
 	// through to that check; bundled as well by Miriam's choice (2026-11-10).
 	// Source: https://river.ai/riverbot.json.
 	'riverbot'           => array(
-		'captured' => '2026-11-10',
+		'captured' => '2026-11-23',
 		'v4'       => array(
 			'3.93.98.160/32',
 			'3.93.250.231/32',
@@ -2299,7 +2308,7 @@ return array(
 	// reverse-DNS suffix (lyrenth.com), as with RiverBot.
 	// Source: https://lyrenth.com/bot/ip-ranges.json.
 	'lyrenth'            => array(
-		'captured' => '2026-11-10',
+		'captured' => '2026-11-23',
 		'v4'       => array(
 			'46.224.73.201/32',
 			'46.225.147.220/32',
@@ -2337,7 +2346,7 @@ return array(
 	// MMSAR_Agent_Log_Verify::list_since() and the decision on it (1.73.0-dev.3).
 	// Source: https://app.keenable.ai/bot/keenablebot.json.
 	'keenable'           => array(
-		'captured' => '2026-11-10',
+		'captured' => '2026-11-23',
 		'since'    => '2026-10-09 12:04:36',
 		'v4'       => array(
 			'34.16.102.59/32',
@@ -2376,14 +2385,15 @@ return array(
 	// Anthropic's hosted browser — Claude-Agent only. Added 1.73.0.
 	//
 	// Read from a SAIL file (application/sail+toml, draft-kelley-webbotauth-sail-00), parsed as TOML:
-	// the `Claude-Agent` service's prefix sets, here the one set `agentic-browser-use` (9 single IPv4
+	// the `Claude-Agent` service's prefix sets, here the one set `agentic-browser-use` (10 single IPv4
 	// addresses, no IPv6, `exclusive = true`; the service is `exhaustive = true`; file modified
-	// 2026-10-22). Kept apart from `anthropic` and `anthropic-outbound`, which are documented for
+	// 2026-11-14, which added one address inside Anthropic's outbound /20; that address verifies
+	// Claude-Agent only from here, since `anthropic-outbound` stays scoped to Claude-User). Kept apart from `anthropic` and `anthropic-outbound`, which are documented for
 	// other agents. The file says `expires_after = 3600`: Anthropic expects an hourly re-read, and a
 	// bundled copy goes stale faster than any other list here. Accepted by Miriam on 2026-11-10.
 	// Source: https://claude.com/.well-known/sail.
 	'anthropic-agent'    => array(
-		'captured' => '2026-11-10',
+		'captured' => '2026-11-23',
 		'v4'       => array(
 			'34.31.25.14/32',
 			'34.60.73.195/32',
@@ -2394,6 +2404,596 @@ return array(
 			'34.71.122.171/32',
 			'34.171.207.92/32',
 			'136.71.21.147/32',
+			'153.61.208.16/32',
+		),
+		'v6'       => array(),
+	),
+	// Seobility — SeobilityBot. Added 1.75.0. A Google-style file with no creationTime: 205 single
+	// IPv4 addresses, 64 single IPv6 addresses and eight IPv6 /64s on 2026-11-23, written here with
+	// adjacent addresses merged. Seobility documents no reverse-DNS method. The one address in the
+	// live log (three requests, 2026-11-17) is inside it.
+	// Source: https://www.seobility.net/bots.json.
+	'seobility'          => array(
+		'captured' => '2026-11-23',
+		'v4'       => array(
+			'5.75.139.32/32',
+			'5.75.151.175/32',
+			'5.75.171.241/32',
+			'5.75.172.119/32',
+			'5.75.179.74/32',
+			'5.75.183.162/32',
+			'5.161.52.46/32',
+			'5.161.65.225/32',
+			'5.161.86.229/32',
+			'5.161.97.73/32',
+			'5.161.115.9/32',
+			'5.161.126.63/32',
+			'5.161.184.233/32',
+			'5.161.211.219/32',
+			'5.161.213.7/32',
+			'5.161.236.87/32',
+			'5.223.48.5/32',
+			'5.223.52.173/32',
+			'5.223.54.133/32',
+			'5.223.58.111/32',
+			'5.223.61.158/32',
+			'5.223.62.119/32',
+			'5.223.62.247/32',
+			'5.223.74.28/32',
+			'5.223.75.235/32',
+			'5.223.79.100/32',
+			'46.224.58.1/32',
+			'46.224.83.115/32',
+			'46.224.117.142/32',
+			'46.224.117.145/32',
+			'46.224.117.162/32',
+			'46.224.117.166/31',
+			'46.224.118.207/32',
+			'46.224.120.21/32',
+			'46.224.120.177/32',
+			'46.224.121.221/32',
+			'46.224.124.102/32',
+			'46.224.126.210/32',
+			'46.224.192.231/32',
+			'46.224.208.163/32',
+			'46.224.210.88/32',
+			'46.224.210.168/32',
+			'46.224.210.184/32',
+			'46.224.210.215/32',
+			'46.224.210.220/32',
+			'46.224.211.4/31',
+			'46.224.211.53/32',
+			'46.224.211.109/32',
+			'46.224.211.110/32',
+			'46.224.211.122/31',
+			'46.224.211.146/31',
+			'46.224.212.25/32',
+			'46.224.212.27/32',
+			'46.224.212.28/32',
+			'46.224.212.30/32',
+			'46.224.212.73/32',
+			'46.224.212.76/30',
+			'46.224.212.80/31',
+			'46.224.212.201/32',
+			'46.224.212.202/32',
+			'46.224.212.208/32',
+			'46.224.212.215/32',
+			'46.224.212.236/32',
+			'46.224.212.242/31',
+			'46.224.212.244/30',
+			'46.224.212.253/32',
+			'46.224.212.255/32',
+			'46.224.213.0/31',
+			'46.224.213.3/32',
+			'46.224.213.4/32',
+			'46.224.213.6/32',
+			'46.224.213.9/32',
+			'46.224.213.17/32',
+			'46.224.213.153/32',
+			'46.224.214.127/32',
+			'46.224.214.132/32',
+			'46.224.215.73/32',
+			'46.224.215.226/32',
+			'46.224.216.139/32',
+			'46.224.217.49/32',
+			'46.224.217.215/32',
+			'46.224.218.132/32',
+			'46.224.219.16/32',
+			'46.224.219.53/32',
+			'46.224.221.139/32',
+			'46.224.221.140/32',
+			'46.224.221.145/32',
+			'46.224.222.32/30',
+			'49.12.193.42/32',
+			'49.12.204.240/32',
+			'49.12.205.98/32',
+			'49.13.164.191/32',
+			'49.13.198.95/32',
+			'78.46.133.250/32',
+			'78.46.135.69/32',
+			'78.47.109.158/32',
+			'78.47.227.224/32',
+			'78.47.249.97/32',
+			'88.99.171.96/32',
+			'91.98.21.79/32',
+			'91.98.71.210/32',
+			'91.98.231.93/32',
+			'91.99.161.82/32',
+			'91.99.224.2/32',
+			'91.107.228.242/32',
+			'91.107.235.117/32',
+			'94.130.98.118/32',
+			'94.130.105.241/32',
+			'94.130.111.123/32',
+			'94.130.168.253/32',
+			'94.130.182.75/32',
+			'94.130.186.94/32',
+			'116.202.182.111/32',
+			'116.203.44.205/32',
+			'116.203.51.72/32',
+			'116.203.60.150/32',
+			'116.203.123.238/32',
+			'116.203.125.116/32',
+			'116.203.143.57/32',
+			'116.203.152.117/32',
+			'116.203.176.85/32',
+			'116.203.185.58/32',
+			'116.203.195.17/32',
+			'128.140.14.171/32',
+			'128.140.38.248/32',
+			'128.140.44.234/32',
+			'128.140.45.196/32',
+			'128.140.64.48/32',
+			'128.140.73.183/32',
+			'128.140.78.247/32',
+			'128.140.104.203/32',
+			'128.140.105.243/32',
+			'142.132.167.189/32',
+			'157.90.30.158/32',
+			'157.90.124.89/32',
+			'157.90.167.94/32',
+			'157.90.173.91/32',
+			'157.90.233.32/32',
+			'159.69.6.57/32',
+			'159.69.9.7/32',
+			'159.69.28.204/32',
+			'159.69.46.182/32',
+			'159.69.85.189/32',
+			'159.69.86.158/32',
+			'159.69.147.205/32',
+			'162.55.58.96/32',
+			'162.55.217.135/32',
+			'167.235.23.143/32',
+			'167.235.132.206/32',
+			'167.235.132.228/32',
+			'167.235.141.22/32',
+			'167.235.151.116/32',
+			'167.235.158.133/32',
+			'168.119.171.113/32',
+			'168.119.172.39/32',
+			'178.156.146.210/32',
+			'178.156.164.170/32',
+			'178.156.198.104/32',
+			'178.156.200.243/32',
+			'178.156.202.99/32',
+			'178.156.203.127/32',
+			'178.156.216.32/32',
+			'178.156.218.160/32',
+			'178.156.219.176/32',
+			'178.156.221.57/32',
+			'188.245.33.136/32',
+			'188.245.38.54/32',
+			'188.245.47.30/32',
+			'188.245.64.84/32',
+			'188.245.72.232/32',
+			'188.245.77.46/32',
+			'188.245.107.236/32',
+			'188.245.147.156/32',
+			'188.245.149.2/32',
+			'188.245.151.253/32',
+			'188.245.176.6/32',
+			'188.245.176.122/32',
+			'188.245.208.7/32',
+			'188.245.210.17/32',
+			'188.245.211.49/32',
+			'188.245.211.238/32',
+			'188.245.212.7/32',
+			'188.245.212.32/32',
+			'188.245.212.102/32',
+			'188.245.212.107/32',
+			'188.245.213.57/32',
+			'188.245.214.95/32',
+			'188.245.214.127/32',
+			'188.245.214.157/32',
+		),
+		'v6'       => array(
+			'2a01:4f8:c0c:5ff::1/128',
+			'2a01:4f8:c0c:1ead::/64',
+			'2a01:4f8:c0c:23b6::/64',
+			'2a01:4f8:c0c:2e24::/64',
+			'2a01:4f8:c0c:4193::1/128',
+			'2a01:4f8:c0c:459e::1/128',
+			'2a01:4f8:c0c:47c3::1/128',
+			'2a01:4f8:c0c:4cb8::/64',
+			'2a01:4f8:c0c:4e7e::1/128',
+			'2a01:4f8:c0c:5e22::/64',
+			'2a01:4f8:c0c:62f4::1/128',
+			'2a01:4f8:c0c:80c1::1/128',
+			'2a01:4f8:c0c:84a7::1/128',
+			'2a01:4f8:c0c:9de3::1/128',
+			'2a01:4f8:c0c:c3e4::1/128',
+			'2a01:4f8:c0c:ede3::1/128',
+			'2a01:4f8:c0c:f4c0::/64',
+			'2a01:4f8:c0c:fd3a::/64',
+			'2a01:4f8:c2c:d21::1/128',
+			'2a01:4f8:c2c:30d2::1/128',
+			'2a01:4f8:c2c:9351::1/128',
+			'2a01:4f8:c2c:9ff5::1/128',
+			'2a01:4f8:c2c:b136::1/128',
+			'2a01:4f8:c2c:dd84::1/128',
+			'2a01:4f8:c2c:e2bc::1/128',
+			'2a01:4f8:c2c:fe8d::1/128',
+			'2a01:4f8:1c0c:4018::1/128',
+			'2a01:4f8:1c0c:49d9::1/128',
+			'2a01:4f8:1c0c:5791::1/128',
+			'2a01:4f8:1c0c:5b9f::1/128',
+			'2a01:4f8:1c0c:6779::1/128',
+			'2a01:4f8:1c0c:71d5::1/128',
+			'2a01:4f8:1c1b:4020::1/128',
+			'2a01:4f8:1c1b:4569::1/128',
+			'2a01:4f8:1c1b:466a::1/128',
+			'2a01:4f8:1c1b:4712::1/128',
+			'2a01:4f8:1c1b:4a41::1/128',
+			'2a01:4f8:1c1b:6271::1/128',
+			'2a01:4f8:1c1b:7bd2::1/128',
+			'2a01:4f8:1c1b:8a93::1/128',
+			'2a01:4f8:1c1b:9365::1/128',
+			'2a01:4f8:1c1b:9c3f::1/128',
+			'2a01:4f8:1c1b:b553::1/128',
+			'2a01:4f8:1c1b:b8bf::1/128',
+			'2a01:4f8:1c1b:d285::1/128',
+			'2a01:4f8:1c1b:d443::1/128',
+			'2a01:4f8:1c1b:d47c::1/128',
+			'2a01:4f8:1c1b:d9ac::1/128',
+			'2a01:4f8:1c1c:1178::1/128',
+			'2a01:4f8:1c1c:184c::1/128',
+			'2a01:4f8:1c1c:495f::1/128',
+			'2a01:4f8:1c1c:6441::1/128',
+			'2a01:4f8:1c1c:6918::1/128',
+			'2a01:4f8:1c1c:7ee7::1/128',
+			'2a01:4f8:1c1c:8a00::1/128',
+			'2a01:4f8:1c1c:8ba3::1/128',
+			'2a01:4f8:1c1c:8f3b::1/128',
+			'2a01:4f8:1c1c:98fb::1/128',
+			'2a01:4f8:1c1c:e75d::1/128',
+			'2a01:4f8:1c1e:4468::1/128',
+			'2a01:4f8:1c1e:494a::1/128',
+			'2a01:4f8:1c1e:6829::1/128',
+			'2a01:4f8:1c1e:6974::1/128',
+			'2a01:4f8:1c1e:7ed8::1/128',
+			'2a01:4f8:1c1e:93fd::1/128',
+			'2a01:4f8:1c1e:a4a3::1/128',
+			'2a01:4f8:1c1e:b9a8::1/128',
+			'2a01:4f8:1c1e:c0eb::1/128',
+			'2a01:4f8:1c1e:d8e9::1/128',
+			'2a01:4f8:1c1e:e5a5::1/128',
+			'2a01:4f8:1c1e:e646::1/128',
+			'2a01:4f8:1c1f:b2df::/64',
+		),
+	),
+	// Google's hosted browsing agent — Google-Agent only. Added 1.75.0.
+	//
+	// Google's own recipe (developers.google.com/crawling/docs/crawlers-fetchers/allow-google-agent):
+	// the user-agent contains Google-Agent and the address is in this file. Twelve IPv4 blocks and
+	// eight IPv6 /124s, creationTime 2026-11-20, written here merged (the /124s are one /121). Kept
+	// apart from Google's other files, which are documented for other fetchers. Its Web Bot Auth
+	// signature (agent.bot.goog) is recorded as a claim, never verified. Google says many users share
+	// this egress pool, so one address carries several people's sessions.
+	// Source: https://developers.google.com/static/crawling/ipranges/user-triggered-agents.json.
+	'google-agent'       => array(
+		'captured' => '2026-11-23',
+		'v4'       => array(
+			'74.125.232.0/25',
+			'136.121.16.0/24',
+			'136.121.24.0/21',
+			'136.121.40.0/21',
+			'136.122.0.0/16',
+		),
+		'v6'       => array(
+			'2001:4860:c::/121',
+		),
+	),
+	// OpenAI's connector range — ChatGPT-User only (MMSAR_Agent_Log_Verify::EXTRA_RANGES). Added 1.75.0.
+	//
+	// OpenAI's counterpart of `anthropic-outbound`: documented for "Plugins, connectors, GPT Actions,
+	// and agentic commerce", which is where a ChatGPT connector calling this site's MCP server comes
+	// from. 289 IPv4 prefixes, creationTime 2026-11-06, written here merged. Its /16 is also in
+	// chatgpt-user.json and so already in `openai`; the rest is not. Scoped to ChatGPT-User: GPTBot or
+	// OAI-SearchBot from here stays `failed`, because a connector address is not a crawler address
+	// (Miriam, 2026-11-23). Not chatgpt-agents.json, which OpenAI documents for Codex cloud's
+	// connections to services such as GitHub, out of scope for a website.
+	// Source: https://openai.com/chatgpt-connectors.json.
+	'openai-outbound'    => array(
+		'captured' => '2026-11-23',
+		'v4'       => array(
+			'3.12.200.18/32',
+			'3.140.2.201/32',
+			'4.7.10.112/30',
+			'4.7.11.196/30',
+			'4.14.111.0/28',
+			'4.17.25.128/29',
+			'4.19.160.0/28',
+			'4.38.166.228/30',
+			'4.53.139.144/28',
+			'4.151.71.176/28',
+			'4.151.119.48/28',
+			'4.151.200.38/32',
+			'4.155.146.196/32',
+			'4.185.216.109/32',
+			'4.189.118.208/28',
+			'4.197.64.0/28',
+			'4.197.64.48/28',
+			'4.197.115.112/28',
+			'4.197.172.116/32',
+			'4.201.232.64/28',
+			'4.205.128.176/28',
+			'4.217.235.100/32',
+			'4.218.24.64/28',
+			'4.226.200.16/28',
+			'4.226.226.32/28',
+			'4.245.198.13/32',
+			'8.244.149.100/30',
+			'9.129.0.0/16',
+			'9.160.96.16/28',
+			'9.160.128.16/28',
+			'9.160.128.64/28',
+			'9.205.8.48/28',
+			'9.205.8.64/28',
+			'9.205.128.32/27',
+			'9.234.96.192/28',
+			'9.234.97.96/28',
+			'12.12.47.194/32',
+			'12.12.56.24/29',
+			'12.12.56.32/29',
+			'12.12.56.224/27',
+			'12.77.42.78/32',
+			'12.79.34.30/32',
+			'12.79.201.188/30',
+			'12.79.202.152/29',
+			'12.79.202.228/30',
+			'12.79.202.232/30',
+			'12.79.225.144/30',
+			'12.105.90.64/27',
+			'12.108.172.96/28',
+			'12.117.245.68/30',
+			'12.129.184.64/26',
+			'12.162.186.200/29',
+			'13.65.138.112/28',
+			'13.67.72.16/28',
+			'13.71.2.208/28',
+			'13.71.25.29/32',
+			'13.76.32.208/28',
+			'13.76.116.80/28',
+			'13.83.237.176/28',
+			'13.223.161.115/32',
+			'13.237.176.161/32',
+			'13.238.110.96/32',
+			'15.168.252.168/32',
+			'18.218.234.253/32',
+			'20.44.100.224/28',
+			'20.45.178.144/28',
+			'20.55.229.144/28',
+			'20.57.199.192/28',
+			'20.63.221.64/28',
+			'20.74.221.21/32',
+			'20.78.130.48/28',
+			'20.98.18.80/28',
+			'20.102.212.144/28',
+			'20.125.40.252/32',
+			'20.125.112.224/28',
+			'20.162.96.163/32',
+			'20.168.7.192/28',
+			'20.168.48.117/32',
+			'20.169.78.48/28',
+			'20.169.78.64/28',
+			'20.169.86.224/28',
+			'20.170.184.16/28',
+			'20.170.184.32/27',
+			'20.170.184.64/27',
+			'20.171.137.175/32',
+			'20.172.29.32/28',
+			'20.184.36.134/32',
+			'20.203.144.245/32',
+			'20.206.101.192/28',
+			'20.212.62.208/28',
+			'20.215.187.208/28',
+			'20.215.219.208/28',
+			'20.219.124.186/32',
+			'20.219.161.192/28',
+			'20.219.184.96/28',
+			'20.227.140.32/28',
+			'20.228.106.176/28',
+			'20.235.87.224/28',
+			'20.241.32.36/32',
+			'20.249.63.208/28',
+			'20.250.136.64/28',
+			'20.254.201.208/28',
+			'23.98.186.64/28',
+			'23.98.186.96/28',
+			'23.101.217.176/28',
+			'23.102.141.32/28',
+			'24.82.185.0/29',
+			'40.88.27.77/32',
+			'40.118.236.137/32',
+			'40.119.36.240/28',
+			'40.122.118.93/32',
+			'40.122.118.119/32',
+			'40.122.118.202/32',
+			'40.124.161.0/28',
+			'43.202.230.227/32',
+			'44.221.134.118/32',
+			'44.249.227.138/32',
+			'45.147.211.96/29',
+			'48.218.181.198/32',
+			'48.221.40.176/28',
+			'48.221.184.80/28',
+			'48.221.184.96/28',
+			'50.145.17.208/28',
+			'50.145.17.224/29',
+			'50.151.105.128/30',
+			'50.151.105.136/29',
+			'50.213.205.80/29',
+			'50.235.235.72/29',
+			'51.4.112.173/32',
+			'51.57.0.96/28',
+			'51.57.158.112/28',
+			'51.59.24.64/27',
+			'51.59.48.80/28',
+			'52.2.184.223/32',
+			'52.6.94.121/32',
+			'52.17.188.55/32',
+			'52.43.161.225/32',
+			'52.119.123.85/32',
+			'52.143.181.161/32',
+			'52.148.129.32/28',
+			'52.165.212.48/28',
+			'52.172.129.160/28',
+			'52.173.221.16/28',
+			'52.173.234.16/28',
+			'52.173.234.80/28',
+			'52.190.137.16/28',
+			'52.190.137.144/28',
+			'52.190.139.48/28',
+			'52.190.142.64/28',
+			'52.190.251.112/28',
+			'52.208.217.159/32',
+			'52.231.30.48/28',
+			'52.231.39.144/28',
+			'52.242.132.224/27',
+			'52.255.109.80/28',
+			'52.255.109.96/28',
+			'52.255.109.144/28',
+			'52.255.111.0/28',
+			'54.180.197.31/32',
+			'54.227.131.66/32',
+			'56.155.71.179/32',
+			'57.133.92.112/31',
+			'57.154.174.112/28',
+			'57.154.187.32/28',
+			'61.105.58.228/30',
+			'62.96.221.184/29',
+			'64.71.12.112/28',
+			'64.124.21.196/32',
+			'64.124.191.96/28',
+			'66.193.99.66/32',
+			'67.207.103.240/28',
+			'68.154.28.96/28',
+			'68.155.152.41/32',
+			'68.220.57.64/28',
+			'70.153.32.16/28',
+			'70.153.32.32/28',
+			'70.156.152.96/28',
+			'72.146.20.246/32',
+			'74.7.35.48/28',
+			'74.7.35.112/28',
+			'74.7.36.64/27',
+			'74.7.36.96/28',
+			'74.161.200.96/28',
+			'74.224.217.64/28',
+			'74.226.253.160/28',
+			'74.248.37.160/28',
+			'74.248.148.7/32',
+			'76.77.188.112/29',
+			'77.75.96.48/29',
+			'79.244.198.212/30',
+			'80.169.53.32/28',
+			'85.211.128.16/28',
+			'85.211.128.32/28',
+			'98.87.72.221/32',
+			'100.31.168.162/32',
+			'102.37.57.54/32',
+			'104.192.219.204/30',
+			'104.208.184.192/28',
+			'104.210.139.192/28',
+			'104.210.139.224/28',
+			'108.179.20.6/31',
+			'112.220.228.112/29',
+			'115.42.241.224/29',
+			'128.177.85.168/30',
+			'128.177.174.162/32',
+			'130.33.24.99/32',
+			'132.196.82.48/28',
+			'134.33.102.192/28',
+			'134.138.52.16/28',
+			'134.138.52.64/28',
+			'134.138.57.64/27',
+			'134.149.233.80/28',
+			'135.13.64.240/28',
+			'135.116.136.160/28',
+			'135.220.40.201/32',
+			'135.220.73.208/28',
+			'135.220.208.92/32',
+			'135.222.99.32/28',
+			'135.234.27.89/32',
+			'135.237.133.48/28',
+			'137.135.191.176/28',
+			'145.132.136.96/28',
+			'148.76.185.192/27',
+			'148.109.10.28/30',
+			'148.109.36.240/28',
+			'149.97.160.16/28',
+			'152.44.170.32/29',
+			'159.180.234.92/30',
+			'172.162.248.64/28',
+			'172.167.32.228/32',
+			'172.167.161.96/32',
+			'172.170.1.80/28',
+			'172.170.225.0/28',
+			'172.170.241.80/28',
+			'172.171.234.186/32',
+			'172.172.206.48/28',
+			'172.175.152.224/28',
+			'172.177.53.240/28',
+			'172.183.143.224/28',
+			'172.191.70.179/32',
+			'172.191.238.68/32',
+			'172.192.112.208/28',
+			'172.198.58.176/28',
+			'172.198.79.112/28',
+			'172.199.137.80/28',
+			'172.203.39.49/32',
+			'172.204.96.80/28',
+			'172.206.38.240/28',
+			'172.207.1.32/28',
+			'172.207.173.200/32',
+			'172.214.226.198/32',
+			'172.215.215.32/28',
+			'173.195.76.0/26',
+			'180.222.194.124/30',
+			'184.73.124.134/32',
+			'191.232.238.96/28',
+			'191.233.251.27/32',
+			'191.234.167.144/28',
+			'191.237.249.64/28',
+			'194.46.223.16/28',
+			'195.171.64.176/28',
+			'199.47.142.0/23',
+			'199.241.201.152/29',
+			'203.125.229.136/29',
+			'203.149.223.128/29',
+			'208.52.97.112/29',
+			'208.69.43.136/29',
+			'208.80.35.32/27',
+			'208.184.8.84/30',
+			'208.184.8.104/29',
+			'209.247.142.56/30',
+			'209.247.151.176/28',
+			'209.249.37.128/26',
+			'209.249.246.178/31',
+			'213.122.44.84/31',
+			'216.64.170.234/32',
+			'217.111.182.45/32',
+			'217.111.242.24/29',
 		),
 		'v6'       => array(),
 	),

@@ -53,7 +53,7 @@ Every feature below can be switched off individually under **Settings > Agent-Re
 
 ### Configuration and operations
 - **Settings page** (Settings > Agent-Ready) — per-feature on/off toggles, post type selector, CSS root selector, robots.txt preview and extra-rules textarea, security contact, Content Signals toggles, a TDMRep policy URL, a structured data (JSON-LD) toggle, WebMCP origin-trial tokens with their status, and a "View" link to every endpoint currently being served
-- **Bulk regeneration** — "Regenerate All" button on the settings page
+- **Bulk regeneration** — "Regenerate All" button on the settings page. On a multisite network it rebuilds only the site it's pressed on, so each site needs its own press
 - **Markdown refresh log** — counts, per day and per field over 14 days, how often custom field changes made the site check and rebuild markdown, so a field that triggers checks for nothing can be found and ignored. Reported in Site Health above a threshold and by the read-only `get-markdown-refresh-log` ability. See *Field changes without a save* under [The description](#the-description)
 - **Agent request log** (off by default) — records which agents fetch the surfaces above, and robots.txt and the site's feeds, on its own screen at Settings > Agent Log, with filters, a Journeys view, a retention setting, a dashboard widget, a CSV export, and a read-only ability so an agent can read it too. Verifies each claimed crawler identity and tags every recognised bot with a category, so AI traffic can be separated from search and SEO traffic. An MCP tool call records what it asked for in its own `arguments` column (content type, topic, the path of the page served, overview sections), each value stored only after it matches something on the site; search terms only if the owner opts in, redacted. Browser-shaped rows carry three signals — a Web Bot Auth signature (recorded, not verified), a published cloud-provider network, and whether the request followed a link on the site — because an agent driving a real browser otherwise looks exactly like a reader; the cloud-network signal also covers HTTP clients such as axios or curl. A Summary tab shows the last 30 days in numbers, a chart of who visited each day (people, identified agents, other known bots, unidentified or spoofed), a chart of what identified agents fetched (agent files, robots.txt, site pages, not found), the busiest bots and what they are for, then says what it means, with findings under three questions (being read, being cited, broken or ignored), also on the dashboard widget and as the `get-agent-insights` ability. An optional setting keeps every entry's full address and full user-agent for six months, so a misread visit can still be corrected. See [The agent log](#the-agent-log)
 - **Visitors sent by AI assistants** (off by default, needs the agent log) — counts people who arrive from ChatGPT, Perplexity, Claude, Gemini, Copilot and other assistants, per assistant and landing page, shown on the Agent Log screen. Kept as a daily count only. See [Visitors sent by AI assistants](#visitors-sent-by-ai-assistants)
@@ -427,8 +427,9 @@ Two methods, chosen per operator, because the operators are split on which they 
   Inoreader, Amazon's search crawler (Amzn-SearchBot), cl0q (cl0q-crawler, cl0q-discovery and
   cl0q-favicon, one published address), Alpost (AlpostBot, one published address), Kakao (KakaoBot),
   HubSpot (HubSpot Crawler, its `WEB_SCRAPING` ranges only), Qihoo 360 (360Spider), Keenable
-  (KeenableBot), River AI (RiverBot), Lyrenth (AIWebIndex) and Anthropic's hosted browser
-  (Claude-Agent, from Anthropic's SAIL file). Most of them
+  (KeenableBot), River AI (RiverBot), Lyrenth (AIWebIndex), Seobility (SeobilityBot), Anthropic's
+  hosted browser (Claude-Agent, from Anthropic's SAIL file) and Google's hosted agent (Google-Agent,
+  from Google's `user-triggered-agents.json`, IPv4 and IPv6). Most of them
   publish no reverse-DNS records for their crawlers, so this is the only method their documentation
   describes. The ranges are bundled with the plugin rather than fetched, so nothing calls a
   third-party service and verification works on a host with no outbound HTTP. The trade-off is that
@@ -441,7 +442,9 @@ Two methods, chosen per operator, because the operators are split on which they 
   the Internet Archive (archive.org_bot), Qwant, DataForSEO, LohiSoft, Keywords Everywhere
   (PoweredByBot), ibou (IbouBot and ibou-search, both under `ibou.io`), Baidu (Baiduspider), Cốc Cốc
   (coccocbot), FindFiles, Iframely, creasource.dev (crawl-engine), Google's AdsBot-Google (under
-  `google.com` only), River AI (RiverBot), Lyrenth (AIWebIndex) and SeeMe AI (BakenBot). The address is reversed to a hostname, that hostname is resolved
+  `google.com` only), Google's testing tools (Google-InspectionTool under `googlebot.com` and
+  `google.com`, the older Google-Structured-Data-Testing-Tool name under `google.com` only), River AI
+  (RiverBot), Lyrenth (AIWebIndex) and SeeMe AI (BakenBot). The address is reversed to a hostname, that hostname is resolved
   forward and must come back to the same address, and it must sit under a domain the claimed
   operator owns. Anyone
   can put any string in a `User-Agent`; nobody can put a record in someone else's DNS zone. A
@@ -469,6 +472,10 @@ else is judged against them. Because the name is recognised before the request's
 looked at, a Claude-Agent visit is filed as a crawler, never as a person's page view. Anthropic
 expects that file to be re-read hourly and this plugin bundles it, so a visit from a newly added
 address reads Spoofed until the plugin is updated, and Re-check then moves it to Verified.
+
+**Google-Agent (1.75.0)** is the same idea from Google: the browser Google runs when someone asks one of its agents to do something on the web. Its user-agent is a Chrome string with `compatible; Google-Agent` in it, and Google's own instructions are to match that token and check the address against `user-triggered-agents.json`. That file is bundled as a group of its own, with no reverse-DNS fallback, so a Google crawler hostname does not verify an unlisted address. Google also signs some of these requests with Web Bot Auth (`agent.bot.goog`); like every signature, that is recorded as a claim, not verified. Google says many people share these addresses, so one address can carry several people's sessions.
+
+**Connector ranges verify the assistant name only.** When a person uses a site through a Claude or ChatGPT connector, the calls come from the operator's outbound addresses, not its crawler addresses. Claude-User is also checked against Anthropic's published outbound range (1.68.0), and ChatGPT-User against OpenAI's `chatgpt-connectors.json`, documented for plugins, connectors, GPT Actions and agentic commerce (1.75.0). Each is kept in a group of its own and verifies only that one name: ClaudeBot, GPTBot or OAI-SearchBot from a connector address still reads as Spoofed, because a connector address is not a crawler address. OpenAI's `chatgpt-agents.json`, documented for Codex cloud's connections to services such as GitHub, is not bundled.
 
 Every other recognised crawler reads as **Unverifiable** — its operator publishes no method this
 release knows about. A suffix or range is only added once it has been confirmed against the
@@ -506,6 +513,8 @@ from `bot.alpost.ch` to `mx2.alpost.ch` within a day, so it is not a hostname th
 (1.67.0). Kakao's KakaoBot is checked against the eight /27s and 15 single addresses Kakao publishes. On the author's site
 the only KakaoBot requests from outside them were robots.txt fetches, which read as Spoofed (1.68.0).
 
+Two published lists are deliberately not used (1.75.0). ethicrawl's list has one address, and both requests on the author's site came from a cloud address that isn't on it. Checking against it read them as Spoofed, though they carried ethicrawl's own contact details, so ethicrawl is recognised but unverifiable. Kaupr's list covers its web server, not its crawler, so Kaupr is unverifiable too.
+
 **Unverifiable** also covers a second case that says nothing about the operator: a row whose address
 was reduced to its network at storage time cannot be tested against a published range, so the
 verdict is withheld rather than guessed. Withholding is deliberate — a range check against a network
@@ -524,6 +533,7 @@ to *Unverifiable*, matching its later ones, with no lookup. Verified rows are ne
 1.69.0 a Spoofed row gets one narrow test: if its full address is inside the operator's published
 list, it moves to Verified. No DNS query is made and nothing else about it changes, so a late list
 update can no longer leave a genuine request accused for good, and a real forgery stays marked.
+Since 1.75.0 there is one more case: a Spoofed row whose crawler no longer has any verification method (because a list was found not to cover the crawler and was dropped) moves to Unverifiable. Spoofed means a check was made and failed, and with no method left there is nothing it failed against.
 
 **User-run clients get their own verdict (1.47.0).** Claude Code and the Claude desktop app's Code
 tab fetch pages from the user's own machine and still send a `Claude-User` user-agent, with a
@@ -553,14 +563,14 @@ category:
 
 | Category | Meaning |
 |---|---|
-| **AI training** | Collects content to train models (GPTBot, ClaudeBot, CCBot, ElevenlabsCrawler, RiverBot…) |
+| **AI training** | Collects content to train models (GPTBot, ClaudeBot, CCBot, ElevenlabsCrawler, RiverBot, ethicrawl…) |
 | **AI search** | Builds or queries an index used to answer questions (OAI-SearchBot, PerplexityBot, LinkupBot, Amzn-SearchBot, meta-webindexer, AIWebIndex, KeenableBot, BakenBot…) |
-| **AI assistant** | Fetches a page because a person asked an assistant right then (ChatGPT-User, Claude-User, Claude-Agent, Amazon Quick, Google-GeminiNotebook, meta-externalfetcher, ExaUser, ElevenlabsBot, HubSpot Crawler…) |
-| **Search engine** | Conventional web search (SeznamBot, DuckDuckBot, YandexBot, Baiduspider, Sogou web spider, Qwantbot, cl0q, ibou-search, PoliasBot, Vento9, AlpostBot, KakaoBot, FusionDiscoverBot, 360Spider…) |
-| **SEO tool** | SEO and backlink platforms (AhrefsBot, SemrushBot, SiteAuditBot, Barkrowler, DataForSeoBot…) |
+| **AI assistant** | Fetches a page because a person asked an assistant right then (ChatGPT-User, Claude-User, Claude-Agent, Amazon Quick, Google-GeminiNotebook, meta-externalfetcher, ExaUser, ElevenlabsBot, HubSpot Crawler, Google-Agent…) |
+| **Search engine** | Conventional web search (SeznamBot, DuckDuckBot, YandexBot, Baiduspider, Sogou web spider, Qwantbot, cl0q, ibou-search, PoliasBot, Vento9, AlpostBot, KakaoBot, FusionDiscoverBot, 360Spider, watrsearch, TinEye, T2Bot…) |
+| **SEO tool** | SEO and backlink platforms (AhrefsBot, SemrushBot, SiteAuditBot, Barkrowler, DataForSeoBot, SeobilityBot, Google-InspectionTool, KostoBot, ConvertlyftBot…) |
 | **Monitoring** | Brand and media monitoring (AwarioBot, trendictionbot, YaK, um-LN) |
-| **Scanner** | Readiness, security and attack-surface scanners (OraBot, KnownGood-Verifier, AgentReadyScanner, CensysInspect, Cortex Xpanse, l9scan, AgentTrustBot, VisionHeight, agenticweb-probe, AgentReady, RankZeroBot) |
-| **Other** | Link previews, feed readers, archiving and everything else named (Twitterbot, facebookexternalhit, Feedly, Inoreader, archive.org_bot, Google-Read-Aloud, CorpusBot, BitMoversBot, ev-crawler, AdsBot-Google, TechLeadsBot…) |
+| **Scanner** | Readiness, security and attack-surface scanners (OraBot, KnownGood-Verifier, AgentReadyScanner, CensysInspect, Cortex Xpanse, l9scan, AgentTrustBot, VisionHeight, agenticweb-probe, AgentReady, RankZeroBot, InternetData.io) |
+| **Other** | Link previews, feed readers, archiving and everything else named (Twitterbot, facebookexternalhit, Feedly, Inoreader, archive.org_bot, Google-Read-Aloud, CorpusBot, BitMoversBot, ev-crawler, AdsBot-Google, TechLeadsBot, LinkedInBot, Kaupr…) |
 
 A category goes by what the operator documents *that specific bot* doing, not by the operator's
 business overall. It is shown under the agent name, filterable as **Crawler type**, and returned by
@@ -611,7 +621,7 @@ because their operator's own verification method says more than their network do
 **An agent browser that names itself leaves the browser count (1.73.0).** Anthropic's hosted browser
 adds `Claude-Agent/1.0` to an otherwise ordinary Chrome user-agent. That token is a recognised crawler
 name, and recognised names are checked before the request's browser shape, so a Claude-Agent visit is
-stored as a crawler, verified against Anthropic's list for it, and never counted as a person.
+stored as a crawler, verified against Anthropic's list for it, and never counted as a person. Google-Agent (1.75.0) works the same way, with `compatible; Google-Agent` in its user-agent and Google's own list.
 
 **What no signal covers:** an agent that runs inside the person's own browser, such as Claude for
 Chrome or Perplexity Comet. It signs nothing, uses the person's own network and follows links the
@@ -632,7 +642,8 @@ The log is off by default. When it is on, this is what it keeps about people:
   level on every surface.
 - **Claude-Agent** (1.73.0) is a browser Anthropic runs on its own servers for someone using Claude,
   so its address is Anthropic's, not the person's. It is a recognised crawler and keeps its full
-  address, which verification needs.
+  address, which verification needs. Google-Agent (1.75.0) is Google's equivalent and is treated the
+  same way.
 - **Feeds and robots.txt** follow the page-view rule. A feed read in a browser or a desktop reader
   is stored at network level. A self-hosted reader such as Miniflux is software a person installs,
   often at home, so it keeps its full address only from inside a cloud-provider network (1.49.0).

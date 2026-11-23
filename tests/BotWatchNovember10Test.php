@@ -198,10 +198,11 @@ final class BotWatchNovember10Test extends TestCase {
 	}
 
 	/**
-	 * Every new group carries today's capture date, and so does every old one.
+	 * Every group carries one capture date: 2026-11-10 for this round, moved by each full refresh
+	 * since (2026-11-23, 1.75.0).
 	 */
 	public function test_capture_date(): void {
-		$this->assertSame( '2026-11-10', MMSAR_Agent_Log_Verify::ranges_captured() );
+		$this->assertSame( '2026-11-23', MMSAR_Agent_Log_Verify::ranges_captured() );
 	}
 
 	/**

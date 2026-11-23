@@ -30,8 +30,11 @@ final class BotWatchOctober22Test extends TestCase {
 	/** ElevenlabsBot as documented: a bare product token, no URL. */
 	private const ELEVENLABS_BOT_UA = 'ElevenlabsBot/1.0';
 
-	/** The one address Alpost documents, from includes/data/crawler-ranges.php. */
-	private const ALPOST_IP = '46.105.236.247';
+	/** The one address Alpost documents, from includes/data/crawler-ranges.php (moved 2026-11-13). */
+	private const ALPOST_IP = '5.39.30.111';
+
+	/** The address Alpost documented until 2026-11-13, bundled 1.67.0 to 1.74.0. */
+	private const ALPOST_OLD_IP = '46.105.236.247';
 
 	/** A budget-VPS address with no PTR, the shape ElevenlabsCrawler arrived in. */
 	private const NO_PTR_IP = '192.3.81.14';
@@ -169,7 +172,10 @@ final class BotWatchOctober22Test extends TestCase {
 				array(),
 				'verified',
 			),
-			'AlpostBot, one address over'       => array( 'AlpostBot', '46.105.236.248', '', array(), 'failed' ),
+			'AlpostBot, one address over'       => array( 'AlpostBot', '5.39.30.112', '', array(), 'failed' ),
+			// Withdrawn in 1.75.0: a new request from it fails. Rows already `verified` from it keep
+			// that verdict, because Re-check never reopens a verified row.
+			'AlpostBot, the withdrawn address'  => array( 'AlpostBot', self::ALPOST_OLD_IP, '', array(), 'failed' ),
 			// A forward-confirmed name under alpost.ch is not a method here, so it cannot rescue
 			// an address the operator does not publish.
 			'AlpostBot, alpost.ch host elsewhere' => array(
